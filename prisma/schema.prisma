@@ -1,0 +1,551 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  MEMBER
+  VIEWER
+  GUEST
+}
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  BILLING
+  SUPPORT
+  NONE
+}
+
+enum OtpPurpose {
+  LOGIN
+  SIGNUP
+  INVITE
+  PASSWORD_RESET
+  MFA
+}
+
+enum SessionEndReason {
+  LOGOUT
+  EXPIRED
+  REVOKED
+  REPLACED
+}
+
+enum PermissionSource {
+  manual
+  inherited
+  system
+}
+
+enum AuditSource {
+  admin_panel
+  api
+  system
+}
+
+enum AuditSeverity {
+  info
+  warning
+  error
+}
+
+enum Gender {
+  male
+  female
+  other
+  prefer_not_say
+}
+
+// -------------------- CORE MODELS --------------------
+
+// Workspace (previously Tenant)
+model Workspace {
+  id             String                @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String                @unique
+  defaultDomain  String?               @map("default_domain")
+  primaryEmail   String?               @map("primary_email")
+  isActive       Boolean               @default(true) @map("is_active")
+
+  // Multi-domain support
+  domains        WorkspaceDomain[]
+
+  // billing / subscription
+  subscriptions  WorkspaceSubscription[]
+
+  // members & roles
+  memberships    Membership[]
+
+  // customers (end-users of a workspace product)
+  customers      Customer[]
+
+  // auth
+  otpRequests    OtpRequest[]
+  sessions       Session[]
+
+  // settings & history
+  settings       WorkspaceSettings?
+
+  // permissions
+  permissions    Permission[]
+  userPermissions UserPermission[]
+
+  // invites
+  invites        WorkspaceInvite[]
+
+  // api keys
+  apiKeys        ApiKey[]
+
+  // support
+  supportTickets SupportTicket[]
+
+  // notifications
+  notifications  Notification[] 
+
+  // audit / webhooks
+  adminAuditLogs AdminAuditLog[] 
+
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@index([createdAt])
+  @@index([primaryEmail])
+  @@index([slug])
+}
+
+// workspace domains (CNAMEs / custom domains)
+model WorkspaceDomain {
+  id         String    @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  workspace  Workspace @relation(fields: [workspaceId], references: [id])
+
+  domain     String   // e.g. workspace.com or acme.platform.com
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  isVerified Boolean  @default(false) @map("is_verified")
+
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([domain])
+  @@index([workspaceId, isPrimary])
+}
+
+// memberships: join table Identity <-> Workspace (many-to-many)
+model Membership {
+  id        String        @id @default(uuid()) @db.Uuid
+ 
+  workspaceId String      @map("workspace_id") @db.Uuid
+  workspace Workspace     @relation(fields: [workspaceId], references: [id])
+
+  identityId String      @map("identity_id") @db.Uuid
+  identity  Identity     @relation(fields: [identityId], references: [id])
+
+  role      WorkspaceRole @default(MEMBER)
+  isActive  Boolean       @default(true) @map("is_active")
+
+  sessions  Session[]
+  // optional temporary access expiry
+  expiresAt DateTime?     @map("expires_at")
+
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  @@unique([workspaceId, identityId])
+  @@index([identityId])
+  @@index([workspaceId, role])
+}
+
+// workspace subscription
+model WorkspaceSubscription {
+  id                         String    @id @default(uuid()) @db.Uuid
+  workspaceId                String    @map("workspace_id") @db.Uuid
+  workspace                  Workspace @relation(fields: [workspaceId], references: [id])
+
+  provider                   String    // e.g. stripe
+  providerSubscriptionId     String?   @map("provider_subscription_id") @db.Uuid
+  planId                     String?   // provider plan identifier
+  status                     String    // active | past_due | cancelled
+  startedAt                  DateTime?
+  expiresAt                  DateTime?
+  metadata                   Json?
+
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@unique([provider, providerSubscriptionId])
+  @@index([workspaceId, status])
+}
+
+// Workspace invites (separate from Membership)
+model WorkspaceInvite {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  email       String
+  role        WorkspaceRole @default(MEMBER)
+  invitedById String?  @map("invited_by") @db.Uuid
+  invitedBy   Identity? @relation(fields: [invitedById], references: [id])
+
+  token       String   @unique
+  status      String   @default("pending") // pending | accepted | revoked | expired
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, status])
+  @@index([token, workspaceId])
+  @@index([email, workspaceId])
+}
+
+model WorkspaceSettings {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  themes      Json // free-form JSON for theme settings (colors, fonts, etc.)
+  
+  settings    Json // free-form JSON for extensible settings (branding, flags)
+
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([workspaceId])
+}
+
+model Identity {
+  id        String @id @default(uuid()) @db.Uuid
+  firstName String? @map("first_name") @db.VarChar(255)
+  lastName  String? @map("last_name") @db.VarChar(255)
+
+  email     String? @unique
+  phone     String? @unique
+
+  emailVerified Boolean @default(false) @map("email_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  phoneVerified Boolean @default(false) @map("phone_verified")
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  authAccounts AuthAccount[]
+  oauthAccounts OAuthAccount[]
+  sessions Session[]
+
+  memberships Membership[]
+  permissions UserPermission[] @relation("UserPermissions")
+  permissionsGranted UserPermission[] @relation("PermissionGrantedBy")
+  permissionsRevoked UserPermission[] @relation("PermissionRevokedBy")
+  adminAuditLogs AdminAuditLog[]
+  invites WorkspaceInvite[]
+  apiKeys ApiKey[]
+  
+  sentTickets SupportTicket[] @relation("CreatedTickets")
+  assignedTickets SupportTicket[] @relation("AssignedTickets")
+  notifications Notification[]
+
+  @@index([email])
+}
+
+model AuthAccount {
+  id String @id @default(uuid()) @db.Uuid
+
+  identityId String? @map("identity_id") @db.Uuid
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String? @map("customer_id") @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  type  String   // email | phone
+  value String   // email address or phone number
+
+  isVerified Boolean @default(false) @map("is_verified")
+  verifiedAt DateTime? @map("verified_at")
+
+  passwordHash String? @map("password_hash")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  optRequests OtpRequest[]
+
+  @@unique([type, value])
+  @@index([identityId])
+  @@index([customerId])
+}
+
+// OAuth linked accounts for Identities (Google, etc.)
+model OAuthAccount {
+  id                 String   @id @default(uuid()) @db.Uuid
+
+  identityId String? @map("identity_id") @db.Uuid
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String? @map("customer_id") @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  provider           String   // 'google', 'github', etc.
+  providerAccountId  String   @map("provider_account_id")
+  accessToken        String? @map("access_token")
+  refreshToken       String? @map("refresh_token")
+  scope              String? 
+
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, providerAccountId])
+  @@index([identityId])
+  @@index([customerId])
+}
+
+// Customers (end-users of a workspace product)
+model Customer {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  email       String?
+  phone       String?
+  name        String?
+  externalId  String?   @map("external_id") // for external systems
+
+  emailVerified Boolean @default(false) @map("email_verified")
+  phoneVerified Boolean @default(false) @map("phone_verified")
+
+  // authentication / sessions
+  authAccounts AuthAccount[]
+  oauthAccounts OAuthAccount[]
+  sessions     Session[] @relation("CustomerSessions")
+
+  notifications Notification[]
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([email, workspaceId])
+  @@index([workspaceId, email])
+  @@index([workspaceId])
+}
+
+// API keys (tenant/workspace scoped)
+model ApiKey {
+  id         String   @id @default(uuid()) @db.Uuid
+  workspaceId String  @map("workspace_id") @db.Uuid
+  workspace  Workspace @relation(fields: [workspaceId], references: [id])
+
+  key        String   @unique
+  description String?
+  scopes     String[] // e.g. ["orders:read","orders:write"]
+  createdById String? @map("created_by") @db.Uuid
+  createdBy  Identity? @relation(fields: [createdById], references: [id])
+
+  isActive   Boolean  @default(true) @map("is_active")
+  expiresAt  DateTime?
+
+  createdAt  DateTime @default(now()) @map("created_at")
+  @@index([workspaceId, isActive])
+}
+
+
+// OTP requests (for email/phone OTP)
+model OtpRequest {
+  id             String    @id @default(uuid()) @db.Uuid
+  authAccountId  String    @map("auth_account_id") @db.Uuid
+  authAccount    AuthAccount @relation(fields: [authAccountId], references: [id])
+
+  workspaceId    String?   @map("workspace_id") @db.Uuid
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id])
+
+  verificationId String?   @map("verification_id")
+  otpPurpose     OtpPurpose @map("otp_purpose")
+  otpHash        String    @map("otp_hash")
+  expiresAt      DateTime  @map("expires_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  attempts       Int       @default(0) @db.SmallInt
+  resendCount    Int       @default(0) @map("resend_count") @db.SmallInt
+
+  @@index([authAccountId, otpPurpose, createdAt])
+  @@index([expiresAt])
+}
+
+// Sessions (polymorphic: Identity or Customer)
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+
+  // actor: either identity or customer
+  identityId String?  @map("identity_id") @db.Uuid
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String?  @map("customer_id") @db.Uuid
+  customer   Customer? @relation("CustomerSessions", fields: [customerId], references: [id])
+
+  // workspace context - nullable for platform-wide sessions
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+
+  membershipId String? @map("membership_id") @db.Uuid
+  membership   Membership? @relation(fields: [membershipId], references: [id])
+
+  platformRole PlatformRole @map("platform_role") @default(NONE)
+  workspaceRole WorkspaceRole? @map("workspace_role")
+
+  ip        String?
+  browser   String?
+  os        String?
+  device    String?
+  deviceId  String?   @map("device_id")
+  userAgent String?   @map("user_agent")
+
+  isActive  Boolean   @default(true) @map("is_active")
+
+  expiresAt DateTime? @map("expires_at")
+  endedAt   DateTime? @map("ended_at")
+  endedReason SessionEndReason? @map("ended_reason")
+
+  lastSeenAt DateTime? @map("last_seen_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([identityId, isActive, createdAt])
+  @@index([isActive, expiresAt])
+  @@index([deviceId])
+  @@index([membershipId])
+}
+
+// Permission models
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String?  @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  key         String
+  name        String?
+  description String?
+  entity      String
+  isActive    Boolean  @default(true) @map("is_active")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  userPermissions UserPermission[]
+
+  @@index([entity, isActive])
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+}
+
+model UserPermission {
+  id String @id @default(uuid()) @db.Uuid
+
+  identityId String @map("identity_id") @db.Uuid
+  identity   Identity @relation("UserPermissions", fields: [identityId], references: [id])
+
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  permissionId String   @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  grantedById String? @map("granted_by") @db.Uuid
+  grantedBy   Identity? @relation("PermissionGrantedBy", fields: [grantedById], references: [id])
+
+  revokedById String? @map("revoked_by") @db.Uuid
+  revokedBy   Identity? @relation("PermissionRevokedBy", fields: [revokedById], references: [id])
+
+  source      PermissionSource @default(manual)
+  isActive    Boolean          @default(true) @map("is_active")
+  isTemporary Boolean          @default(false) @map("is_temporary")
+  expiresAt   DateTime?        @map("expires_at")
+
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@unique([identityId, workspaceId, permissionId])
+  @@index([permissionId])
+  @@index([identityId, workspaceId])
+  @@index([expiresAt])
+}
+
+// Admin audit logs
+model AdminAuditLog {
+  id String @id @default(uuid()) @db.Uuid
+
+  adminIdentityId String @map("admin_identity_id") @db.Uuid
+  adminIdentity   Identity @relation(fields: [adminIdentityId], references: [id])
+
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  adminEmail String? @map("admin_email")
+  adminRole  String? @map("admin_role")
+
+  action     String
+  entityType String @map("entity_type")
+  entityId   String @map("entity_id") @db.Uuid
+
+  description String?
+  oldValue    Json?   @map("old_value")
+  newValue    Json?   @map("new_value")
+
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+  requestId String? @map("request_id")
+
+  source   AuditSource   @default(admin_panel)
+  severity AuditSeverity @default(info)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([adminIdentityId])
+  @@index([entityType, entityId])
+  @@index([workspaceId, createdAt])
+  @@index([createdAt])
+  @@index([severity])
+}
+// Support / notifications / pages / blogs placeholders (kept from original)
+model SupportTicket {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  createdById String? @map("created_by") @db.Uuid
+  createdBy Identity? @relation("CreatedTickets", fields: [createdById], references: [id])
+
+  assignedToId String? @map("assigned_to") @db.Uuid
+  assignedTo Identity? @relation("AssignedTickets", fields: [assignedToId], references: [id])
+
+  title String
+  body  String
+  status String
+  priority String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+}
+
+model Notification {
+  id String @id @default(uuid()) @db.Uuid
+  workspaceId String @map("workspace_id") @db.Uuid
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+
+  recipientIdentityId String? @map("recipient_identity_id") @db.Uuid
+  recipientIdentity Identity? @relation(fields: [recipientIdentityId], references: [id])
+
+  recipientCustomerId String? @map("recipient_customer_id") @db.Uuid
+  recipientCustomer Customer? @relation(fields: [recipientCustomerId], references: [id])
+
+  channel String
+  payload Json
+  isRead Boolean @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+}
