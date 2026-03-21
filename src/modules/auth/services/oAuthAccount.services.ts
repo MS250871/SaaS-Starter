@@ -1,20 +1,39 @@
 import { oauthAccountCrud, oauthAccountQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 /**
  * Get OAuth account by ID
  */
 export async function getOAuthAccountById(id: string) {
-  return oauthAccountQueries.byId(id);
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OAuth account ID is required');
+  }
+
+  const account = await oauthAccountQueries.byId(id);
+
+  if (!account) {
+    throwError(ERR.NOT_FOUND, 'OAuth account not found');
+  }
+
+  return account;
 }
 
 /**
- * Find OAuth account by provider + providerAccountId
+ * Find OAuth account
  */
 export async function findOAuthAccount(
   provider: string,
   providerAccountId: string,
 ) {
+  if (!provider || !providerAccountId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'Provider and providerAccountId are required',
+    );
+  }
+
   return oauthAccountQueries.findFirst({
     where: {
       provider,
@@ -27,6 +46,10 @@ export async function findOAuthAccount(
  * List OAuth accounts for identity
  */
 export async function listIdentityOAuthAccounts(identityId: string) {
+  if (!identityId) {
+    throwError(ERR.INVALID_INPUT, 'Identity ID is required');
+  }
+
   return oauthAccountQueries.many({
     where: {
       identityId,
@@ -41,6 +64,10 @@ export async function listIdentityOAuthAccounts(identityId: string) {
  * List OAuth accounts for customer
  */
 export async function listCustomerOAuthAccounts(customerId: string) {
+  if (!customerId) {
+    throwError(ERR.INVALID_INPUT, 'Customer ID is required');
+  }
+
   return oauthAccountQueries.many({
     where: {
       customerId,
@@ -55,7 +82,18 @@ export async function listCustomerOAuthAccounts(customerId: string) {
  * Create OAuth account
  */
 export async function createOAuthAccount(data: CreateInput<'OAuthAccount'>) {
-  return oauthAccountCrud.create(data);
+  if (!data?.provider || !data?.providerAccountId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'Provider and providerAccountId are required',
+    );
+  }
+
+  try {
+    return await oauthAccountCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create OAuth account', undefined, e);
+  }
 }
 
 /**
@@ -69,14 +107,27 @@ export async function createOAuthAccountForIdentity(params: {
   refreshToken?: string | null;
   scope?: string | null;
 }) {
-  return oauthAccountCrud.create({
-    identityId: params.identityId,
-    provider: params.provider,
-    providerAccountId: params.providerAccountId,
-    accessToken: params.accessToken ?? undefined,
-    refreshToken: params.refreshToken ?? undefined,
-    scope: params.scope ?? undefined,
-  });
+  if (!params.identityId || !params.provider || !params.providerAccountId) {
+    throwError(ERR.INVALID_INPUT, 'Missing required OAuth identity params');
+  }
+
+  try {
+    return await oauthAccountCrud.create({
+      identityId: params.identityId,
+      provider: params.provider,
+      providerAccountId: params.providerAccountId,
+      accessToken: params.accessToken ?? undefined,
+      refreshToken: params.refreshToken ?? undefined,
+      scope: params.scope ?? undefined,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to create OAuth account for identity',
+      undefined,
+      e,
+    );
+  }
 }
 
 /**
@@ -90,14 +141,27 @@ export async function createOAuthAccountForCustomer(params: {
   refreshToken?: string | null;
   scope?: string | null;
 }) {
-  return oauthAccountCrud.create({
-    customerId: params.customerId,
-    provider: params.provider,
-    providerAccountId: params.providerAccountId,
-    accessToken: params.accessToken ?? undefined,
-    refreshToken: params.refreshToken ?? undefined,
-    scope: params.scope ?? undefined,
-  });
+  if (!params.customerId || !params.provider || !params.providerAccountId) {
+    throwError(ERR.INVALID_INPUT, 'Missing required OAuth customer params');
+  }
+
+  try {
+    return await oauthAccountCrud.create({
+      customerId: params.customerId,
+      provider: params.provider,
+      providerAccountId: params.providerAccountId,
+      accessToken: params.accessToken ?? undefined,
+      refreshToken: params.refreshToken ?? undefined,
+      scope: params.scope ?? undefined,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to create OAuth account for customer',
+      undefined,
+      e,
+    );
+  }
 }
 
 /**
@@ -111,13 +175,21 @@ export async function updateOAuthTokens(
     scope?: string | null;
   },
 ) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OAuth account ID is required');
+  }
+
   const payload: UpdateInput<'OAuthAccount'> = {
     accessToken: data.accessToken ?? undefined,
     refreshToken: data.refreshToken ?? undefined,
     scope: data.scope ?? undefined,
   };
 
-  return oauthAccountCrud.update(id, payload);
+  try {
+    return await oauthAccountCrud.update(id, payload);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update OAuth tokens', undefined, e);
+  }
 }
 
 /**
@@ -127,10 +199,23 @@ export async function linkOAuthAccountToIdentity(
   id: string,
   identityId: string,
 ) {
-  return oauthAccountCrud.update(id, {
-    identityId,
-    customerId: null,
-  });
+  if (!id || !identityId) {
+    throwError(ERR.INVALID_INPUT, 'id and identityId are required');
+  }
+
+  try {
+    return await oauthAccountCrud.update(id, {
+      identityId,
+      customerId: null,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to link OAuth account to identity',
+      undefined,
+      e,
+    );
+  }
 }
 
 /**
@@ -140,15 +225,36 @@ export async function linkOAuthAccountToCustomer(
   id: string,
   customerId: string,
 ) {
-  return oauthAccountCrud.update(id, {
-    customerId,
-    identityId: null,
-  });
+  if (!id || !customerId) {
+    throwError(ERR.INVALID_INPUT, 'id and customerId are required');
+  }
+
+  try {
+    return await oauthAccountCrud.update(id, {
+      customerId,
+      identityId: null,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to link OAuth account to customer',
+      undefined,
+      e,
+    );
+  }
 }
 
 /**
  * Delete OAuth account
  */
 export async function deleteOAuthAccount(id: string) {
-  return oauthAccountCrud.delete(id);
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OAuth account ID is required');
+  }
+
+  try {
+    return await oauthAccountCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete OAuth account', undefined, e);
+  }
 }

@@ -14,6 +14,9 @@ import type {
   UpdateInput,
 } from './prisma-types';
 
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
+
 type Guard = {
   model: ModelName;
   foreignKey: string;
@@ -59,7 +62,7 @@ export function buildCud<M extends ModelName>({
     const workspaceId = getWorkspaceId();
 
     if (!workspaceId) {
-      throw new Error(`Workspace context missing for ${model}`);
+      throwError(ERR.TENANT_REQUIRED, `Workspace context missing for ${model}`);
     }
 
     return {
@@ -81,13 +84,20 @@ export function buildCud<M extends ModelName>({
         const workspaceId = getWorkspaceId();
 
         if (!workspaceId) {
-          throw new Error(`Workspace context missing for ${model}`);
+          throwError(
+            ERR.TENANT_REQUIRED,
+            `Workspace context missing for ${model}`,
+          );
         }
 
         finalData[workspaceField] = workspaceId;
       }
 
-      return d.create({ data: finalData });
+      try {
+        return await d.create({ data: finalData });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to create ${model}`, undefined, e);
+      }
     },
 
     /**
@@ -96,10 +106,14 @@ export function buildCud<M extends ModelName>({
     async update(id: string, data: UpdateInput<M>) {
       const d = delegate();
 
-      return d.update({
-        where: enforceWorkspace({ id }),
-        data,
-      });
+      try {
+        return await d.update({
+          where: enforceWorkspace({ id }),
+          data,
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to update ${model}`, undefined, e);
+      }
     },
 
     /**
@@ -118,20 +132,24 @@ export function buildCud<M extends ModelName>({
         });
 
         if (count > 0) {
-          throw new Error(g.message);
+          throwError(ERR.INVALID_STATE, g.message);
         }
       }
 
-      if (softDelete && activeField) {
-        return d.update({
-          where: enforceWorkspace({ id }),
-          data: { [activeField]: false },
-        });
-      }
+      try {
+        if (softDelete && activeField) {
+          return await d.update({
+            where: enforceWorkspace({ id }),
+            data: { [activeField]: false },
+          });
+        }
 
-      return d.delete({
-        where: enforceWorkspace({ id }),
-      });
+        return await d.delete({
+          where: enforceWorkspace({ id }),
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to delete ${model}`, undefined, e);
+      }
     },
 
     /**

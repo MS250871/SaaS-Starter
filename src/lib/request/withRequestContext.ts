@@ -2,6 +2,8 @@ import { runWithContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
 import type { ActorContext } from '@/lib/context/actor-context';
 import { buildActorContext } from '@/lib/context/build-actor';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 export async function withRequestContext(
   req: Request,
@@ -10,7 +12,7 @@ export async function withRequestContext(
   const raw = req.headers.get('x-request-context');
 
   if (!raw) {
-    throw new Error('Missing request context');
+    throwError(ERR.TENANT_REQUIRED, 'Missing request context');
   }
 
   const requestContext = JSON.parse(raw);

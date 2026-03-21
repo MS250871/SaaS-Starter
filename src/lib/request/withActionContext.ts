@@ -5,6 +5,8 @@ import { runWithContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
 import { buildActorContext } from '@/lib/context/build-actor';
 import type { ActorContext } from '@/lib/context/actor-context';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 export async function withActionContext<T>(handler: () => Promise<T>) {
   const hdrs = await headers();
@@ -13,7 +15,7 @@ export async function withActionContext<T>(handler: () => Promise<T>) {
   const raw = hdrs.get('x-request-context');
 
   if (!raw) {
-    throw new Error('Missing request context');
+    throwError(ERR.TENANT_REQUIRED, 'Missing request context');
   }
 
   const requestContext = JSON.parse(raw);

@@ -4,80 +4,88 @@ import {
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 /**
- * Get workspace settings
+ * Get settings
  */
 export async function getWorkspaceSettings(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
+
   return workspaceSettingsQueries.findFirst({
-    where: {
-      workspaceId,
-    },
+    where: { workspaceId },
   });
 }
 
 /**
- * Create workspace settings
+ * Create settings
  */
 export async function createWorkspaceSettings(
   data: CreateInput<'WorkspaceSettings'>,
 ) {
-  return workspaceSettingsCrud.create(data);
+  if (!data?.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId required');
+  }
+
+  try {
+    return await workspaceSettingsCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create settings', undefined, e);
+  }
 }
 
 /**
- * Update workspace settings
+ * Update settings
  */
 export async function updateWorkspaceSettings(
   id: string,
   data: UpdateInput<'WorkspaceSettings'>,
 ) {
-  return workspaceSettingsCrud.update(id, data);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Settings ID required');
+
+  try {
+    return await workspaceSettingsCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update settings', undefined, e);
+  }
 }
 
 /**
- * Upsert workspace settings
+ * Upsert
  */
 export async function upsertWorkspaceSettings(params: {
   workspaceId: string;
   themes?: any;
   settings?: any;
 }) {
+  if (!params.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId required');
+  }
+
   const existing = await getWorkspaceSettings(params.workspaceId);
 
   if (!existing) {
-    return workspaceSettingsCrud.create({
+    return createWorkspaceSettings({
       workspaceId: params.workspaceId,
       themes: params.themes ?? {},
       settings: params.settings ?? {},
     });
   }
 
-  return workspaceSettingsCrud.update(existing.id, {
+  return updateWorkspaceSettings(existing.id, {
     themes: params.themes ?? existing.themes,
     settings: params.settings ?? existing.settings,
   });
 }
 
-/**
- * Update theme only
- */
 export async function updateWorkspaceTheme(workspaceId: string, themes: any) {
-  return upsertWorkspaceSettings({
-    workspaceId,
-    themes,
-  });
+  return upsertWorkspaceSettings({ workspaceId, themes });
 }
 
-/**
- * Update settings only
- */
 export async function updateWorkspaceConfig(
   workspaceId: string,
   settings: any,
 ) {
-  return upsertWorkspaceSettings({
-    workspaceId,
-    settings,
-  });
+  return upsertWorkspaceSettings({ workspaceId, settings });
 }

@@ -15,6 +15,9 @@ import type {
   SelectInput,
 } from './prisma-types';
 
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
+
 type SortEntry = { column: string; dir: 'asc' | 'desc' };
 
 type SearchColumn = {
@@ -156,7 +159,10 @@ export function buildQueries<M extends ModelName>({
       const workspaceId = getWorkspaceId();
 
       if (!workspaceId) {
-        throw new Error(`Workspace context missing for ${model}`);
+        throwError(
+          ERR.TENANT_REQUIRED,
+          `Workspace context missing for ${model}`,
+        );
       }
 
       finalWhere[workspaceField] = workspaceId;
@@ -173,10 +179,14 @@ export function buildQueries<M extends ModelName>({
         select?: SelectInput<M>;
       },
     ) {
-      return delegate().findFirst({
-        where: withDefaultWhere({ id } as any),
-        ...opts,
-      });
+      try {
+        return await delegate().findFirst({
+          where: withDefaultWhere({ id } as any),
+          ...opts,
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
+      }
     },
 
     async findUnique(opts: {
@@ -184,11 +194,15 @@ export function buildQueries<M extends ModelName>({
       include?: IncludeInput<M>;
       select?: SelectInput<M>;
     }) {
-      return delegate().findUnique({
-        where: opts.where,
-        include: opts.include,
-        select: opts.select,
-      });
+      try {
+        return await delegate().findUnique({
+          where: opts.where,
+          include: opts.include,
+          select: opts.select,
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
+      }
     },
 
     async findFirst(opts?: {
@@ -197,10 +211,14 @@ export function buildQueries<M extends ModelName>({
       select?: SelectInput<M>;
       orderBy?: any;
     }) {
-      return delegate().findFirst({
-        ...opts,
-        where: withDefaultWhere(opts?.where),
-      });
+      try {
+        return await delegate().findFirst({
+          ...opts,
+          where: withDefaultWhere(opts?.where),
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
+      }
     },
 
     async many(opts?: {
@@ -211,10 +229,14 @@ export function buildQueries<M extends ModelName>({
       take?: number;
       skip?: number;
     }) {
-      return delegate().findMany({
-        ...opts,
-        where: withDefaultWhere(opts?.where),
-      });
+      try {
+        return await delegate().findMany({
+          ...opts,
+          where: withDefaultWhere(opts?.where),
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to list ${model}`, undefined, e);
+      }
     },
 
     async paginated(opts?: {
@@ -228,81 +250,98 @@ export function buildQueries<M extends ModelName>({
       search?: SearchOptions;
       filters?: Record<string, FilterValue>;
     }) {
-      const page = opts?.page ?? 1;
-      const pageSize = opts?.pageSize ?? 20;
+      try {
+        const page = opts?.page ?? 1;
+        const pageSize = opts?.pageSize ?? 20;
 
-      const where = withDefaultWhere(opts?.where ?? {});
+        const where = withDefaultWhere(opts?.where ?? {});
 
-      if (opts?.filters) {
-        for (const col of Object.keys(opts.filters)) {
-          filterToPrisma(where, col, opts.filters[col]);
+        if (opts?.filters) {
+          for (const col of Object.keys(opts.filters)) {
+            filterToPrisma(where, col, opts.filters[col]);
+          }
         }
+
+        if (opts?.search?.text && opts?.search?.columns?.length) {
+          const or = opts.search.columns.map((c) => {
+            const path = c.column.split('.');
+            return buildNestedWhere(path, opts.search!.text!, c.relationType);
+          });
+
+          (where as any).OR = or;
+        }
+
+        let orderBy = opts?.orderBy ?? undefined;
+
+        if (opts?.sort && opts.sort.length > 0) {
+          orderBy = opts.sort.map((s) => {
+            if (s.column.startsWith('_count.')) {
+              const rel = s.column.split('.')[1];
+              return { [rel]: { _count: s.dir } };
+            }
+
+            if (s.column.includes('.')) {
+              const parts = s.column.split('.');
+              return parts.reduceRight<any>(
+                (acc, part) => ({ [part]: acc }),
+                s.dir,
+              );
+            }
+
+            return { [s.column]: s.dir };
+          });
+        }
+
+        const [items, total] = await Promise.all([
+          delegate().findMany({
+            where,
+            include: opts?.include,
+            select: opts?.select,
+            orderBy,
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
+          delegate().count({ where }),
+        ]);
+
+        return {
+          items,
+          total,
+          page,
+          pageSize,
+          pageCount: Math.ceil(total / pageSize),
+        };
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to query ${model}`, undefined, e);
       }
-
-      if (opts?.search?.text && opts?.search?.columns?.length) {
-        const or = opts.search.columns.map((c) => {
-          const path = c.column.split('.');
-          return buildNestedWhere(path, opts.search!.text!, c.relationType);
-        });
-
-        (where as any).OR = or;
-      }
-
-      let orderBy = opts?.orderBy ?? undefined;
-
-      if (opts?.sort && opts.sort.length > 0) {
-        orderBy = opts.sort.map((s) => {
-          if (s.column.startsWith('_count.')) {
-            const rel = s.column.split('.')[1];
-            return { [rel]: { _count: s.dir } };
-          }
-
-          if (s.column.includes('.')) {
-            const parts = s.column.split('.');
-            return parts.reduceRight<any>(
-              (acc, part) => ({ [part]: acc }),
-              s.dir,
-            );
-          }
-
-          return { [s.column]: s.dir };
-        });
-      }
-
-      const [items, total] = await Promise.all([
-        delegate().findMany({
-          where,
-          include: opts?.include,
-          select: opts?.select,
-          orderBy,
-          skip: (page - 1) * pageSize,
-          take: pageSize,
-        }),
-        delegate().count({ where }),
-      ]);
-
-      return {
-        items,
-        total,
-        page,
-        pageSize,
-        pageCount: Math.ceil(total / pageSize),
-      };
     },
 
     async count(where?: WhereInput<M>) {
-      return delegate().count({
-        where: withDefaultWhere(where),
-      });
+      try {
+        return await delegate().count({
+          where: withDefaultWhere(where),
+        });
+      } catch (e) {
+        throwError(ERR.DB_ERROR, `Failed to count ${model}`, undefined, e);
+      }
     },
 
     async exists(where?: WhereInput<M>) {
-      const r = await delegate().findFirst({
-        where: withDefaultWhere(where),
-        select: { id: true },
-      });
+      try {
+        const r = await delegate().findFirst({
+          where: withDefaultWhere(where),
+          select: { id: true },
+        });
 
-      return !!r;
+        return !!r;
+      } catch (e) {
+        throwError(
+          ERR.DB_ERROR,
+          `Failed to check existence of ${model}`,
+          undefined,
+          e,
+        );
+      }
     },
 
     get delegate() {

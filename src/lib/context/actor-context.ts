@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 export type ActorContext = {
   actorType: 'identity' | 'customer' | 'system';
@@ -26,7 +28,7 @@ export function getActor(): ActorContext {
   const actor = actorStorage.getStore();
 
   if (!actor) {
-    throw new Error('ActorContext not initialized');
+    throwError(ERR.INTERNAL_ERROR, 'ActorContext not initialized');
   }
 
   return actor;

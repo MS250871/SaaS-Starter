@@ -1,92 +1,92 @@
 import { workspaceCrud, workspaceQueries } from '@/modules/workspace/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 /**
- * Get workspace by ID
+ * Get workspace
  */
 export async function getWorkspaceById(id: string) {
-  return workspaceQueries.byId(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
+
+  const ws = await workspaceQueries.byId(id);
+  if (!ws) throwError(ERR.NOT_FOUND, 'Workspace not found');
+
+  return ws;
 }
 
-/**
- * Find workspace by slug
- */
 export async function findWorkspaceBySlug(slug: string) {
-  return workspaceQueries.findFirst({
-    where: {
-      slug,
-    },
-  });
+  if (!slug) throwError(ERR.INVALID_INPUT, 'Slug required');
+
+  return workspaceQueries.findFirst({ where: { slug } });
 }
 
-/**
- * Find workspace by primary email
- */
 export async function findWorkspaceByPrimaryEmail(email: string) {
+  if (!email) throwError(ERR.INVALID_INPUT, 'Email required');
+
   return workspaceQueries.findFirst({
-    where: {
-      primaryEmail: email.toLowerCase(),
-    },
+    where: { primaryEmail: email.toLowerCase() },
   });
 }
 
-/**
- * Create workspace
- */
 export async function createWorkspace(data: CreateInput<'Workspace'>) {
-  const payload: CreateInput<'Workspace'> = { ...data };
+  if (!data?.slug) {
+    throwError(ERR.INVALID_INPUT, 'Workspace slug required');
+  }
+
+  const exists = await workspaceQueries.exists({ slug: data.slug });
+  if (exists) throwError(ERR.ALREADY_EXISTS, 'Workspace slug already exists');
+
+  const payload = { ...data };
 
   if (payload.primaryEmail) {
     payload.primaryEmail = payload.primaryEmail.toLowerCase();
   }
 
-  return workspaceCrud.create(payload);
+  try {
+    return await workspaceCrud.create(payload);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create workspace', undefined, e);
+  }
 }
 
-/**
- * Update workspace
- */
 export async function updateWorkspace(
   id: string,
   data: UpdateInput<'Workspace'>,
 ) {
-  const payload: UpdateInput<'Workspace'> = { ...data };
+  if (!id) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
+
+  const payload = { ...data };
 
   if (typeof payload.primaryEmail === 'string') {
     payload.primaryEmail = payload.primaryEmail.toLowerCase();
   }
 
-  return workspaceCrud.update(id, payload);
+  try {
+    return await workspaceCrud.update(id, payload);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update workspace', undefined, e);
+  }
 }
 
-/**
- * Deactivate workspace
- */
 export async function deactivateWorkspace(id: string) {
-  return workspaceCrud.update(id, {
-    isActive: false,
-  });
+  return updateWorkspace(id, { isActive: false });
 }
 
-/**
- * Activate workspace
- */
 export async function activateWorkspace(id: string) {
-  return workspaceCrud.update(id, {
-    isActive: true,
-  });
+  return updateWorkspace(id, { isActive: true });
 }
 
-/**
- * Delete workspace
- */
 export async function deleteWorkspace(id: string) {
-  return workspaceCrud.delete(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
+
+  try {
+    return await workspaceCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete workspace', undefined, e);
+  }
 }
 
-/**
- * List workspaces
- */
 export async function listWorkspaces(opts?: {
   page?: number;
   pageSize?: number;
@@ -94,29 +94,18 @@ export async function listWorkspaces(opts?: {
   return workspaceQueries.paginated({
     page: opts?.page ?? 1,
     pageSize: opts?.pageSize ?? 20,
-    sort: [
-      {
-        column: 'createdAt',
-        dir: 'desc',
-      },
-    ],
+    sort: [{ column: 'createdAt', dir: 'desc' }],
   });
 }
 
-/**
- * Check if workspace exists by slug
- */
 export async function workspaceExistsBySlug(slug: string) {
-  return workspaceQueries.exists({
-    slug,
-  });
+  if (!slug) throwError(ERR.INVALID_INPUT, 'Slug required');
+
+  return workspaceQueries.exists({ slug });
 }
 
-/**
- * Check if workspace exists by domain
- */
 export async function workspaceExistsByDomain(domain: string) {
-  return workspaceQueries.exists({
-    defaultDomain: domain,
-  });
+  if (!domain) throwError(ERR.INVALID_INPUT, 'Domain required');
+
+  return workspaceQueries.exists({ defaultDomain: domain });
 }

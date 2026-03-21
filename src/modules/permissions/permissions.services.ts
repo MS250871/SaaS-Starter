@@ -17,6 +17,9 @@ import {
   PermissionEffect,
 } from '@/generated/prisma/client';
 
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
+
 /* -------------------------------------------------------------------------- */
 /*                              SHARED TYPES                                  */
 /* -------------------------------------------------------------------------- */
@@ -61,160 +64,167 @@ type ResolvePermissionsParams = {
 /*                        PERMISSION DEFINITIONS                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Get permission definition by ID
- */
 export async function getPermissionById(id: string) {
-  return permissionQueries.byId(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Permission ID is required');
+
+  const permission = await permissionQueries.byId(id);
+  if (!permission) throwError(ERR.NOT_FOUND, 'Permission not found');
+
+  return permission;
 }
 
-/**
- * Find permission by key
- * Global permissions only — no workspace scoping here.
- */
 export async function findPermissionByKey(key: string) {
+  if (!key) throwError(ERR.INVALID_INPUT, 'Permission key is required');
+
   return permissionQueries.findFirst({
-    where: {
-      key,
-      isActive: true,
-    },
+    where: { key, isActive: true },
   });
 }
 
-/**
- * List all permissions
- */
 export async function listPermissions() {
   return permissionQueries.many({
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      entity: 'asc',
-    },
+    where: { isActive: true },
+    orderBy: { entity: 'asc' },
   });
 }
 
-/**
- * List permissions by entity/module
- */
 export async function listPermissionsByEntity(entity: string) {
+  if (!entity) throwError(ERR.INVALID_INPUT, 'Entity is required');
+
   return permissionQueries.many({
-    where: {
-      entity,
-      isActive: true,
-    },
-    orderBy: {
-      key: 'asc',
-    },
+    where: { entity, isActive: true },
+    orderBy: { key: 'asc' },
   });
 }
 
-/**
- * Create permission definition
- */
 export async function createPermission(data: CreateInput<'Permission'>) {
-  return permissionCrud.create(data);
+  if (!data?.key) throwError(ERR.INVALID_INPUT, 'Permission key is required');
+
+  const existing = await permissionQueries.findFirst({
+    where: { key: data.key },
+  });
+
+  if (existing) {
+    throwError(ERR.ALREADY_EXISTS, 'Permission key already exists');
+  }
+
+  try {
+    return await permissionCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create permission', undefined, e);
+  }
 }
 
-/**
- * Update permission definition
- */
 export async function updatePermission(
   id: string,
   data: UpdateInput<'Permission'>,
 ) {
-  return permissionCrud.update(id, data);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Permission ID is required');
+
+  try {
+    return await permissionCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update permission', undefined, e);
+  }
 }
 
-/**
- * Delete permission definition
- */
 export async function deletePermission(id: string) {
-  return permissionCrud.delete(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Permission ID is required');
+
+  try {
+    return await permissionCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete permission', undefined, e);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
 /*                           ROLE PERMISSIONS                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Get role permission by ID
- */
 export async function getRolePermissionById(id: string) {
-  return rolePermissionQueries.byId(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'RolePermission ID is required');
+
+  const rp = await rolePermissionQueries.byId(id);
+  if (!rp) throwError(ERR.NOT_FOUND, 'Role permission not found');
+
+  return rp;
 }
 
-/**
- * Create role permission
- */
 export async function createRolePermission(data: RolePermissionInput) {
-  return rolePermissionCrud.create({
-    ...data,
-  });
+  if (!data.permissionId) {
+    throwError(ERR.INVALID_INPUT, 'permissionId is required');
+  }
+
+  if (!data.workspaceRole && !data.platformRole) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'Either workspaceRole or platformRole required',
+    );
+  }
+
+  try {
+    return await rolePermissionCrud.create({ ...data });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create role permission', undefined, e);
+  }
 }
 
-/**
- * Delete role permission
- */
 export async function deleteRolePermission(id: string) {
-  return rolePermissionCrud.delete(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'RolePermission ID is required');
+
+  try {
+    return await rolePermissionCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete role permission', undefined, e);
+  }
 }
 
-/**
- * List all permissions for a workspace role
- */
 export async function listRolePermissionsByWorkspaceRole(
   workspaceRole: WorkspaceRole,
 ) {
+  if (!workspaceRole) {
+    throwError(ERR.INVALID_INPUT, 'workspaceRole is required');
+  }
+
   return rolePermissionQueries.many({
-    where: {
-      workspaceRole,
-    },
-    include: {
-      permission: true,
-    },
+    where: { workspaceRole },
+    include: { permission: true },
   });
 }
 
-/**
- * List all permissions for a platform role
- */
 export async function listRolePermissionsByPlatformRole(
   platformRole: PlatformRole,
 ) {
+  if (!platformRole) {
+    throwError(ERR.INVALID_INPUT, 'platformRole is required');
+  }
+
   return rolePermissionQueries.many({
-    where: {
-      platformRole,
-    },
-    include: {
-      permission: true,
-    },
+    where: { platformRole },
+    include: { permission: true },
   });
 }
 
-/**
- * Remove all role-permission mappings for a workspace role
- * Useful for admin panel reset / replacement flows.
- */
 export async function clearWorkspaceRolePermissions(
   workspaceRole: WorkspaceRole,
 ) {
+  if (!workspaceRole) {
+    throwError(ERR.INVALID_INPUT, 'workspaceRole is required');
+  }
+
   return rolePermissionCrud.delegate.deleteMany?.({
-    where: {
-      workspaceRole,
-    },
+    where: { workspaceRole },
   });
 }
 
-/**
- * Remove all role-permission mappings for a platform role
- */
 export async function clearPlatformRolePermissions(platformRole: PlatformRole) {
+  if (!platformRole) {
+    throwError(ERR.INVALID_INPUT, 'platformRole is required');
+  }
+
   return rolePermissionCrud.delegate.deleteMany?.({
-    where: {
-      platformRole,
-    },
+    where: { platformRole },
   });
 }
 
@@ -222,74 +232,96 @@ export async function clearPlatformRolePermissions(platformRole: PlatformRole) {
 /*                     WORKSPACE ROLE PERMISSIONS                             */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Get workspace role permission by ID
- */
 export async function getWorkspaceRolePermissionById(id: string) {
-  return workspaceRolePermissionQueries.byId(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'ID is required');
+
+  const rec = await workspaceRolePermissionQueries.byId(id);
+  if (!rec) throwError(ERR.NOT_FOUND, 'Workspace role permission not found');
+
+  return rec;
 }
 
-/**
- * Create workspace role permission override
- */
 export async function createWorkspaceRolePermission(
   data: WorkspaceRolePermissionInput,
 ) {
-  return workspaceRolePermissionCrud.create({
-    workspaceId: data.workspaceId,
-    workspaceRole: data.workspaceRole,
-    permissionId: data.permissionId,
-    isAllowed: data.isAllowed ?? true,
-  });
+  if (!data.workspaceId || !data.workspaceRole || !data.permissionId) {
+    throwError(ERR.INVALID_INPUT, 'Invalid workspace role permission data');
+  }
+
+  try {
+    return await workspaceRolePermissionCrud.create({
+      workspaceId: data.workspaceId,
+      workspaceRole: data.workspaceRole,
+      permissionId: data.permissionId,
+      isAllowed: data.isAllowed ?? true,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to create workspace role permission',
+      undefined,
+      e,
+    );
+  }
 }
 
-/**
- * Update workspace role permission override
- */
 export async function updateWorkspaceRolePermission(
   id: string,
   data: UpdateInput<'WorkspaceRolePermission'>,
 ) {
-  return workspaceRolePermissionCrud.update(id, data);
+  if (!id) throwError(ERR.INVALID_INPUT, 'ID is required');
+
+  try {
+    return await workspaceRolePermissionCrud.update(id, data);
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to update workspace role permission',
+      undefined,
+      e,
+    );
+  }
 }
 
-/**
- * Delete workspace role permission override
- */
 export async function deleteWorkspaceRolePermission(id: string) {
-  return workspaceRolePermissionCrud.delete(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'ID is required');
+
+  try {
+    return await workspaceRolePermissionCrud.delete(id);
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to delete workspace role permission',
+      undefined,
+      e,
+    );
+  }
 }
 
-/**
- * List workspace-specific overrides for a role
- */
 export async function listWorkspaceRolePermissions(
   workspaceId: string,
   workspaceRole: WorkspaceRole,
 ) {
+  if (!workspaceId || !workspaceRole) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and workspaceRole required');
+  }
+
   return workspaceRolePermissionQueries.many({
-    where: {
-      workspaceId,
-      workspaceRole,
-    },
-    include: {
-      permission: true,
-    },
+    where: { workspaceId, workspaceRole },
+    include: { permission: true },
   });
 }
 
-/**
- * Clear all overrides for a workspace role inside a workspace
- */
 export async function clearWorkspaceRolePermissionOverrides(
   workspaceId: string,
   workspaceRole: WorkspaceRole,
 ) {
+  if (!workspaceId || !workspaceRole) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and workspaceRole required');
+  }
+
   return workspaceRolePermissionCrud.delegate.deleteMany?.({
-    where: {
-      workspaceId,
-      workspaceRole,
-    },
+    where: { workspaceId, workspaceRole },
   });
 }
 
@@ -297,35 +329,41 @@ export async function clearWorkspaceRolePermissionOverrides(
 /*                           USER PERMISSIONS                                 */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Grant permission to identity
- */
 export async function grantPermission(data: CreateInput<'UserPermission'>) {
-  return userPermissionCrud.create(data);
+  if (!data?.identityId || !data?.permissionId) {
+    throwError(ERR.INVALID_INPUT, 'Invalid user permission data');
+  }
+
+  try {
+    return await userPermissionCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to grant permission', undefined, e);
+  }
 }
 
-/**
- * Grant permission helper
- */
 export async function grantIdentityPermission(
   params: GrantIdentityPermissionParams,
 ) {
-  return userPermissionCrud.create({
-    identityId: params.identityId,
-    permissionId: params.permissionId,
-    workspaceId: params.workspaceId ?? undefined,
-    grantedById: params.grantedById ?? undefined,
-    source: params.source ?? PermissionSource.MANUAL,
-    expiresAt: params.expiresAt ?? undefined,
-    isActive: true,
-    isTemporary: !!params.expiresAt,
-    effect: PermissionEffect.ALLOW,
-  });
-}
+  if (!params.identityId || !params.permissionId) {
+    throwError(ERR.INVALID_INPUT, 'Invalid grant params');
+  }
 
-/**
- * Deny permission helper
- */
+  try {
+    return await userPermissionCrud.create({
+      identityId: params.identityId,
+      permissionId: params.permissionId,
+      workspaceId: params.workspaceId ?? undefined,
+      grantedById: params.grantedById ?? undefined,
+      source: params.source ?? PermissionSource.MANUAL,
+      expiresAt: params.expiresAt ?? undefined,
+      isActive: true,
+      isTemporary: !!params.expiresAt,
+      effect: PermissionEffect.ALLOW,
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to grant permission', undefined, e);
+  }
+}
 
 export async function denyIdentityPermission(params: {
   identityId: string;
@@ -333,72 +371,70 @@ export async function denyIdentityPermission(params: {
   workspaceId?: string | null;
   grantedById?: string | null;
 }) {
-  return userPermissionCrud.create({
-    identityId: params.identityId,
-    permissionId: params.permissionId,
-    workspaceId: params.workspaceId ?? undefined,
-    grantedById: params.grantedById ?? undefined,
-    source: PermissionSource.MANUAL,
-    isActive: true,
-    effect: PermissionEffect.DENY,
-  });
-}
+  if (!params.identityId || !params.permissionId) {
+    throwError(ERR.INVALID_INPUT, 'Invalid deny params');
+  }
 
-/**
- * Revoke permission
- */
-export async function revokePermission(id: string, revokedById?: string) {
-  return userPermissionCrud.update(id, {
-    isActive: false,
-    revokedById: revokedById ?? undefined,
-    revokedAt: new Date(),
-  });
-}
-
-/**
- * Get user permission assignment
- */
-export async function getUserPermissionById(id: string) {
-  return userPermissionQueries.byId(id);
-}
-
-/**
- * List identity permissions
- */
-export async function listIdentityPermissions(identityId: string) {
-  return userPermissionQueries.many({
-    where: {
-      identityId,
+  try {
+    return await userPermissionCrud.create({
+      identityId: params.identityId,
+      permissionId: params.permissionId,
+      workspaceId: params.workspaceId ?? undefined,
+      grantedById: params.grantedById ?? undefined,
+      source: PermissionSource.MANUAL,
       isActive: true,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    include: {
-      permission: true,
-    },
+      effect: PermissionEffect.DENY,
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to deny permission', undefined, e);
+  }
+}
+
+export async function revokePermission(id: string, revokedById?: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Permission ID is required');
+
+  try {
+    return await userPermissionCrud.update(id, {
+      isActive: false,
+      revokedById: revokedById ?? undefined,
+      revokedAt: new Date(),
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to revoke permission', undefined, e);
+  }
+}
+
+export async function getUserPermissionById(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'ID is required');
+
+  const perm = await userPermissionQueries.byId(id);
+  if (!perm) throwError(ERR.NOT_FOUND, 'User permission not found');
+
+  return perm;
+}
+
+export async function listIdentityPermissions(identityId: string) {
+  if (!identityId) throwError(ERR.INVALID_INPUT, 'identityId required');
+
+  return userPermissionQueries.many({
+    where: { identityId, isActive: true },
+    orderBy: { createdAt: 'desc' },
+    include: { permission: true },
   });
 }
 
-/**
- * List workspace permissions for identity
- */
 export async function listWorkspaceIdentityPermissions(
   workspaceId: string,
   identityId: string,
 ) {
+  if (!workspaceId || !identityId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and identityId required');
+  }
+
   return userPermissionQueries.many({
-    where: {
-      identityId,
-      workspaceId,
-      isActive: true,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    include: {
-      permission: true,
-    },
+    where: { identityId, workspaceId, isActive: true },
+    orderBy: { createdAt: 'desc' },
+    include: { permission: true },
   });
 }
 
@@ -414,10 +450,6 @@ function toPermissionKeySet(records: Array<{ permission?: { key: string } }>) {
   );
 }
 
-/**
- * Base role permissions from global role defaults.
- * Supports one or both of platformRole / workspaceRole.
- */
 export async function getBaseRolePermissionKeys(params: {
   workspaceRole?: WorkspaceRole | null;
   platformRole?: PlatformRole | null;
@@ -445,10 +477,6 @@ export async function getBaseRolePermissionKeys(params: {
   return keys;
 }
 
-/**
- * Workspace-specific role overrides.
- * Adds allowed permissions and removes denied permissions.
- */
 export async function applyWorkspaceRoleOverrides(params: {
   workspaceId: string;
   workspaceRole: WorkspaceRole;
@@ -473,11 +501,6 @@ export async function applyWorkspaceRoleOverrides(params: {
   return params.basePermissions;
 }
 
-/**
- * User-level overrides.
- * Currently this table is grant-oriented, so active rows add permissions.
- * Inactive / revoked rows are ignored.
- */
 export async function applyUserPermissionOverrides(params: {
   identityId: string;
   workspaceId?: string | null;
@@ -496,22 +519,15 @@ export async function applyUserPermissionOverrides(params: {
     const key = up.permission?.key;
     if (!key) continue;
 
-    // ❗ skip inactive
     if (!up.isActive) continue;
-
-    // ❗ skip revoked
     if (up.revokedAt) continue;
-
-    // skip expired
     if (up.expiresAt && up.expiresAt < now) continue;
 
-    // 🔴 DENY → remove
     if (up.effect === PermissionEffect.DENY) {
       params.permissions.delete(key);
       continue;
     }
 
-    // 🟢 ALLOW → add
     if (up.effect === PermissionEffect.ALLOW) {
       params.permissions.add(key);
     }
@@ -520,10 +536,6 @@ export async function applyUserPermissionOverrides(params: {
   return params.permissions;
 }
 
-/**
- * Resolve effective permissions for an actor.
- * This is the main resolver used at login / session refresh.
- */
 export async function resolvePermissions(params: ResolvePermissionsParams) {
   const permissions = await getBaseRolePermissionKeys({
     workspaceRole: params.workspaceRole ?? null,
@@ -553,16 +565,15 @@ export async function resolvePermissions(params: ResolvePermissionsParams) {
 /*                               CHECK HELPERS                                */
 /* -------------------------------------------------------------------------- */
 
-/**
- * Check if identity has permission via DB.
- * Useful for admin-panel lookups and debugging.
- * Prefer session-based checks at runtime.
- */
 export async function identityHasPermission(params: {
   identityId: string;
   permissionKey: string;
   workspaceId?: string | null;
 }) {
+  if (!params.identityId || !params.permissionKey) {
+    throwError(ERR.INVALID_INPUT, 'Invalid permission check params');
+  }
+
   const permission = await findPermissionByKey(params.permissionKey);
 
   if (!permission) return false;
@@ -599,6 +610,6 @@ export function hasPermission(permissions: string[], required: string) {
 
 export function assertPermission(permissions: string[], required: string) {
   if (!permissions.includes(required)) {
-    throw new Error(`Permission denied: ${required}`);
+    throwError(ERR.FORBIDDEN, `Permission denied: ${required}`);
   }
 }

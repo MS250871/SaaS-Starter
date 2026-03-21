@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PrismaClient } from '@/generated/prisma/client';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 type WorkspaceContext = {
   workspaceId: string;
@@ -37,7 +39,7 @@ export function getRequestContext(): RequestContext {
   const ctx = storage.getStore();
 
   if (!ctx) {
-    throw new Error('RequestContext not initialized');
+    throwError(ERR.INTERNAL_ERROR, 'RequestContext not initialized');
   }
 
   return ctx;

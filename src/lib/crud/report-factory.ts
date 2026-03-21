@@ -7,6 +7,9 @@ import {
   shouldBypassWorkspace,
 } from '@/lib/context/workspace-utils';
 
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
+
 type SortEntry = { column: string; dir: 'asc' | 'desc' };
 
 type FilterValue =
@@ -61,7 +64,10 @@ export const reportFactory = {
       const workspaceId = getWorkspaceId();
 
       if (!workspaceId) {
-        throw new Error(`Workspace context missing for report on ${opts.view}`);
+        throwError(
+          ERR.TENANT_REQUIRED,
+          `Workspace context missing for report on ${opts.view}`,
+        );
       }
 
       values.push(workspaceId);
@@ -155,17 +161,26 @@ export const reportFactory = {
       ${where}
     `;
 
-    const items = await prisma.$queryRawUnsafe(dataQuery, ...values);
-    const countRes: any = await prisma.$queryRawUnsafe(countQuery, ...values);
+    try {
+      const items = await prisma.$queryRawUnsafe(dataQuery, ...values);
+      const countRes: any = await prisma.$queryRawUnsafe(countQuery, ...values);
 
-    const total = Number(countRes[0]?.total ?? 0);
+      const total = Number(countRes[0]?.total ?? 0);
 
-    return {
-      items,
-      total,
-      page,
-      pageSize,
-      pageCount: Math.ceil(total / pageSize),
-    };
+      return {
+        items,
+        total,
+        page,
+        pageSize,
+        pageCount: Math.ceil(total / pageSize),
+      };
+    } catch (e) {
+      throwError(
+        ERR.DB_ERROR,
+        `Failed to generate report for ${opts.view}`,
+        undefined,
+        e,
+      );
+    }
   },
 };

@@ -16,16 +16,25 @@ import {
 } from '@/modules/entitlements/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 /* -------------------------------------------------------------------------- */
 /*                                   PLAN                                     */
 /* -------------------------------------------------------------------------- */
 
 export async function getPlanById(id: string) {
-  return planQueries.byId(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
+  const plan = await planQueries.byId(id);
+  if (!plan) throwError(ERR.NOT_FOUND, 'Plan not found');
+
+  return plan;
 }
 
 export async function findPlanByKey(key: string) {
+  if (!key) throwError(ERR.INVALID_INPUT, 'Plan key is required');
+
   return planQueries.findFirst({ where: { key } });
 }
 
@@ -34,15 +43,43 @@ export async function listPlans() {
 }
 
 export async function createPlan(data: CreateInput<'Plan'>) {
-  return planCrud.create(data);
+  if (!data?.key) {
+    throwError(ERR.INVALID_INPUT, 'Plan key is required');
+  }
+
+  const existing = await planQueries.findFirst({
+    where: { key: data.key },
+  });
+
+  if (existing) {
+    throwError(ERR.ALREADY_EXISTS, 'Plan key already exists');
+  }
+
+  try {
+    return await planCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create plan', undefined, e);
+  }
 }
 
 export async function updatePlan(id: string, data: UpdateInput<'Plan'>) {
-  return planCrud.update(id, data);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
+  try {
+    return await planCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update plan', undefined, e);
+  }
 }
 
 export async function deletePlan(id: string) {
-  return planCrud.delete(id);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
+  try {
+    return await planCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete plan', undefined, e);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -54,11 +91,33 @@ export async function listFeatures() {
 }
 
 export async function createFeature(data: CreateInput<'Feature'>) {
-  return featureCrud.create(data);
+  if (!data?.key) {
+    throwError(ERR.INVALID_INPUT, 'Feature key is required');
+  }
+
+  const existing = await featureQueries.findFirst({
+    where: { key: data.key },
+  });
+
+  if (existing) {
+    throwError(ERR.ALREADY_EXISTS, 'Feature key already exists');
+  }
+
+  try {
+    return await featureCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create feature', undefined, e);
+  }
 }
 
 export async function updateFeature(id: string, data: UpdateInput<'Feature'>) {
-  return featureCrud.update(id, data);
+  if (!id) throwError(ERR.INVALID_INPUT, 'Feature ID is required');
+
+  try {
+    return await featureCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update feature', undefined, e);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -70,7 +129,23 @@ export async function listLimits() {
 }
 
 export async function createLimit(data: CreateInput<'LimitDefinition'>) {
-  return limitDefinitionCrud.create(data);
+  if (!data?.key) {
+    throwError(ERR.INVALID_INPUT, 'Limit key is required');
+  }
+
+  const existing = await limitDefinitionQueries.findFirst({
+    where: { key: data.key },
+  });
+
+  if (existing) {
+    throwError(ERR.ALREADY_EXISTS, 'Limit key already exists');
+  }
+
+  try {
+    return await limitDefinitionCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create limit definition', undefined, e);
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -82,21 +157,31 @@ export async function setPlanFeature(params: {
   featureId: string;
   isEnabled: boolean;
 }) {
-  return planFeatureCrud.delegate.upsert?.({
-    where: {
-      planId_featureId: {
-        planId: params.planId,
-        featureId: params.featureId,
+  if (!params.planId || !params.featureId) {
+    throwError(ERR.INVALID_INPUT, 'planId and featureId are required');
+  }
+
+  try {
+    return await planFeatureCrud.delegate.upsert?.({
+      where: {
+        planId_featureId: {
+          planId: params.planId,
+          featureId: params.featureId,
+        },
       },
-    },
-    create: params,
-    update: {
-      isEnabled: params.isEnabled,
-    },
-  });
+      create: params,
+      update: {
+        isEnabled: params.isEnabled,
+      },
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to set plan feature', undefined, e);
+  }
 }
 
 export async function listPlanFeatures(planId: string) {
+  if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
   return planFeatureQueries.many({
     where: { planId },
     include: { feature: true },
@@ -112,21 +197,35 @@ export async function setPlanLimit(params: {
   limitDefinitionId: string;
   valueInt: number;
 }) {
-  return planLimitCrud.delegate.upsert?.({
-    where: {
-      planId_limitDefinitionId: {
-        planId: params.planId,
-        limitDefinitionId: params.limitDefinitionId,
+  if (!params.planId || !params.limitDefinitionId) {
+    throwError(ERR.INVALID_INPUT, 'planId and limitDefinitionId are required');
+  }
+
+  if (params.valueInt < 0) {
+    throwError(ERR.INVALID_STATE, 'Limit value cannot be negative');
+  }
+
+  try {
+    return await planLimitCrud.delegate.upsert?.({
+      where: {
+        planId_limitDefinitionId: {
+          planId: params.planId,
+          limitDefinitionId: params.limitDefinitionId,
+        },
       },
-    },
-    create: params,
-    update: {
-      valueInt: params.valueInt,
-    },
-  });
+      create: params,
+      update: {
+        valueInt: params.valueInt,
+      },
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to set plan limit', undefined, e);
+  }
 }
 
 export async function listPlanLimits(planId: string) {
+  if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
   return planLimitQueries.many({
     where: { planId },
     include: { limitDefinition: true },
@@ -142,21 +241,36 @@ export async function setWorkspaceFeatureOverride(params: {
   featureId: string;
   isEnabled: boolean;
 }) {
-  return workspaceFeatureOverrideCrud.delegate.upsert?.({
-    where: {
-      workspaceId_featureId: {
-        workspaceId: params.workspaceId,
-        featureId: params.featureId,
+  if (!params.workspaceId || !params.featureId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and featureId are required');
+  }
+
+  try {
+    return await workspaceFeatureOverrideCrud.delegate.upsert?.({
+      where: {
+        workspaceId_featureId: {
+          workspaceId: params.workspaceId,
+          featureId: params.featureId,
+        },
       },
-    },
-    create: params,
-    update: {
-      isEnabled: params.isEnabled,
-    },
-  });
+      create: params,
+      update: {
+        isEnabled: params.isEnabled,
+      },
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to set workspace feature override',
+      undefined,
+      e,
+    );
+  }
 }
 
 export async function listWorkspaceFeatureOverrides(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+
   return workspaceFeatureOverrideQueries.many({
     where: { workspaceId },
     include: { feature: true },
@@ -172,21 +286,43 @@ export async function setWorkspaceLimitOverride(params: {
   limitDefinitionId: string;
   valueInt: number;
 }) {
-  return workspaceLimitOverrideCrud.delegate.upsert?.({
-    where: {
-      workspaceId_limitDefinitionId: {
-        workspaceId: params.workspaceId,
-        limitDefinitionId: params.limitDefinitionId,
+  if (!params.workspaceId || !params.limitDefinitionId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId and limitDefinitionId are required',
+    );
+  }
+
+  if (params.valueInt < 0) {
+    throwError(ERR.INVALID_STATE, 'Limit override cannot be negative');
+  }
+
+  try {
+    return await workspaceLimitOverrideCrud.delegate.upsert?.({
+      where: {
+        workspaceId_limitDefinitionId: {
+          workspaceId: params.workspaceId,
+          limitDefinitionId: params.limitDefinitionId,
+        },
       },
-    },
-    create: params,
-    update: {
-      valueInt: params.valueInt,
-    },
-  });
+      create: params,
+      update: {
+        valueInt: params.valueInt,
+      },
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to set workspace limit override',
+      undefined,
+      e,
+    );
+  }
 }
 
 export async function listWorkspaceLimitOverrides(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+
   return workspaceLimitOverrideQueries.many({
     where: { workspaceId },
     include: { limitDefinition: true },
@@ -201,10 +337,13 @@ export async function resolveEntitlements(params: {
   workspaceId: string;
   planId?: string | null;
 }) {
+  if (!params.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
   const features = new Set<string>();
   const limits = new Map<string, number>();
 
-  /* ---------------- PLAN ---------------- */
   if (params.planId) {
     const planFeatures = await listPlanFeatures(params.planId);
 
@@ -223,7 +362,6 @@ export async function resolveEntitlements(params: {
     }
   }
 
-  /* ---------------- FEATURE OVERRIDES ---------------- */
   const featureOverrides = await listWorkspaceFeatureOverrides(
     params.workspaceId,
   );
@@ -236,7 +374,6 @@ export async function resolveEntitlements(params: {
     else features.delete(key);
   }
 
-  /* ---------------- LIMIT OVERRIDES ---------------- */
   const limitOverrides = await listWorkspaceLimitOverrides(params.workspaceId);
 
   for (const lo of limitOverrides) {

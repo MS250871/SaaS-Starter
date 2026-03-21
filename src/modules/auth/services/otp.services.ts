@@ -7,21 +7,37 @@ import {
   buildOtpPayload,
   hashOtp,
 } from '@/lib/auth/auth-utils';
+import { throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 /**
  * Get OTP request by ID
  */
 export async function getOtpRequestById(id: string) {
-  return otpQueries.byId(id);
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OTP request ID is required');
+  }
+
+  const otp = await otpQueries.byId(id);
+
+  if (!otp) {
+    throwError(ERR.NOT_FOUND, 'OTP request not found');
+  }
+
+  return otp;
 }
 
 /**
- * Get latest OTP request for auth account + purpose
+ * Get latest OTP request
  */
 export async function getLatestOtpRequest(
   authAccountId: string,
   otpPurpose: OtpPurpose,
 ) {
+  if (!authAccountId || !otpPurpose) {
+    throwError(ERR.INVALID_INPUT, 'authAccountId and otpPurpose are required');
+  }
+
   return otpQueries.findFirst({
     where: {
       authAccountId,
@@ -37,7 +53,15 @@ export async function getLatestOtpRequest(
  * Create OTP request
  */
 export async function createOtpRequest(data: CreateInput<'OtpRequest'>) {
-  return otpCrud.create(data);
+  if (!data?.authAccountId || !data?.otpPurpose) {
+    throwError(ERR.INVALID_INPUT, 'Invalid OTP request payload');
+  }
+
+  try {
+    return await otpCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create OTP request', undefined, e);
+  }
 }
 
 /**
@@ -46,13 +70,13 @@ export async function createOtpRequest(data: CreateInput<'OtpRequest'>) {
 export async function incrementOtpAttempts(id: string) {
   const otp = await getOtpRequestById(id);
 
-  if (!otp) {
-    throw new Error('OTP request not found');
+  try {
+    return await otpCrud.update(id, {
+      attempts: otp.attempts + 1,
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to increment OTP attempts', undefined, e);
   }
-
-  return otpCrud.update(id, {
-    attempts: otp.attempts + 1,
-  });
 }
 
 /**
@@ -61,13 +85,18 @@ export async function incrementOtpAttempts(id: string) {
 export async function incrementResendCount(id: string) {
   const otp = await getOtpRequestById(id);
 
-  if (!otp) {
-    throw new Error('OTP request not found');
+  try {
+    return await otpCrud.update(id, {
+      resendCount: otp.resendCount + 1,
+    });
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to increment OTP resend count',
+      undefined,
+      e,
+    );
   }
-
-  return otpCrud.update(id, {
-    resendCount: otp.resendCount + 1,
-  });
 }
 
 /**
@@ -77,14 +106,30 @@ export async function updateOtpRequest(
   id: string,
   data: UpdateInput<'OtpRequest'>,
 ) {
-  return otpCrud.update(id, data);
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OTP request ID is required');
+  }
+
+  try {
+    return await otpCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update OTP request', undefined, e);
+  }
 }
 
 /**
  * Delete OTP request
  */
 export async function deleteOtpRequest(id: string) {
-  return otpCrud.delete(id);
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'OTP request ID is required');
+  }
+
+  try {
+    return await otpCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete OTP request', undefined, e);
+  }
 }
 
 /**
@@ -115,20 +160,24 @@ export function hasExceededResends(
 }
 
 /**
- * Compare provided OTP with stored hash
+ * Compare OTP
  */
 export function compareOtp(providedOtp: string, storedHash: string) {
   return hashOtp(providedOtp) === storedHash;
 }
 
 /**
- * Generate a new OTP and store request
+ * Generate OTP
  */
 export async function generateOtp(params: {
   authAccountId: string;
   workspaceId?: string | null;
   otpPurpose: OtpPurpose;
 }) {
+  if (!params.authAccountId || !params.otpPurpose) {
+    throwError(ERR.INVALID_INPUT, 'Invalid OTP generation params');
+  }
+
   const { otp, payload } = buildOtpPayload(params);
 
   await createOtpRequest(payload);
@@ -147,17 +196,21 @@ export async function resendOtp(params: {
   otpPurpose: OtpPurpose;
   workspaceId?: string | null;
 }) {
+  if (!params.authAccountId || !params.otpPurpose) {
+    throwError(ERR.INVALID_INPUT, 'Invalid resend OTP params');
+  }
+
   const latest = await getLatestOtpRequest(
     params.authAccountId,
     params.otpPurpose,
   );
 
   if (!latest) {
-    throw new Error('OTP request not found');
+    throwError(ERR.NOT_FOUND, 'OTP request not found');
   }
 
   if (hasExceededResends(latest)) {
-    throw new Error('Maximum OTP resends exceeded');
+    throwError(ERR.LIMIT_EXCEEDED, 'Maximum OTP resends exceeded');
   }
 
   await incrementResendCount(latest.id);
@@ -177,26 +230,30 @@ export async function verifyOtp(params: {
   otpPurpose: OtpPurpose;
   otp: string;
 }) {
+  if (!params.authAccountId || !params.otpPurpose || !params.otp) {
+    throwError(ERR.INVALID_INPUT, 'Invalid OTP verification params');
+  }
+
   const latest = await getLatestOtpRequest(
     params.authAccountId,
     params.otpPurpose,
   );
 
   if (!latest) {
-    throw new Error('OTP request not found');
+    throwError(ERR.NOT_FOUND, 'OTP request not found');
   }
 
   if (hasExceededAttempts(latest)) {
-    throw new Error('Maximum OTP attempts exceeded');
+    throwError(ERR.LIMIT_EXCEEDED, 'Maximum OTP attempts exceeded');
   }
 
   if (isOtpExpired(latest)) {
-    throw new Error('OTP expired');
+    throwError(ERR.OTP_EXPIRED, 'OTP expired');
   }
 
   if (!compareOtp(params.otp, latest.otpHash)) {
     await incrementOtpAttempts(latest.id);
-    throw new Error('Invalid OTP');
+    throwError(ERR.OTP_INVALID, 'Invalid OTP');
   }
 
   return {
