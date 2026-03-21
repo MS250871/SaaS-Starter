@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 export function PricingCard({
   name,
@@ -9,6 +10,7 @@ export function PricingCard({
   description,
   features,
   button,
+  link,
   highlight,
 }: {
   name: string;
@@ -16,6 +18,7 @@ export function PricingCard({
   description: string;
   features: string[];
   button: string;
+  link: string;
   highlight?: boolean;
 }) {
   return (
@@ -46,8 +49,9 @@ export function PricingCard({
         <Button
           className="w-full mt-auto"
           variant={highlight ? 'default' : 'outline'}
+          asChild
         >
-          {button}
+          <Link href={link}>{button}</Link>
         </Button>
       </CardContent>
     </Card>

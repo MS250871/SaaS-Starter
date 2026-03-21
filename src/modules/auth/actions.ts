@@ -4,6 +4,13 @@ import { emailSchema, loginSchema, otpSchema, signupSchema } from './schema';
 import { LoginState, VerifyState } from './types';
 import { SignupState } from './types';
 
+export async function googleAuthAction() {
+  // This is a placeholder for the actual Google OAuth flow.
+  // In a real implementation, you would redirect the user to Google's OAuth page
+  // and handle the callback to authenticate the user.
+  return {};
+}
+
 export async function loginAction(
   prevState: LoginState,
   formData: FormData,

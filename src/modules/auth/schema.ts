@@ -15,6 +15,7 @@ export const loginSchema = z.object({
         phoneSchema.safeParse(val).success,
       { message: 'Enter a valid email or phone number' },
     ),
+  intent: z.enum(['free', 'paid']),
 });
 
 export type LoginSchema = z.infer<typeof loginSchema>;
@@ -24,12 +25,14 @@ export const signupSchema = z.object({
   lastName: z.string().min(2, 'Last name too short'),
   email: z.email('Invalid email'),
   phone: z.string().regex(/^\d{10,15}$/, 'Invalid phone number'),
+  intent: z.enum(['free', 'paid']),
 });
 
 export type SignupSchema = z.infer<typeof signupSchema>;
 
 export const otpSchema = z.object({
-  otp: z.string().length(6).regex(/^\d+$/),
+  otp: z.string().length(6).regex(/^\d+$/, 'Invalid OTP'),
+  mode: z.enum(['email', 'phone']),
 });
 
 export type OtpSchema = z.infer<typeof otpSchema>;

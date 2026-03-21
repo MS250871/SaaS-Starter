@@ -25,8 +25,9 @@ import {
 import { useActionState } from 'react';
 import { Input } from '@/components/ui/input';
 import type { LoginState } from '../types';
-import { loginAction } from '../actions';
+import { googleAuthAction, loginAction } from '../actions';
 import type { AuthIntent } from '@/lib/auth/auth-cookies';
+import { GoogleButton } from './google-button';
 
 const initialState: LoginState = {};
 
@@ -62,6 +63,19 @@ export function LoginForm({
             {/* Hidden intent */}
             <input type="hidden" name="intent" value={intent} />
             <FieldSet>
+              {/* GOOGLE AUTH */}
+              <Field>
+                <GoogleButton
+                  message="Continue with Google"
+                  size="default"
+                  className="w-full mb-4"
+                  formAction={googleAuthAction}
+                />
+              </Field>
+
+              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+                Or continue with
+              </FieldSeparator>
               <FieldGroup>
                 {/* Identifier Field */}
                 <Field>

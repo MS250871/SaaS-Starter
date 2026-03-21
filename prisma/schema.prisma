@@ -15,16 +15,15 @@ datasource db {
 enum WorkspaceRole {
   OWNER
   ADMIN
-  MEMBER
+  STAFF
   VIEWER
-  GUEST
 }
 
 enum PlatformRole {
   PLATFORM_ADMIN
-  BILLING
-  SUPPORT
-  NONE
+  BILLING_AGENT
+  SUPPORT_AGENT
+  PLATFORM_STAFF
 }
 
 enum OtpPurpose {
@@ -35,6 +34,11 @@ enum OtpPurpose {
   MFA
 }
 
+enum AuthAccountType {
+  EMAIL
+  PHONE
+}
+
 enum SessionEndReason {
   LOGOUT
   EXPIRED
@@ -42,29 +46,47 @@ enum SessionEndReason {
   REPLACED
 }
 
+enum SenderType {
+  IDENTITY
+  CUSTOMER
+  SYSTEM
+}
+
 enum PermissionSource {
-  manual
-  inherited
-  system
+  MANUAL
+  INHERITED
+  SYSTEM
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
 }
 
 enum AuditSource {
-  admin_panel
-  api
-  system
+  ADMIN_PANEL
+  API
+  SYSTEM
 }
 
 enum AuditSeverity {
-  info
-  warning
-  error
+  INFO
+  WARNING
+  ERROR
 }
 
 enum Gender {
-  male
-  female
-  other
-  prefer_not_say
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_SAY
+}
+
+
+enum EntitlementSource {
+  PLAN
+  MANUAL
+  SYSTEM
 }
 
 // -------------------- CORE MODELS --------------------
@@ -98,8 +120,8 @@ model Workspace {
   settings       WorkspaceSettings?
 
   // permissions
-  permissions    Permission[]
   userPermissions UserPermission[]
+  workspaceRolePermissions WorkspaceRolePermission[]
 
   // invites
   invites        WorkspaceInvite[]
@@ -109,9 +131,14 @@ model Workspace {
 
   // support
   supportTickets SupportTicket[]
+  supportMessages SupportTicketMessage[]
 
   // notifications
   notifications  Notification[] 
+
+  // features & limits
+  featureOverrides WorkspaceFeatureOverride[]
+  limitOverrides WorkspaceLimitOverride[]
 
   // audit / webhooks
   adminAuditLogs AdminAuditLog[] 
@@ -151,7 +178,7 @@ model Membership {
   identityId String      @map("identity_id") @db.Uuid
   identity  Identity     @relation(fields: [identityId], references: [id])
 
-  role      WorkspaceRole @default(MEMBER)
+  role      WorkspaceRole @default(STAFF)
   isActive  Boolean       @default(true) @map("is_active")
 
   sessions  Session[]
@@ -171,13 +198,20 @@ model WorkspaceSubscription {
   workspaceId                String    @map("workspace_id") @db.Uuid
   workspace                  Workspace @relation(fields: [workspaceId], references: [id])
 
+  plandId                     String?   @map("plan_id") @db.Uuid
+  plan                       Plan?     @relation(fields: [plandId], references: [id])
+
   provider                   String    // e.g. stripe
-  providerSubscriptionId     String?   @map("provider_subscription_id") @db.Uuid
-  planId                     String?   // provider plan identifier
+  providerSubscriptionId     String?   @map("provider_subscription_id") 
+  providerPlanId             String?   @map("provider_plan_id") 
+  providerPriceId            String?   @map("provider_price_id") 
+
   status                     String    // active | past_due | cancelled
   startedAt                  DateTime?
   expiresAt                  DateTime?
   metadata                   Json?
+
+
 
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
@@ -193,7 +227,7 @@ model WorkspaceInvite {
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
   email       String
-  role        WorkspaceRole @default(MEMBER)
+  role        WorkspaceRole @default(STAFF)
   invitedById String?  @map("invited_by") @db.Uuid
   invitedBy   Identity? @relation(fields: [invitedById], references: [id])
 
@@ -230,11 +264,6 @@ model Identity {
   email     String? @unique
   phone     String? @unique
 
-  emailVerified Boolean @default(false) @map("email_verified")
-  emailVerifiedAt DateTime? @map("email_verified_at")
-  phoneVerified Boolean @default(false) @map("phone_verified")
-  phoneVerifiedAt DateTime? @map("phone_verified_at")
-
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -268,7 +297,7 @@ model AuthAccount {
   customerId String? @map("customer_id") @db.Uuid
   customer   Customer? @relation(fields: [customerId], references: [id])
 
-  type  String   // email | phone
+  type  AuthAccountType   // EMAIL | PHONE
   value String   // email address or phone number
 
   isVerified Boolean @default(false) @map("is_verified")
@@ -314,13 +343,10 @@ model Customer {
   workspaceId String   @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  email       String?
-  phone       String?
+  email       String? 
+  phone       String? 
   name        String?
   externalId  String?   @map("external_id") // for external systems
-
-  emailVerified Boolean @default(false) @map("email_verified")
-  phoneVerified Boolean @default(false) @map("phone_verified")
 
   // authentication / sessions
   authAccounts AuthAccount[]
@@ -333,6 +359,7 @@ model Customer {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@unique([email, workspaceId])
+  @@unique([phone, workspaceId])
   @@index([workspaceId, email])
   @@index([workspaceId])
 }
@@ -396,14 +423,15 @@ model Session {
   membershipId String? @map("membership_id") @db.Uuid
   membership   Membership? @relation(fields: [membershipId], references: [id])
 
-  platformRole PlatformRole @map("platform_role") @default(NONE)
-  workspaceRole WorkspaceRole? @map("workspace_role")
+  platformRole PlatformRole? @map("platform_role")
+  workspaceRole WorkspaceRole? @map("workspace_role") 
 
   ip        String?
   browser   String?
   os        String?
   device    String?
   deviceId  String?   @map("device_id")
+  deviceFingerprint String? @map("device_fingerprint")
   userAgent String?   @map("user_agent")
 
   isActive  Boolean   @default(true) @map("is_active")
@@ -419,15 +447,15 @@ model Session {
   @@index([identityId, isActive, createdAt])
   @@index([isActive, expiresAt])
   @@index([deviceId])
+  @@index([deviceFingerprint])
   @@index([membershipId])
 }
 
 // Permission models
 model Permission {
   id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String?  @map("workspace_id") @db.Uuid
-  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
-  key         String
+
+  key         String @unique
   name        String?
   description String?
   entity      String
@@ -437,10 +465,46 @@ model Permission {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   userPermissions UserPermission[]
+  rolePermissions RolePermission[]
+  workspaceRolePermissions WorkspaceRolePermission[]
 
+  @@index([entity])
   @@index([entity, isActive])
-  @@unique([workspaceId, key])
-  @@index([workspaceId])
+}
+
+model RolePermission {
+  id String @id @default(uuid()) @db.Uuid
+
+  workspaceRole WorkspaceRole? @map("workspace_role")
+  platformRole PlatformRole? @map("platform_role")
+
+  permissionId String   @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([platformRole, permissionId])
+  @@unique([workspaceRole, permissionId])
+  @@index([platformRole])
+  @@index([workspaceRole])
+  // Note: platformRole and workspaceRole are mutually exclusive - only one can be set but ensure at least one is set 
+}
+
+model WorkspaceRolePermission {
+  id String @id @default(uuid())
+
+  workspaceId String @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceRole WorkspaceRole @map("workspace_role")
+
+  permissionId String  @map("permission_id") @db.Uuid
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  isAllowed Boolean @default(true)
+
+  @@unique([workspaceId, workspaceRole, permissionId])
+  @@index([workspaceId, workspaceRole])
+  @@index([permissionId])
 }
 
 model UserPermission {
@@ -461,7 +525,9 @@ model UserPermission {
   revokedById String? @map("revoked_by") @db.Uuid
   revokedBy   Identity? @relation("PermissionRevokedBy", fields: [revokedById], references: [id])
 
-  source      PermissionSource @default(manual)
+  effect      PermissionEffect @default(ALLOW)
+
+  source      PermissionSource @default(MANUAL)
   isActive    Boolean          @default(true) @map("is_active")
   isTemporary Boolean          @default(false) @map("is_temporary")
   expiresAt   DateTime?        @map("expires_at")
@@ -471,8 +537,9 @@ model UserPermission {
 
   @@unique([identityId, workspaceId, permissionId])
   @@index([permissionId])
-  @@index([identityId, workspaceId])
+  @@index([identityId, workspaceId, isActive])
   @@index([expiresAt])
+  @@index([identityId, workspaceId, effect])
 }
 
 // Admin audit logs
@@ -500,8 +567,8 @@ model AdminAuditLog {
   userAgent String? @map("user_agent")
   requestId String? @map("request_id")
 
-  source   AuditSource   @default(admin_panel)
-  severity AuditSeverity @default(info)
+  source   AuditSource   @default(ADMIN_PANEL)
+  severity AuditSeverity @default(INFO)
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -530,6 +597,27 @@ model SupportTicket {
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  messages SupportTicketMessage[]
+}
+
+model SupportTicketMessage {
+  id       String @id @default(uuid()) @db.Uuid
+  ticketId String @map("ticket_id") @db.Uuid
+
+  workspaceId String @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  senderType SenderType @map("sender_type")
+  senderId   String?    @map("sender_id") @db.Uuid
+
+  message        String
+  isInternalNote Boolean  @default(false) @map("is_internal_note")
+  attachments    Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId, createdAt])
 }
 
 model Notification {
@@ -548,4 +636,148 @@ model Notification {
   isRead Boolean @default(false) @map("is_read")
 
   createdAt DateTime @default(now()) @map("created_at")
+}
+
+// -------------------- ENTITLEMENTS --------------------
+
+
+model Plan {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  name        String
+  description String?
+
+  isActive    Boolean  @default(true) @map("is_active")
+  isPublic    Boolean  @default(true) @map("is_public")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  features    PlanFeature[]
+  limits      PlanLimit[]
+  subscriptions WorkspaceSubscription[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Feature {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  name        String
+  description String?
+  category    String?
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  planFeatures PlanFeature[]
+  workspaceOverrides WorkspaceFeatureOverride[]
+
+  @@index([category, isActive])
+  @@index([sortOrder])
+}
+
+model LimitDefinition {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  name        String
+  description String?
+  unit        String?  // e.g. users, projects, GB, seats
+
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  planLimits   PlanLimit[]
+  workspaceOverrides WorkspaceLimitOverride[]
+
+  @@index([isActive])
+  @@index([unit])
+  @@index([sortOrder])
+}
+
+model PlanFeature {
+  id         String   @id @default(uuid()) @db.Uuid
+
+  planId     String   @map("plan_id") @db.Uuid
+  plan       Plan     @relation(fields: [planId], references: [id])
+
+  featureId  String   @map("feature_id") @db.Uuid
+  feature    Feature  @relation(fields: [featureId], references: [id])
+
+  isEnabled  Boolean  @default(true) @map("is_enabled")
+
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([planId, featureId])
+  @@index([featureId])
+  @@index([planId, isEnabled])
+}
+
+model PlanLimit {
+  id               String   @id @default(uuid()) @db.Uuid
+
+  planId           String   @map("plan_id") @db.Uuid
+  plan             Plan     @relation(fields: [planId], references: [id])
+
+  limitDefinitionId String  @map("limit_definition_id") @db.Uuid
+  limitDefinition   LimitDefinition @relation(fields: [limitDefinitionId], references: [id])
+
+  valueInt         Int      @map("value_int")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@unique([planId, limitDefinitionId])
+  @@index([limitDefinitionId])
+  @@index([planId])
+}
+
+model WorkspaceFeatureOverride {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  featureId    String   @map("feature_id") @db.Uuid
+  feature      Feature  @relation(fields: [featureId], references: [id])
+
+  isEnabled    Boolean  @map("is_enabled")
+
+  source       EntitlementSource @default(MANUAL)
+  reason       String?
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, featureId])
+  @@index([workspaceId])
+  @@index([featureId])
+}
+
+model WorkspaceLimitOverride {
+  id               String   @id @default(uuid()) @db.Uuid
+
+  workspaceId      String   @map("workspace_id") @db.Uuid
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+
+  limitDefinitionId String  @map("limit_definition_id") @db.Uuid
+  limitDefinition   LimitDefinition @relation(fields: [limitDefinitionId], references: [id])
+
+  valueInt         Int      @map("value_int")
+
+  source           EntitlementSource @default(MANUAL)
+  reason           String?
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, limitDefinitionId])
+  @@index([workspaceId])
+  @@index([limitDefinitionId])
 }

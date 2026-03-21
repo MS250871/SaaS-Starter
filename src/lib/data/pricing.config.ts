@@ -1,3 +1,5 @@
+import { link } from 'fs';
+
 export const pricingPlans = [
   {
     name: 'Free Trial',
@@ -11,6 +13,7 @@ export const pricingPlans = [
       'Invite up to 3 users',
     ],
     button: 'Start Free Trial',
+    link: '/signup?intent=free',
   },
 
   {
@@ -26,6 +29,7 @@ export const pricingPlans = [
     ],
     button: 'Start Professional',
     highlight: true,
+    link: '/signup?intent=paid',
   },
 
   {
@@ -40,5 +44,6 @@ export const pricingPlans = [
       'Enterprise onboarding',
     ],
     button: 'Contact Sales',
+    link: '/contact-sales',
   },
 ];

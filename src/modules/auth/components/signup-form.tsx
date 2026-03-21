@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState } from 'react';
-import { signupAction } from '@/modules/auth/actions';
+import { signupAction, googleAuthAction } from '@/modules/auth/actions';
 import { SignupState } from '../types';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { cn } from '@/lib/utils';
@@ -24,6 +24,7 @@ import {
   FieldSeparator,
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { GoogleButton } from './google-button';
 import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
 import type { AuthIntent } from '@/lib/auth/auth-cookies';
@@ -49,11 +50,13 @@ export function SignupForm({
           <div className="mx-auto pt-6 pb-2">
             <Logo />
           </div>
+
           <FieldSeparator />
 
           <CardTitle className="text-sm md:text-lg mt-2 font-medium">
             Create your account
           </CardTitle>
+
           <CardDescription className="text-xs md:text-sm">
             We’ll verify your email first, then your phone to keep your account
             secure.
@@ -62,9 +65,24 @@ export function SignupForm({
 
         <CardContent>
           <form action={action}>
-            <input type="hidden" name="intent" value={intent} />
+            <Input type="hidden" name="intent" value={intent} />
+
             <FieldSet className="gap-3">
-              <FieldGroup className="gap-3">
+              {/* GOOGLE AUTH */}
+              <Field>
+                <GoogleButton
+                  message="Continue with Google"
+                  size="default"
+                  className="w-full mb-4"
+                  formAction={googleAuthAction}
+                />
+              </Field>
+
+              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
+                Or continue with
+              </FieldSeparator>
+
+              <FieldGroup className="gap-3 mt-3">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {/* First Name */}
                   <Field>
@@ -122,7 +140,7 @@ export function SignupForm({
                   )}
                 </Field>
 
-                {/* Form-level error */}
+                {/* FORM ERROR */}
                 {state.formError && (
                   <Field>
                     <FieldError className="text-center">
@@ -131,7 +149,7 @@ export function SignupForm({
                   </Field>
                 )}
 
-                {/* Submit */}
+                {/* SUBMIT */}
                 <Field>
                   {pending ? (
                     <SpinnerButton message="Creating your account..." />
@@ -142,7 +160,7 @@ export function SignupForm({
                   )}
                 </Field>
 
-                {/* Switch to Login */}
+                {/* SWITCH TO LOGIN */}
                 <Field>
                   <FieldDescription className="text-center">
                     Already have an account?{' '}
@@ -159,6 +177,7 @@ export function SignupForm({
           </form>
         </CardContent>
       </Card>
+
       <FieldDescription className="px-6 text-center">
         By clicking continue, you agree to our{' '}
         <Link href="/terms">Terms of Service</Link> and{' '}

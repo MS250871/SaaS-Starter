@@ -1,26 +1,32 @@
 -- CreateEnum
-CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'MEMBER', 'VIEWER', 'GUEST');
+CREATE TYPE "WorkspaceRole" AS ENUM ('OWNER', 'ADMIN', 'STAFF', 'VIEWER', 'MEMBER', 'GUEST');
 
 -- CreateEnum
-CREATE TYPE "PlatformRole" AS ENUM ('PLATFORM_ADMIN', 'BILLING', 'SUPPORT', 'NONE');
+CREATE TYPE "PlatformRole" AS ENUM ('PLATFORM_ADMIN', 'BILLING_AGENT', 'SUPPORT_AGENT', 'PLATFORM_STAFF', 'BILLING', 'SUPPORT', 'NONE');
 
 -- CreateEnum
 CREATE TYPE "OtpPurpose" AS ENUM ('LOGIN', 'SIGNUP', 'INVITE', 'PASSWORD_RESET', 'MFA');
 
 -- CreateEnum
+CREATE TYPE "AuthAccountType" AS ENUM ('EMAIL', 'PHONE');
+
+-- CreateEnum
 CREATE TYPE "SessionEndReason" AS ENUM ('LOGOUT', 'EXPIRED', 'REVOKED', 'REPLACED');
 
 -- CreateEnum
-CREATE TYPE "PermissionSource" AS ENUM ('manual', 'inherited', 'system');
+CREATE TYPE "SenderType" AS ENUM ('IDENTITY', 'CUSTOMER', 'SYSTEM');
 
 -- CreateEnum
-CREATE TYPE "AuditSource" AS ENUM ('admin_panel', 'api', 'system');
+CREATE TYPE "PermissionSource" AS ENUM ('MANUAL', 'INHERITED', 'SYSTEM');
 
 -- CreateEnum
-CREATE TYPE "AuditSeverity" AS ENUM ('info', 'warning', 'error');
+CREATE TYPE "AuditSource" AS ENUM ('ADMIN_PANEL', 'API', 'SYSTEM');
 
 -- CreateEnum
-CREATE TYPE "Gender" AS ENUM ('male', 'female', 'other', 'prefer_not_say');
+CREATE TYPE "AuditSeverity" AS ENUM ('INFO', 'WARNING', 'ERROR');
+
+-- CreateEnum
+CREATE TYPE "Gender" AS ENUM ('MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_SAY');
 
 -- CreateTable
 CREATE TABLE "Workspace" (
@@ -53,7 +59,7 @@ CREATE TABLE "Membership" (
     "id" UUID NOT NULL,
     "workspace_id" UUID NOT NULL,
     "identity_id" UUID NOT NULL,
-    "role" "WorkspaceRole" NOT NULL DEFAULT 'MEMBER',
+    "role" "WorkspaceRole" NOT NULL DEFAULT 'STAFF',
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "expires_at" TIMESTAMP(3),
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -83,7 +89,7 @@ CREATE TABLE "WorkspaceInvite" (
     "id" UUID NOT NULL,
     "workspace_id" UUID NOT NULL,
     "email" TEXT NOT NULL,
-    "role" "WorkspaceRole" NOT NULL DEFAULT 'MEMBER',
+    "role" "WorkspaceRole" NOT NULL DEFAULT 'STAFF',
     "invited_by" UUID,
     "token" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
@@ -112,10 +118,6 @@ CREATE TABLE "Identity" (
     "last_name" VARCHAR(255),
     "email" TEXT,
     "phone" TEXT,
-    "email_verified" BOOLEAN NOT NULL DEFAULT false,
-    "email_verified_at" TIMESTAMP(3),
-    "phone_verified" BOOLEAN NOT NULL DEFAULT false,
-    "phone_verified_at" TIMESTAMP(3),
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -128,7 +130,7 @@ CREATE TABLE "AuthAccount" (
     "id" UUID NOT NULL,
     "identity_id" UUID,
     "customer_id" UUID,
-    "type" TEXT NOT NULL,
+    "type" "AuthAccountType" NOT NULL,
     "value" TEXT NOT NULL,
     "is_verified" BOOLEAN NOT NULL DEFAULT false,
     "verified_at" TIMESTAMP(3),
@@ -161,8 +163,6 @@ CREATE TABLE "Customer" (
     "phone" TEXT,
     "name" TEXT,
     "external_id" TEXT,
-    "email_verified" BOOLEAN NOT NULL DEFAULT false,
-    "phone_verified" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -207,13 +207,14 @@ CREATE TABLE "Session" (
     "customer_id" UUID,
     "workspace_id" UUID,
     "membership_id" UUID,
-    "platform_role" "PlatformRole" NOT NULL DEFAULT 'NONE',
+    "platform_role" "PlatformRole",
     "workspace_role" "WorkspaceRole",
     "ip" TEXT,
     "browser" TEXT,
     "os" TEXT,
     "device" TEXT,
     "device_id" TEXT,
+    "device_fingerprint" TEXT,
     "user_agent" TEXT,
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "expires_at" TIMESTAMP(3),
@@ -228,7 +229,6 @@ CREATE TABLE "Session" (
 -- CreateTable
 CREATE TABLE "Permission" (
     "id" UUID NOT NULL,
-    "workspace_id" UUID,
     "key" TEXT NOT NULL,
     "name" TEXT,
     "description" TEXT,
@@ -241,6 +241,28 @@ CREATE TABLE "Permission" (
 );
 
 -- CreateTable
+CREATE TABLE "RolePermission" (
+    "id" UUID NOT NULL,
+    "workspace_role" "WorkspaceRole",
+    "platform_role" "PlatformRole",
+    "permission_id" UUID NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "RolePermission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "WorkspaceRolePermission" (
+    "id" TEXT NOT NULL,
+    "workspace_id" UUID NOT NULL,
+    "workspace_role" "WorkspaceRole" NOT NULL,
+    "permission_id" UUID NOT NULL,
+    "isAllowed" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "WorkspaceRolePermission_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "UserPermission" (
     "id" UUID NOT NULL,
     "identity_id" UUID NOT NULL,
@@ -248,7 +270,7 @@ CREATE TABLE "UserPermission" (
     "permission_id" UUID NOT NULL,
     "granted_by" UUID,
     "revoked_by" UUID,
-    "source" "PermissionSource" NOT NULL DEFAULT 'manual',
+    "source" "PermissionSource" NOT NULL DEFAULT 'MANUAL',
     "is_active" BOOLEAN NOT NULL DEFAULT true,
     "is_temporary" BOOLEAN NOT NULL DEFAULT false,
     "expires_at" TIMESTAMP(3),
@@ -274,8 +296,8 @@ CREATE TABLE "AdminAuditLog" (
     "ip_address" TEXT,
     "user_agent" TEXT,
     "request_id" TEXT,
-    "source" "AuditSource" NOT NULL DEFAULT 'admin_panel',
-    "severity" "AuditSeverity" NOT NULL DEFAULT 'info',
+    "source" "AuditSource" NOT NULL DEFAULT 'ADMIN_PANEL',
+    "severity" "AuditSeverity" NOT NULL DEFAULT 'INFO',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "AdminAuditLog_pkey" PRIMARY KEY ("id")
@@ -295,6 +317,21 @@ CREATE TABLE "SupportTicket" (
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "SupportTicket_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "SupportTicketMessage" (
+    "id" UUID NOT NULL,
+    "ticket_id" UUID NOT NULL,
+    "workspace_id" UUID NOT NULL,
+    "sender_type" "SenderType" NOT NULL,
+    "sender_id" UUID,
+    "message" TEXT NOT NULL,
+    "is_internal_note" BOOLEAN NOT NULL DEFAULT false,
+    "attachments" JSONB,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "SupportTicketMessage_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -399,6 +436,9 @@ CREATE INDEX "Customer_workspace_id_idx" ON "Customer"("workspace_id");
 CREATE UNIQUE INDEX "Customer_email_workspace_id_key" ON "Customer"("email", "workspace_id");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "Customer_phone_workspace_id_key" ON "Customer"("phone", "workspace_id");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "ApiKey_key_key" ON "ApiKey"("key");
 
 -- CreateIndex
@@ -420,22 +460,46 @@ CREATE INDEX "Session_is_active_expires_at_idx" ON "Session"("is_active", "expir
 CREATE INDEX "Session_device_id_idx" ON "Session"("device_id");
 
 -- CreateIndex
+CREATE INDEX "Session_device_fingerprint_idx" ON "Session"("device_fingerprint");
+
+-- CreateIndex
 CREATE INDEX "Session_membership_id_idx" ON "Session"("membership_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Permission_key_key" ON "Permission"("key");
+
+-- CreateIndex
+CREATE INDEX "Permission_entity_idx" ON "Permission"("entity");
 
 -- CreateIndex
 CREATE INDEX "Permission_entity_is_active_idx" ON "Permission"("entity", "is_active");
 
 -- CreateIndex
-CREATE INDEX "Permission_workspace_id_idx" ON "Permission"("workspace_id");
+CREATE INDEX "RolePermission_platform_role_idx" ON "RolePermission"("platform_role");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Permission_workspace_id_key_key" ON "Permission"("workspace_id", "key");
+CREATE INDEX "RolePermission_workspace_role_idx" ON "RolePermission"("workspace_role");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RolePermission_platform_role_permission_id_key" ON "RolePermission"("platform_role", "permission_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "RolePermission_workspace_role_permission_id_key" ON "RolePermission"("workspace_role", "permission_id");
+
+-- CreateIndex
+CREATE INDEX "WorkspaceRolePermission_workspace_id_workspace_role_idx" ON "WorkspaceRolePermission"("workspace_id", "workspace_role");
+
+-- CreateIndex
+CREATE INDEX "WorkspaceRolePermission_permission_id_idx" ON "WorkspaceRolePermission"("permission_id");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "WorkspaceRolePermission_workspace_id_workspace_role_permiss_key" ON "WorkspaceRolePermission"("workspace_id", "workspace_role", "permission_id");
 
 -- CreateIndex
 CREATE INDEX "UserPermission_permission_id_idx" ON "UserPermission"("permission_id");
 
 -- CreateIndex
-CREATE INDEX "UserPermission_identity_id_workspace_id_idx" ON "UserPermission"("identity_id", "workspace_id");
+CREATE INDEX "UserPermission_identity_id_workspace_id_is_active_idx" ON "UserPermission"("identity_id", "workspace_id", "is_active");
 
 -- CreateIndex
 CREATE INDEX "UserPermission_expires_at_idx" ON "UserPermission"("expires_at");
@@ -457,6 +521,9 @@ CREATE INDEX "AdminAuditLog_created_at_idx" ON "AdminAuditLog"("created_at");
 
 -- CreateIndex
 CREATE INDEX "AdminAuditLog_severity_idx" ON "AdminAuditLog"("severity");
+
+-- CreateIndex
+CREATE INDEX "SupportTicketMessage_ticket_id_created_at_idx" ON "SupportTicketMessage"("ticket_id", "created_at");
 
 -- AddForeignKey
 ALTER TABLE "WorkspaceDomain" ADD CONSTRAINT "WorkspaceDomain_workspace_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -519,7 +586,13 @@ ALTER TABLE "Session" ADD CONSTRAINT "Session_workspace_id_fkey" FOREIGN KEY ("w
 ALTER TABLE "Session" ADD CONSTRAINT "Session_membership_id_fkey" FOREIGN KEY ("membership_id") REFERENCES "Membership"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Permission" ADD CONSTRAINT "Permission_workspace_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "Workspace"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "RolePermission" ADD CONSTRAINT "RolePermission_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkspaceRolePermission" ADD CONSTRAINT "WorkspaceRolePermission_workspace_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "WorkspaceRolePermission" ADD CONSTRAINT "WorkspaceRolePermission_permission_id_fkey" FOREIGN KEY ("permission_id") REFERENCES "Permission"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "UserPermission" ADD CONSTRAINT "UserPermission_identity_id_fkey" FOREIGN KEY ("identity_id") REFERENCES "Identity"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -550,6 +623,12 @@ ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_created_by_fkey" FOREI
 
 -- AddForeignKey
 ALTER TABLE "SupportTicket" ADD CONSTRAINT "SupportTicket_assigned_to_fkey" FOREIGN KEY ("assigned_to") REFERENCES "Identity"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_workspace_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "SupportTicketMessage" ADD CONSTRAINT "SupportTicketMessage_ticket_id_fkey" FOREIGN KEY ("ticket_id") REFERENCES "SupportTicket"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Notification" ADD CONSTRAINT "Notification_workspace_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
