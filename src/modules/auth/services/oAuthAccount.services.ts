@@ -61,24 +61,6 @@ export async function listIdentityOAuthAccounts(identityId: string) {
 }
 
 /**
- * List OAuth accounts for customer
- */
-export async function listCustomerOAuthAccounts(customerId: string) {
-  if (!customerId) {
-    throwError(ERR.INVALID_INPUT, 'Customer ID is required');
-  }
-
-  return oauthAccountQueries.many({
-    where: {
-      customerId,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-}
-
-/**
  * Create OAuth account
  */
 export async function createOAuthAccount(data: CreateInput<'OAuthAccount'>) {
@@ -131,40 +113,6 @@ export async function createOAuthAccountForIdentity(params: {
 }
 
 /**
- * Create OAuth account for customer
- */
-export async function createOAuthAccountForCustomer(params: {
-  customerId: string;
-  provider: string;
-  providerAccountId: string;
-  accessToken?: string | null;
-  refreshToken?: string | null;
-  scope?: string | null;
-}) {
-  if (!params.customerId || !params.provider || !params.providerAccountId) {
-    throwError(ERR.INVALID_INPUT, 'Missing required OAuth customer params');
-  }
-
-  try {
-    return await oauthAccountCrud.create({
-      customerId: params.customerId,
-      provider: params.provider,
-      providerAccountId: params.providerAccountId,
-      accessToken: params.accessToken ?? undefined,
-      refreshToken: params.refreshToken ?? undefined,
-      scope: params.scope ?? undefined,
-    });
-  } catch (e) {
-    throwError(
-      ERR.DB_ERROR,
-      'Failed to create OAuth account for customer',
-      undefined,
-      e,
-    );
-  }
-}
-
-/**
  * Update OAuth tokens
  */
 export async function updateOAuthTokens(
@@ -206,38 +154,11 @@ export async function linkOAuthAccountToIdentity(
   try {
     return await oauthAccountCrud.update(id, {
       identityId,
-      customerId: null,
     });
   } catch (e) {
     throwError(
       ERR.DB_ERROR,
       'Failed to link OAuth account to identity',
-      undefined,
-      e,
-    );
-  }
-}
-
-/**
- * Link OAuth account to customer
- */
-export async function linkOAuthAccountToCustomer(
-  id: string,
-  customerId: string,
-) {
-  if (!id || !customerId) {
-    throwError(ERR.INVALID_INPUT, 'id and customerId are required');
-  }
-
-  try {
-    return await oauthAccountCrud.update(id, {
-      customerId,
-      identityId: null,
-    });
-  } catch (e) {
-    throwError(
-      ERR.DB_ERROR,
-      'Failed to link OAuth account to customer',
       undefined,
       e,
     );

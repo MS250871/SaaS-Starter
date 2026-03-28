@@ -29,8 +29,8 @@ export function AuthButtons({
             </Button>
           </Link>
 
-          <Link href="/signup">
-            <Button size="sm">Get Started</Button>
+          <Link href="/signup?intent=free">
+            <Button size="sm">Start Free Trial</Button>
           </Link>
         </>
       )}

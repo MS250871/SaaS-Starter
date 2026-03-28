@@ -21,55 +21,19 @@ export async function getCustomerById(id: string) {
 }
 
 /**
- * Find customer by email
+ * Get customer by identity id
  */
-export async function findCustomerByEmail(workspaceId: string, email: string) {
-  if (!workspaceId || !email) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId and email are required');
+export async function getCustomerByIdentityId(identityId: string) {
+  if (!identityId) {
+    throwError(ERR.INVALID_INPUT, 'Identity ID is required');
+  }
+  const customer = await customerQueries.findUnique({ where: { identityId } });
+
+  if (!customer) {
+    throwError(ERR.NOT_FOUND, 'Customer not found');
   }
 
-  return customerQueries.findFirst({
-    where: {
-      workspaceId,
-      email: email.toLowerCase(),
-    },
-  });
-}
-
-/**
- * Find customer by phone
- */
-export async function findCustomerByPhone(workspaceId: string, phone: string) {
-  if (!workspaceId || !phone) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId and phone are required');
-  }
-
-  return customerQueries.findFirst({
-    where: {
-      workspaceId,
-      phone,
-    },
-  });
-}
-
-/**
- * Find customer by identifier
- */
-export async function findCustomerByIdentifier(
-  workspaceId: string,
-  identifier: string,
-) {
-  if (!workspaceId || !identifier) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId and identifier are required');
-  }
-
-  const normalized = identifier.trim();
-
-  if (normalized.includes('@')) {
-    return findCustomerByEmail(workspaceId, normalized);
-  }
-
-  return findCustomerByPhone(workspaceId, normalized);
+  return customer;
 }
 
 /**
@@ -79,13 +43,7 @@ export async function createCustomer(data: CreateInput<'Customer'>) {
   if (!data?.workspaceId) {
     throwError(ERR.INVALID_INPUT, 'workspaceId is required');
   }
-
   const payload: CreateInput<'Customer'> = { ...data };
-
-  if (payload.email) {
-    payload.email = payload.email.toLowerCase();
-  }
-
   try {
     return await customerCrud.create(payload);
   } catch (e) {
@@ -103,13 +61,7 @@ export async function updateCustomer(
   if (!id) {
     throwError(ERR.INVALID_INPUT, 'Customer ID is required');
   }
-
   const payload: UpdateInput<'Customer'> = { ...data };
-
-  if (typeof payload.email === 'string') {
-    payload.email = payload.email.toLowerCase();
-  }
-
   try {
     return await customerCrud.update(id, payload);
   } catch (e) {
@@ -171,31 +123,5 @@ export async function countWorkspaceCustomers(workspaceId: string) {
 
   return customerQueries.count({
     workspaceId,
-  });
-}
-
-/**
- * Check existence
- */
-export async function customerExistsByIdentifier(
-  workspaceId: string,
-  identifier: string,
-) {
-  if (!workspaceId || !identifier) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId and identifier are required');
-  }
-
-  const normalized = identifier.trim();
-
-  if (normalized.includes('@')) {
-    return customerQueries.exists({
-      workspaceId,
-      email: normalized.toLowerCase(),
-    });
-  }
-
-  return customerQueries.exists({
-    workspaceId,
-    phone: normalized,
   });
 }

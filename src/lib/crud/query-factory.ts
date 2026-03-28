@@ -145,7 +145,15 @@ export function buildQueries<M extends ModelName>({
 
   function delegate() {
     const prisma = getPrisma();
-    return prisma[delegateName] as any;
+    const d = prisma[delegateName];
+
+    if (!d) {
+      throw new Error(
+        `Prisma delegate not found for model: ${model} → ${delegateName}`,
+      );
+    }
+
+    return d as any;
   }
 
   function withDefaultWhere(where?: WhereInput<M>): WhereInput<M> {

@@ -32,11 +32,11 @@ export function handleRouteGuards(
   }
 
   // Verify OTP
-  if (pathname === VERIFY_ROUTE) {
-    if (!verifySession || !authFlow) {
-      return NextResponse.redirect(new URL('/login', req.url));
-    }
-  }
+  // if (pathname === VERIFY_ROUTE) {
+  //   if (!verifySession || !authFlow) {
+  //     return NextResponse.redirect(new URL('/login', req.url));
+  //   }
+  // }
 
   // Create workspace
   if (pathname === CREATE_WORKSPACE_ROUTE) {

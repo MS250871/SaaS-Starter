@@ -4,62 +4,62 @@ import { cookies } from 'next/headers';
 import { encryptToken, decryptToken } from '../security/crypto';
 import { randomUUID } from './auth-utils';
 import { OtpPurpose } from '@/generated/prisma/client';
+import { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
 
 /* -------------------------------------------------------------------------- */
 /*                               CONFIG                                       */
 /* -------------------------------------------------------------------------- */
 
 const IS_PROD = process.env.NODE_ENV === 'production';
+const MAX_AGE = 60 * 10 * 1 * 1; // 10 min
+const VERIFY_MAX_AGE = 15 * 60; // 15 min
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 /* -------------------------------------------------------------------------- */
 /*                               AUTH FLOW COOKIES                            */
 /* -------------------------------------------------------------------------- */
 
-export type AuthIntent = 'free' | 'paid';
-export type AuthFlow = 'login' | 'signup';
+export type AuthCookies = {
+  flow: 'signup' | 'login';
+  intent?: 'free' | 'paid';
+  entry: 'platform' | 'workspace' | 'invite';
+  inviteToken?: string;
+  workspaceId?: string | null;
+  createdAt: number;
+};
 
-export async function setAuthCookies({
-  flow,
-  intent,
-}: {
-  flow: AuthFlow;
-  intent?: AuthIntent;
-}) {
+export async function setAuthCookies({ data }: { data: AuthCookies }) {
   const store = await cookies();
 
-  if (intent) {
-    const existingIntent = store.get('auth_intent')?.value;
-    if (!existingIntent) {
-      store.set('auth_intent', intent, {
-        httpOnly: true,
-        secure: IS_PROD,
-        sameSite: 'lax',
-        path: '/',
-      });
-    }
-  }
-
-  store.set('auth_flow', flow, {
+  store.set('auth_flow', JSON.stringify(data), {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
+    maxAge: MAX_AGE,
   });
 }
 
-export async function getAuthIntent(): Promise<AuthIntent | undefined> {
+export async function getAuthCookie(): Promise<AuthCookies | null> {
   const store = await cookies();
-  return store.get('auth_intent')?.value as AuthIntent | undefined;
+  const raw = store.get('auth_flow')?.value;
+
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw) as AuthCookies;
+    if (Date.now() - parsed.createdAt > MAX_AGE) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
-export async function getAuthFlow(): Promise<AuthFlow | undefined> {
+export async function clearAuthCookie() {
   const store = await cookies();
-  return store.get('auth_flow')?.value as AuthFlow | undefined;
-}
-
-export async function clearAuthCookies() {
-  const store = await cookies();
-  store.delete('auth_intent');
   store.delete('auth_flow');
 }
 
@@ -73,7 +73,7 @@ export type VerificationStep = 'email' | 'phone' | 'done';
 export type VerificationMode = 'email' | 'phone';
 
 export type VerificationSession = {
-  verificationId: string;
+  verificationId: string | null | undefined;
   authAccountId: string;
   otpPurpose: OtpPurpose;
 
@@ -81,16 +81,13 @@ export type VerificationSession = {
   step: VerificationStep;
 
   identityId?: string;
-  customerId?: string;
-
-  intent?: AuthIntent;
 
   createdAt: number;
 };
 
 export async function setVerificationSession(
   payload: VerificationSession,
-  ttlSeconds: number = 15 * 60,
+  ttlSeconds: number = VERIFY_MAX_AGE,
 ) {
   const store = await cookies();
 
@@ -115,7 +112,7 @@ export async function getVerificationSession(): Promise<VerificationSession | nu
   if (!session) return null;
 
   // expiry safety
-  const maxAgeMs = 15 * 60 * 1000;
+  const maxAgeMs = VERIFY_MAX_AGE * 1000;
   if (Date.now() - session.createdAt > maxAgeMs) {
     await clearVerificationSession();
     return null;
@@ -155,14 +152,13 @@ const SESSION_COOKIE = 'user_session';
 export type SessionPayload = {
   sessionId: string;
 
-  identityId?: string;
-  customerId?: string;
+  identityId: string;
 
   workspaceId?: string;
   membershipId?: string;
 
-  platformRole?: string;
-  workspaceRole?: string;
+  platformRole?: PlatformRole;
+  workspaceRole?: WorkspaceRole;
 
   isActive: boolean;
 
@@ -192,7 +188,7 @@ export async function setUserSession(payload: SessionPayload) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: ttlSeconds + 15 * 24 * 60 * 60, // grace buffer
+    maxAge: ttlSeconds + SESSION_MAX_AGE, // grace buffer
   });
 }
 
@@ -237,7 +233,7 @@ export async function setDeviceId(deviceId: string) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: 365 * 24 * 60 * 60,
+    maxAge: DEVICE_ID_MAX_AGE,
   });
 }
 

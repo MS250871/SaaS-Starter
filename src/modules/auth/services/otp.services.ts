@@ -7,8 +7,11 @@ import {
   buildOtpPayload,
   hashOtp,
 } from '@/lib/auth/auth-utils';
+import { sendOtpEmail } from '@/lib/email/email-service';
+import { sendOtpSms } from '@/lib/sms/sms-service';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { emailSchema } from '../schema';
 
 /**
  * Get OTP request by ID
@@ -260,4 +263,32 @@ export async function verifyOtp(params: {
     success: true,
     authAccountId: latest.authAccountId,
   };
+}
+
+export async function sendOtp({
+  identifier,
+  otp,
+  name,
+  brand,
+}: {
+  identifier: string;
+  otp: string;
+  name: string;
+  brand: string;
+}) {
+  if (!identifier || !otp) {
+    throwError(ERR.INVALID_INPUT, 'Identifier and OTP are required');
+  }
+  const cleanIdentifier = identifier.trim();
+  const isEmail = emailSchema.safeParse(cleanIdentifier).success;
+
+  try {
+    if (isEmail) {
+      await sendOtpEmail({ to: cleanIdentifier, otp, name });
+    } else {
+      await sendOtpSms({ numbers: [cleanIdentifier], otp, brand });
+    }
+  } catch (e) {
+    throwError(ERR.EXTERNAL_SERVICE_ERROR, 'Failed to send OTP', undefined, e);
+  }
 }

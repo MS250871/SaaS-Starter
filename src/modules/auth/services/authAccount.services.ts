@@ -1,6 +1,7 @@
 import { authAccountCrud, authAccountQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { AuthAccountType } from '@/generated/prisma/client';
+import { emailSchema } from '../schema';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -50,7 +51,9 @@ export async function findAuthAccountByIdentifier(identifier: string) {
 
   const normalized = identifier.trim();
 
-  if (normalized.includes('@')) {
+  const isEmail = emailSchema.safeParse(normalized).success;
+
+  if (isEmail) {
     return findAuthAccountByTypeValue(
       AuthAccountType.EMAIL,
       normalized.toLowerCase(),
@@ -71,21 +74,6 @@ export async function listAuthAccountsForIdentity(identityId: string) {
   return authAccountQueries.many({
     where: {
       identityId,
-    },
-  });
-}
-
-/**
- * List auth accounts for customer
- */
-export async function listAuthAccountsForCustomer(customerId: string) {
-  if (!customerId) {
-    throwError(ERR.INVALID_INPUT, 'Customer ID is required');
-  }
-
-  return authAccountQueries.many({
-    where: {
-      customerId,
     },
   });
 }
@@ -136,37 +124,6 @@ export async function createAuthAccountForIdentity(
     throwError(
       ERR.DB_ERROR,
       'Failed to create auth account for identity',
-      undefined,
-      e,
-    );
-  }
-}
-
-/**
- * Create auth account for customer
- */
-export async function createAuthAccountForCustomer(
-  customerId: string,
-  type: AuthAccountType,
-  value: string,
-) {
-  if (!customerId || !type || !value) {
-    throwError(ERR.INVALID_INPUT, 'customerId, type and value are required');
-  }
-
-  const normalized =
-    type === AuthAccountType.EMAIL ? value.toLowerCase() : value;
-
-  try {
-    return await authAccountCrud.create({
-      customerId,
-      type,
-      value: normalized,
-    });
-  } catch (e) {
-    throwError(
-      ERR.DB_ERROR,
-      'Failed to create auth account for customer',
       undefined,
       e,
     );

@@ -5,22 +5,22 @@ type GoogleButtonProps = {
   message?: string;
   size?: 'sm' | 'default' | 'lg';
   className?: string;
-  formAction?: (formData: FormData) => void;
+  onClick?: () => void | Promise<void>;
 };
 
 export function GoogleButton({
   message = 'Continue with Google',
   size = 'sm',
   className,
-  formAction,
+  onClick,
 }: GoogleButtonProps) {
   return (
     <Button
       variant="outline"
-      type="submit"
+      type="button"
       size={size}
       className={className}
-      formAction={formAction}
+      onClick={onClick}
     >
       <Image src="/google.png" alt="Google Icon" width={16} height={16} />
       {message}

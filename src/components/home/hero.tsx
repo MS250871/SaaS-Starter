@@ -23,7 +23,7 @@ export function Hero() {
 
         <div className="mt-8 flex items-center justify-center gap-4 pointer-events-auto">
           <Button size="lg" asChild>
-            <Link href="/signup">Get Started</Link>
+            <Link href="/signup?intent=free">Start Free Trial</Link>
           </Button>
 
           <Button variant="outline" size="lg" asChild>

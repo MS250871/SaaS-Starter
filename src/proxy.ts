@@ -10,8 +10,6 @@ import { handleRouteGuards } from '@/lib/middleware/route-gaurds';
 export async function proxy(req: NextRequest) {
   const res = NextResponse.next();
 
-  console.log('HOST:', req.headers.get('host'));
-
   /* ---------------- WORKSPACE (FIRST) ---------------- */
   const workspace = await resolveWorkspace(req);
 

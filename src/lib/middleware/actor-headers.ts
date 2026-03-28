@@ -13,10 +13,6 @@ export function injectActorHeaders(
     res.headers.set('x-identity-id', session.identityId);
   }
 
-  if (session.customerId) {
-    res.headers.set('x-customer-id', session.customerId);
-  }
-
   if (session.workspaceId) {
     res.headers.set('x-workspace-id', session.workspaceId);
   }

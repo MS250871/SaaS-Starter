@@ -1,8 +1,9 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { signupFormSchema, type SignupFormInput } from '@/modules/auth/schema';
 import { signupAction, googleAuthAction } from '@/modules/auth/actions';
-import { SignupState } from '../types';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -27,22 +28,75 @@ import { Input } from '@/components/ui/input';
 import { GoogleButton } from './google-button';
 import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
-import type { AuthIntent } from '@/lib/auth/auth-cookies';
-
-const initialState: SignupState = {};
+import type { AuthCookies } from '@/lib/auth/auth-cookies';
+import { useState } from 'react';
 
 export function SignupForm({
   intent,
+  invite,
   className,
 }: {
-  intent: AuthIntent;
+  intent: AuthCookies['intent'];
+  invite?: string;
   className?: string;
 }) {
-  const [state, action, pending] = useActionState<SignupState, FormData>(
-    signupAction,
-    initialState,
-  );
+  const form = useForm<SignupFormInput>({
+    resolver: zodResolver(signupFormSchema),
+    defaultValues: {
+      firstName: '',
+      lastName: '',
+      email: '',
+      phone: '',
+      intent,
+    },
+  });
 
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const onSubmit = async (data: SignupFormInput) => {
+    setLoading(true);
+    setFormError(null);
+
+    try {
+      const formData = new FormData();
+
+      if (invite) {
+        formData.append('inviteToken', invite);
+      }
+
+      Object.entries(data).forEach(([k, v]) => {
+        formData.append(k, String(v));
+      });
+
+      // 🚀 navigation action (redirect happens on success)
+      await signupAction(formData);
+    } catch (err: any) {
+      setLoading(false);
+
+      const details = err?.details;
+
+      // ✅ map only if it's a clean field-error object
+      if (details && typeof details === 'object' && !Array.isArray(details)) {
+        let mapped = false;
+
+        for (const [field, message] of Object.entries(details)) {
+          if (typeof message === 'string') {
+            mapped = true;
+
+            form.setError(field as keyof SignupFormInput, {
+              message,
+            });
+          }
+        }
+
+        if (mapped) return;
+      }
+
+      // ✅ fallback
+      setFormError(err?.message || 'Something went wrong');
+    }
+  };
   return (
     <div className={cn('flex flex-col gap-6', className)}>
       <Card className="pt-0">
@@ -58,118 +112,97 @@ export function SignupForm({
           </CardTitle>
 
           <CardDescription className="text-xs md:text-sm">
-            We’ll verify your email first, then your phone to keep your account
-            secure.
+            We’ll verify your email first, then your phone.
           </CardDescription>
         </CardHeader>
 
         <CardContent>
-          <form action={action}>
-            <Input type="hidden" name="intent" value={intent} />
+          {/* GOOGLE */}
+          <Field>
+            <GoogleButton
+              message="Continue with Google"
+              size="default"
+              className="w-full mb-4"
+              onClick={async () => {
+                await googleAuthAction();
+              }}
+            />
+          </Field>
 
+          <FieldSeparator className="my-2">Or continue with</FieldSeparator>
+
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet className="gap-3">
-              {/* GOOGLE AUTH */}
-              <Field>
-                <GoogleButton
-                  message="Continue with Google"
-                  size="default"
-                  className="w-full mb-4"
-                  formAction={googleAuthAction}
-                />
-              </Field>
-
-              <FieldSeparator className="*:data-[slot=field-separator-content]:bg-card">
-                Or continue with
-              </FieldSeparator>
-
               <FieldGroup className="gap-3 mt-3">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {/* First Name */}
                   <Field>
-                    <FieldLabel htmlFor="firstName">First Name</FieldLabel>
+                    <FieldLabel>First Name</FieldLabel>
                     <FieldContent>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        placeholder="John"
-                      />
+                      <Input {...form.register('firstName')} />
                     </FieldContent>
-                    {state.errors?.firstName && (
-                      <FieldError>{state.errors.firstName}</FieldError>
-                    )}
+                    <FieldError className="text-xs">
+                      {form.formState.errors.firstName?.message}
+                    </FieldError>
                   </Field>
 
                   {/* Last Name */}
                   <Field>
-                    <FieldLabel htmlFor="lastName">Last Name</FieldLabel>
+                    <FieldLabel>Last Name</FieldLabel>
                     <FieldContent>
-                      <Input id="lastName" name="lastName" placeholder="Doe" />
+                      <Input {...form.register('lastName')} />
                     </FieldContent>
-                    {state.errors?.lastName && (
-                      <FieldError>{state.errors.lastName}</FieldError>
-                    )}
+                    <FieldError className="text-xs">
+                      {form.formState.errors.lastName?.message}
+                    </FieldError>
                   </Field>
                 </div>
 
                 {/* Email */}
                 <Field>
-                  <FieldLabel htmlFor="email">Email Address</FieldLabel>
+                  <FieldLabel>Email</FieldLabel>
                   <FieldContent>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      placeholder="you@example.com"
-                    />
+                    <Input type="email" {...form.register('email')} />
                   </FieldContent>
-
-                  {state.errors?.email && (
-                    <FieldError>{state.errors.email}</FieldError>
-                  )}
+                  <FieldError className="text-xs">
+                    {form.formState.errors.email?.message}
+                  </FieldError>
                 </Field>
 
                 {/* Phone */}
                 <Field>
-                  <FieldLabel htmlFor="phone">Mobile Number</FieldLabel>
+                  <FieldLabel>Phone</FieldLabel>
                   <FieldContent>
-                    <Input id="phone" name="phone" placeholder="9876543210" />
+                    <Input {...form.register('phone')} />
                   </FieldContent>
-
-                  {state.errors?.phone && (
-                    <FieldError>{state.errors.phone}</FieldError>
-                  )}
+                  <FieldError className="text-xs">
+                    {form.formState.errors.phone?.message}
+                  </FieldError>
                 </Field>
 
                 {/* FORM ERROR */}
-                {state.formError && (
+                {formError && (
                   <Field>
-                    <FieldError className="text-center">
-                      {state.formError}
-                    </FieldError>
+                    <FieldError className="text-center">{formError}</FieldError>
                   </Field>
                 )}
 
                 {/* SUBMIT */}
                 <Field>
-                  {pending ? (
+                  {loading ? (
                     <SpinnerButton message="Creating your account..." />
                   ) : (
-                    <Button type="submit" className="w-full capitalize">
+                    <Button type="submit" className="w-full">
                       Continue
                     </Button>
                   )}
                 </Field>
 
-                {/* SWITCH TO LOGIN */}
+                {/* LOGIN */}
                 <Field>
                   <FieldDescription className="text-center">
                     Already have an account?{' '}
-                    <Link
-                      href={`/login?intent=${intent}`}
-                      className="underline underline-offset-4 hover:text-primary capitalize"
-                    >
-                      Login here
-                    </Link>
+                    <Link href={`/login?intent=${intent}`}>Login here</Link>
                   </FieldDescription>
                 </Field>
               </FieldGroup>
@@ -177,12 +210,6 @@ export function SignupForm({
           </form>
         </CardContent>
       </Card>
-
-      <FieldDescription className="px-6 text-center">
-        By clicking continue, you agree to our{' '}
-        <Link href="/terms">Terms of Service</Link> and{' '}
-        <Link href="/privacy">Privacy Policy</Link>.
-      </FieldDescription>
     </div>
   );
 }

@@ -1,6 +1,9 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { otpSchema, type OtpSchema } from '@/modules/auth/schema';
+import { verifyAction, resendAction } from '../actions';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { Logo } from '@/components/layout/logo';
 import { cn } from '@/lib/utils';
@@ -27,10 +30,8 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import type { Mode, VerifyState } from '../types';
-import { verifyAction, resendAction } from '../actions';
-
-const initialState: VerifyState = {};
+import type { Mode } from '../types';
+import { useState } from 'react';
 
 export function VerifyForm({
   mode,
@@ -39,10 +40,16 @@ export function VerifyForm({
   mode?: Mode;
   className?: string;
 }) {
-  const [state, action, pending] = useActionState<VerifyState, FormData>(
-    verifyAction,
-    initialState,
-  );
+  const form = useForm<OtpSchema>({
+    resolver: zodResolver(otpSchema),
+    defaultValues: {
+      otp: '',
+      mode: mode ?? 'email',
+    },
+  });
+
+  const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const title = mode === 'email' ? 'Verify your email' : 'Verify your phone';
   const description =
@@ -50,33 +57,71 @@ export function VerifyForm({
       ? 'Enter the code we emailed you to verify your email address.'
       : 'Enter the code we texted you to verify your phone number.';
 
+  const onSubmit = async (data: OtpSchema) => {
+    setLoading(true);
+    setFormError(null);
+
+    try {
+      const formData = new FormData();
+
+      Object.entries(data).forEach(([k, v]) => {
+        formData.append(k, String(v));
+      });
+
+      await verifyAction(formData);
+    } catch (err: any) {
+      setLoading(false);
+
+      const details = err?.details;
+
+      if (details && typeof details === 'object' && !Array.isArray(details)) {
+        let mapped = false;
+
+        for (const [field, message] of Object.entries(details)) {
+          if (typeof message === 'string') {
+            mapped = true;
+
+            form.setError(field as keyof OtpSchema, {
+              message,
+            });
+          }
+        }
+
+        if (mapped) return;
+      }
+
+      setFormError(err?.message || 'Something went wrong');
+    }
+  };
+
   return (
     <div className={cn('flex flex-col gap-6', className)}>
       <Card className="pt-0">
         <CardHeader>
-          <div className="mx-auto">
+          <div className="mx-auto pt-6">
             <Logo />
           </div>
+          <FieldSeparator className="my-2" />
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
-          <FieldSeparator />
         </CardHeader>
 
         <CardContent>
-          <form action={action}>
-            <input type="hidden" name="mode" value={mode} />
+          <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet>
               <FieldGroup>
                 {/* OTP FIELD */}
                 <Field>
-                  <FieldLabel htmlFor="otp">Verification Code</FieldLabel>
+                  <FieldLabel>Verification Code</FieldLabel>
 
                   <FieldContent>
                     <InputOTP
-                      id="otp"
-                      name="otp"
                       maxLength={6}
                       pattern="[0-9]*"
+                      value={form.watch('otp')}
+                      onChange={(val) =>
+                        form.setValue('otp', val, { shouldValidate: true })
+                      }
                     >
                       <InputOTPGroup className="gap-2.5 *:data-[slot=input-otp-slot]:rounded-md *:data-[slot=input-otp-slot]:border">
                         <InputOTPSlot index={0} />
@@ -93,21 +138,21 @@ export function VerifyForm({
                     Enter the 6-digit code we sent you.
                   </FieldDescription>
 
-                  {state.errors?.otp && (
-                    <FieldError>{state.errors.otp}</FieldError>
-                  )}
+                  <FieldError>{form.formState.errors.otp?.message}</FieldError>
                 </Field>
 
                 {/* FORM ERROR */}
-                {state.formError && (
-                  <Field className="bg-primary/10 rounded-md p-2">
-                    <FieldError>{state.formError}</FieldError>
+                {formError && (
+                  <Field className="bg-red-200/50 p-2 rounded-lg border border-red-400">
+                    <FieldError className="text-center capitalize">
+                      {formError}
+                    </FieldError>
                   </Field>
                 )}
 
                 {/* SUBMIT */}
                 <Field>
-                  {pending ? (
+                  {loading ? (
                     <SpinnerButton message="Verifying..." />
                   ) : (
                     <Button type="submit" className="w-full capitalize">
@@ -117,20 +162,24 @@ export function VerifyForm({
                 </Field>
 
                 {/* RESEND */}
-                {resendAction && (
-                  <Field>
-                    <FieldDescription className="text-center">
-                      Didn’t receive the code?{' '}
-                      <button
-                        type="button"
-                        onClick={resendAction}
-                        className="underline underline-offset-4 hover:text-primary"
-                      >
-                        Resend
-                      </button>
-                    </FieldDescription>
-                  </Field>
-                )}
+                <Field>
+                  <FieldDescription className="text-center">
+                    Didn’t receive the code?{' '}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await resendAction();
+                        } catch (e) {
+                          console.error('Resend failed', e);
+                        }
+                      }}
+                      className="underline underline-offset-4 hover:text-primary"
+                    >
+                      Resend
+                    </button>
+                  </FieldDescription>
+                </Field>
               </FieldGroup>
             </FieldSet>
           </form>

@@ -41,6 +41,13 @@ function getPrisma() {
   }
 }
 
+/* ---------------------------------------------------------
+   🔥 FIX: Proper Prisma delegate name (camelCase)
+--------------------------------------------------------- */
+function toDelegateName<M extends ModelName>(model: M): DelegateName<M> {
+  return (model.charAt(0).toLowerCase() + model.slice(1)) as DelegateName<M>;
+}
+
 export function buildCud<M extends ModelName>({
   model,
   guards = [],
@@ -49,11 +56,19 @@ export function buildCud<M extends ModelName>({
   workspaceField = 'workspaceId',
   activeField = 'isActive',
 }: Options<M>) {
-  const delegateName = model.toLowerCase() as DelegateName<M>;
+  const delegateName = toDelegateName(model);
 
   function delegate() {
     const prisma = getPrisma();
-    return prisma[delegateName] as any;
+    const d = prisma[delegateName];
+
+    if (!d) {
+      throw new Error(
+        `Prisma delegate not found for model: ${model} → ${delegateName}`,
+      );
+    }
+
+    return d as any;
   }
 
   function enforceWorkspace(where: any) {
@@ -124,10 +139,9 @@ export function buildCud<M extends ModelName>({
       const d = delegate();
 
       for (const g of guards) {
-        const relationDelegate =
-          prisma[g.model.toLowerCase() as DelegateName<typeof g.model>];
+        const relationDelegate = prisma[toDelegateName(g.model)] as any;
 
-        const count = await (relationDelegate as any).count({
+        const count = await relationDelegate.count({
           where: enforceWorkspace({ [g.foreignKey]: id }),
         });
 

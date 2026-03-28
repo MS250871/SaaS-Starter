@@ -9,8 +9,10 @@ async function VerifyOtpPage({
   const resolvedSearchParams = await searchParams;
   const mode = (resolvedSearchParams.mode as Mode) || 'email';
   return (
-    <div>
-      <VerifyForm mode={mode} />
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-sm mt-6">
+        <VerifyForm mode={mode} />
+      </div>
     </div>
   );
 }

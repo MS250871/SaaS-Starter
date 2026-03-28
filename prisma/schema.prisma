@@ -185,6 +185,8 @@ model Membership {
   // optional temporary access expiry
   expiresAt DateTime?     @map("expires_at")
 
+  version   Int           @default(1)
+
   createdAt DateTime      @default(now()) @map("created_at")
 
   @@unique([workspaceId, identityId])
@@ -210,8 +212,6 @@ model WorkspaceSubscription {
   startedAt                  DateTime?
   expiresAt                  DateTime?
   metadata                   Json?
-
-
 
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
@@ -274,6 +274,7 @@ model Identity {
   sessions Session[]
 
   memberships Membership[]
+  customers Customer[]
   permissions UserPermission[] @relation("UserPermissions")
   permissionsGranted UserPermission[] @relation("PermissionGrantedBy")
   permissionsRevoked UserPermission[] @relation("PermissionRevokedBy")
@@ -291,11 +292,8 @@ model Identity {
 model AuthAccount {
   id String @id @default(uuid()) @db.Uuid
 
-  identityId String? @map("identity_id") @db.Uuid
-  identity   Identity? @relation(fields: [identityId], references: [id])
-
-  customerId String? @map("customer_id") @db.Uuid
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  identityId String @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
 
   type  AuthAccountType   // EMAIL | PHONE
   value String   // email address or phone number
@@ -311,18 +309,15 @@ model AuthAccount {
 
   @@unique([type, value])
   @@index([identityId])
-  @@index([customerId])
+  @@index([identityId, type])
 }
 
 // OAuth linked accounts for Identities (Google, etc.)
 model OAuthAccount {
   id                 String   @id @default(uuid()) @db.Uuid
 
-  identityId String? @map("identity_id") @db.Uuid
-  identity   Identity? @relation(fields: [identityId], references: [id])
-
-  customerId String? @map("customer_id") @db.Uuid
-  customer   Customer? @relation(fields: [customerId], references: [id])
+  identityId String @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
 
   provider           String   // 'google', 'github', etc.
   providerAccountId  String   @map("provider_account_id")
@@ -334,33 +329,26 @@ model OAuthAccount {
 
   @@unique([provider, providerAccountId])
   @@index([identityId])
-  @@index([customerId])
 }
 
 // Customers (end-users of a workspace product)
 model Customer {
   id          String   @id @default(uuid()) @db.Uuid
+
+  identityId String @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
+
   workspaceId String   @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  email       String? 
-  phone       String? 
-  name        String?
   externalId  String?   @map("external_id") // for external systems
-
-  // authentication / sessions
-  authAccounts AuthAccount[]
-  oauthAccounts OAuthAccount[]
-  sessions     Session[] @relation("CustomerSessions")
 
   notifications Notification[]
 
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  @@unique([email, workspaceId])
-  @@unique([phone, workspaceId])
-  @@index([workspaceId, email])
+  @@unique([workspaceId, identityId])
   @@index([workspaceId])
 }
 
@@ -405,16 +393,12 @@ model OtpRequest {
   @@index([expiresAt])
 }
 
-// Sessions (polymorphic: Identity or Customer)
+// Sessions 
 model Session {
   id        String   @id @default(uuid()) @db.Uuid
 
-  // actor: either identity or customer
-  identityId String?  @map("identity_id") @db.Uuid
-  identity   Identity? @relation(fields: [identityId], references: [id])
-
-  customerId String?  @map("customer_id") @db.Uuid
-  customer   Customer? @relation("CustomerSessions", fields: [customerId], references: [id])
+  identityId String  @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
 
   // workspace context - nullable for platform-wide sessions
   workspaceId String? @map("workspace_id") @db.Uuid
@@ -436,7 +420,7 @@ model Session {
 
   isActive  Boolean   @default(true) @map("is_active")
 
-  expiresAt DateTime? @map("expires_at")
+  expiresAt DateTime @map("expires_at")
   endedAt   DateTime? @map("ended_at")
   endedReason SessionEndReason? @map("ended_reason")
 
@@ -449,6 +433,7 @@ model Session {
   @@index([deviceId])
   @@index([deviceFingerprint])
   @@index([membershipId])
+  @@index([workspaceId])
 }
 
 // Permission models

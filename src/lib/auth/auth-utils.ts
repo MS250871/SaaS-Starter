@@ -2,6 +2,10 @@ import crypto from 'crypto';
 import type { RequestContext } from '../context/request-context';
 import type { CreateInput } from '@/lib/crud/prisma-types';
 import { OtpPurpose } from '@/generated/prisma/client';
+import {
+  parsePhoneNumberFromString,
+  type CountryCode,
+} from 'libphonenumber-js';
 
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_MAX_RESENDS = 3;
@@ -65,5 +69,30 @@ export function buildOtpPayload(params: {
   return {
     otp,
     payload,
+  };
+}
+
+const DEFAULT_COUNTRY: CountryCode = 'IN';
+
+export function normalizePhone(
+  input: string,
+  country: CountryCode = DEFAULT_COUNTRY,
+) {
+  const cleaned = input.trim().replace(/\s+/g, '');
+
+  // 🔥 STRICT INPUT CHECK
+  if (!/^\+?\d+$/.test(cleaned)) {
+    return { valid: false, e164: null };
+  }
+
+  const parsed = parsePhoneNumberFromString(cleaned, country);
+
+  if (!parsed || !parsed.isValid()) {
+    return { valid: false, e164: null };
+  }
+
+  return {
+    valid: true,
+    e164: parsed.number, // ✅ normalized
   };
 }

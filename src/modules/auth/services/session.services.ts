@@ -2,7 +2,7 @@ import { sessionCrud, sessionQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { SessionEndReason } from '@/generated/prisma/client';
 import type { Session } from '@/generated/prisma/client';
-import { getUserSession } from '@/lib/auth/auth-cookies';
+import { getUserSession, SessionPayload } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -27,11 +27,8 @@ export async function getSessionById(id: string) {
  * Create session
  */
 export async function createSession(data: CreateInput<'Session'>) {
-  if (!data?.identityId && !data?.customerId) {
-    throwError(
-      ERR.INVALID_INPUT,
-      'Session must belong to identity or customer',
-    );
+  if (!data?.identityId) {
+    throwError(ERR.INVALID_INPUT, 'Session must belong to identity');
   }
 
   try {
@@ -125,35 +122,6 @@ export async function endAllIdentitySessions(
 }
 
 /**
- * End all sessions for customer
- */
-export async function endAllCustomerSessions(
-  customerId: string,
-  reason: SessionEndReason = SessionEndReason.REVOKED,
-) {
-  if (!customerId) {
-    throwError(ERR.INVALID_INPUT, 'Customer ID is required');
-  }
-
-  const sessions = (await sessionQueries.many({
-    where: {
-      customerId,
-      isActive: true,
-    },
-  })) as Session[];
-
-  const updates = sessions.map((s) =>
-    sessionCrud.update(s.id, {
-      isActive: false,
-      endedAt: new Date(),
-      endedReason: reason,
-    }),
-  );
-
-  return Promise.all(updates);
-}
-
-/**
  * List sessions
  */
 export async function listIdentitySessions(identityId: string) {
@@ -164,22 +132,6 @@ export async function listIdentitySessions(identityId: string) {
   return sessionQueries.many({
     where: {
       identityId,
-      isActive: true,
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-  });
-}
-
-export async function listCustomerSessions(customerId: string) {
-  if (!customerId) {
-    throwError(ERR.INVALID_INPUT, 'Customer ID is required');
-  }
-
-  return sessionQueries.many({
-    where: {
-      customerId,
       isActive: true,
     },
     orderBy: {
@@ -231,4 +183,20 @@ export async function getSessionEntitlements() {
 
 export async function getSession() {
   return getUserSession();
+}
+
+export async function extendSessionIfNeeded(session: Session) {
+  const now = new Date();
+
+  const remaining = session.expiresAt.getTime() - now.getTime();
+
+  const REFRESH_THRESHOLD = 10 * 60 * 1000; // 10 min
+
+  if (remaining < REFRESH_THRESHOLD) {
+    return updateSession(session.id, {
+      expiresAt: new Date(now.getTime() + 60 * 60 * 1000),
+    });
+  }
+
+  return session;
 }

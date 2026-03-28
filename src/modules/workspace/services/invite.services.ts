@@ -190,9 +190,15 @@ export async function validateInviteToken(token: string) {
 
   const invite = await findInviteByToken(token);
 
-  if (!invite) return null;
-  if (invite.status !== 'pending') return null;
-  if (isInviteExpired(invite)) return null;
+  if (!invite) {
+    throwError(ERR.NOT_FOUND, 'Invalid invite token');
+  }
+  if (invite.status !== 'pending') {
+    throwError(ERR.INVALID_INPUT, 'Invite already used or revoked');
+  }
+  if (isInviteExpired(invite)) {
+    throwError(ERR.INVALID_INPUT, 'Invite has expired');
+  }
 
   return invite;
 }
