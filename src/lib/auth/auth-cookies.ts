@@ -3,36 +3,36 @@
 import { cookies } from 'next/headers';
 import { encryptToken, decryptToken } from '../security/crypto';
 import { randomUUID } from './auth-utils';
-import { OtpPurpose } from '@/generated/prisma/client';
-import { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
+import {
+  authCookiesSchema,
+  verificationSessionSchema,
+  sessionPayloadSchema,
+  deviceIdSchema,
+  type AuthCookies,
+  type VerificationSession,
+  type SessionPayload,
+} from './auth.schema';
 
 /* -------------------------------------------------------------------------- */
 /*                               CONFIG                                       */
 /* -------------------------------------------------------------------------- */
 
 const IS_PROD = process.env.NODE_ENV === 'production';
-const MAX_AGE = 60 * 10 * 1 * 1; // 10 min
-const VERIFY_MAX_AGE = 15 * 60; // 15 min
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
-const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+const MAX_AGE = 60 * 10;
+const VERIFY_MAX_AGE = 15 * 60;
+const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
+const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365;
 
 /* -------------------------------------------------------------------------- */
 /*                               AUTH FLOW COOKIES                            */
 /* -------------------------------------------------------------------------- */
 
-export type AuthCookies = {
-  flow: 'signup' | 'login';
-  intent?: 'free' | 'paid';
-  entry: 'platform' | 'workspace' | 'invite';
-  inviteToken?: string;
-  workspaceId?: string | null;
-  createdAt: number;
-};
-
 export async function setAuthCookies({ data }: { data: AuthCookies }) {
   const store = await cookies();
 
-  store.set('auth_flow', JSON.stringify(data), {
+  const parsed = authCookiesSchema.parse(data); // 🔥 strict
+
+  store.set('auth_flow', JSON.stringify(parsed), {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
@@ -48,11 +48,16 @@ export async function getAuthCookie(): Promise<AuthCookies | null> {
   if (!raw) return null;
 
   try {
-    const parsed = JSON.parse(raw) as AuthCookies;
-    if (Date.now() - parsed.createdAt > MAX_AGE) {
+    const parsed = JSON.parse(raw);
+    const validated = authCookiesSchema.safeParse(parsed);
+
+    if (!validated.success) return null;
+
+    if (Date.now() - validated.data.createdAt > MAX_AGE * 1000) {
       return null;
     }
-    return parsed;
+
+    return validated.data;
   } catch {
     return null;
   }
@@ -69,29 +74,15 @@ export async function clearAuthCookie() {
 
 const VERIFY_COOKIE = 'verify_session';
 
-export type VerificationStep = 'email' | 'phone' | 'done';
-export type VerificationMode = 'email' | 'phone';
-
-export type VerificationSession = {
-  verificationId: string | null | undefined;
-  authAccountId: string;
-  otpPurpose: OtpPurpose;
-
-  mode: VerificationMode;
-  step: VerificationStep;
-
-  identityId?: string;
-
-  createdAt: number;
-};
-
 export async function setVerificationSession(
   payload: VerificationSession,
   ttlSeconds: number = VERIFY_MAX_AGE,
 ) {
   const store = await cookies();
 
-  const token = await encryptToken(payload);
+  const parsed = verificationSessionSchema.parse(payload);
+
+  const token = await encryptToken(parsed);
 
   store.set(VERIFY_COOKIE, token, {
     httpOnly: true,
@@ -108,17 +99,24 @@ export async function getVerificationSession(): Promise<VerificationSession | nu
 
   if (!token) return null;
 
-  const session = await decryptToken<VerificationSession>(token);
+  const session = await decryptToken<unknown>(token);
   if (!session) return null;
 
-  // expiry safety
-  const maxAgeMs = VERIFY_MAX_AGE * 1000;
-  if (Date.now() - session.createdAt > maxAgeMs) {
+  const validated = verificationSessionSchema.safeParse(session);
+
+  if (!validated.success) {
     await clearVerificationSession();
     return null;
   }
 
-  return session;
+  const data = validated.data;
+
+  if (Date.now() - data.createdAt > VERIFY_MAX_AGE * 1000) {
+    await clearVerificationSession();
+    return null;
+  }
+
+  return data;
 }
 
 export async function clearVerificationSession() {
@@ -135,7 +133,7 @@ export async function updateVerificationSession(
     throw new Error('Verification session not found');
   }
 
-  const updated: VerificationSession = {
+  const updated = {
     ...existing,
     ...updates,
   };
@@ -149,38 +147,16 @@ export async function updateVerificationSession(
 
 const SESSION_COOKIE = 'user_session';
 
-export type SessionPayload = {
-  sessionId: string;
-
-  identityId: string;
-
-  workspaceId?: string;
-  membershipId?: string;
-
-  platformRole?: PlatformRole;
-  workspaceRole?: WorkspaceRole;
-
-  isActive: boolean;
-
-  permissions: string[];
-  features: string[];
-  limits: Record<string, number>;
-
-  createdAt: number;
-  expiresAt: number;
-
-  // optional future-proofing
-  version?: number;
-};
-
 export async function setUserSession(payload: SessionPayload) {
   const store = await cookies();
 
-  const token = await encryptToken(payload);
+  const parsed = sessionPayloadSchema.parse(payload);
+
+  const token = await encryptToken(parsed);
 
   const ttlSeconds = Math.max(
     0,
-    Math.floor((payload.expiresAt - Date.now()) / 1000),
+    Math.floor((parsed.expiresAt - Date.now()) / 1000),
   );
 
   store.set(SESSION_COOKIE, token, {
@@ -188,7 +164,7 @@ export async function setUserSession(payload: SessionPayload) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: ttlSeconds + SESSION_MAX_AGE, // grace buffer
+    maxAge: ttlSeconds + SESSION_MAX_AGE,
   });
 }
 
@@ -198,22 +174,29 @@ export async function getUserSession(): Promise<SessionPayload | null> {
 
   if (!token) return null;
 
-  const session = await decryptToken<SessionPayload>(token);
+  const session = await decryptToken<unknown>(token);
   if (!session) return null;
 
-  // expiry check
-  if (Date.now() > session.expiresAt) {
+  const validated = sessionPayloadSchema.safeParse(session);
+
+  if (!validated.success) {
     await clearUserSession();
     return null;
   }
 
-  // active check
-  if (!session.isActive) {
+  const data = validated.data;
+
+  if (Date.now() > data.expiresAt) {
     await clearUserSession();
     return null;
   }
 
-  return session;
+  if (!data.isActive) {
+    await clearUserSession();
+    return null;
+  }
+
+  return data;
 }
 
 export async function clearUserSession() {
@@ -228,7 +211,9 @@ export async function clearUserSession() {
 export async function setDeviceId(deviceId: string) {
   const store = await cookies();
 
-  store.set('device_id', deviceId, {
+  const parsed = deviceIdSchema.parse(deviceId);
+
+  store.set('device_id', parsed, {
     httpOnly: true,
     secure: IS_PROD,
     sameSite: 'lax',
@@ -239,7 +224,12 @@ export async function setDeviceId(deviceId: string) {
 
 export async function getDeviceId(): Promise<string | undefined> {
   const store = await cookies();
-  return store.get('device_id')?.value;
+  const value = store.get('device_id')?.value;
+
+  if (!value) return undefined;
+
+  const validated = deviceIdSchema.safeParse(value);
+  return validated.success ? validated.data : undefined;
 }
 
 export async function clearDeviceId() {

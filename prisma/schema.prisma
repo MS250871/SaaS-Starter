@@ -381,11 +381,12 @@ model OtpRequest {
   workspaceId    String?   @map("workspace_id") @db.Uuid
   workspace      Workspace? @relation(fields: [workspaceId], references: [id])
 
-  verificationId String?   @map("verification_id")
+  verificationId String   @map("verification_id") @unique @db.Uuid
   otpPurpose     OtpPurpose @map("otp_purpose")
   otpHash        String    @map("otp_hash")
   expiresAt      DateTime  @map("expires_at")
   createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
   attempts       Int       @default(0) @db.SmallInt
   resendCount    Int       @default(0) @map("resend_count") @db.SmallInt
 

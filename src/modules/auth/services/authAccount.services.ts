@@ -54,13 +54,28 @@ export async function findAuthAccountByIdentifier(identifier: string) {
   const isEmail = emailSchema.safeParse(normalized).success;
 
   if (isEmail) {
-    return findAuthAccountByTypeValue(
+    const authAccount = await findAuthAccountByTypeValue(
       AuthAccountType.EMAIL,
       normalized.toLowerCase(),
     );
+
+    if (!authAccount) {
+      throwError(ERR.NOT_FOUND, 'Auth account not found');
+    }
+
+    return authAccount;
   }
 
-  return findAuthAccountByTypeValue(AuthAccountType.PHONE, normalized);
+  const authAccount = await findAuthAccountByTypeValue(
+    AuthAccountType.PHONE,
+    normalized,
+  );
+
+  if (!authAccount) {
+    throwError(ERR.NOT_FOUND, 'Auth account not found');
+  }
+
+  return authAccount;
 }
 
 /**

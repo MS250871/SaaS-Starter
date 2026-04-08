@@ -1,5 +1,6 @@
 import { VerifyForm } from '@/modules/auth/components/verify-form';
-import type { Mode } from '@/modules/auth/types';
+
+type Mode = 'email' | 'phone';
 
 async function VerifyOtpPage({
   searchParams,

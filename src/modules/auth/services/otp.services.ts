@@ -5,6 +5,7 @@ import {
   OTP_MAX_ATTEMPTS,
   OTP_MAX_RESENDS,
   buildOtpPayload,
+  buildOtpUpdatePayload,
   hashOtp,
 } from '@/lib/auth/auth-utils';
 import { sendOtpEmail } from '@/lib/email/email-service';
@@ -31,9 +32,30 @@ export async function getOtpRequestById(id: string) {
 }
 
 /**
- * Get latest OTP request
+ * Get OTP request by verification ID
  */
-export async function getLatestOtpRequest(
+export async function getOtpRequestByVerificationId(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Verification ID is required');
+  }
+
+  const otp = await otpQueries.findFirst({
+    where: {
+      verificationId: id,
+    },
+  });
+
+  if (!otp) {
+    throwError(ERR.NOT_FOUND, 'OTP request not found');
+  }
+
+  return otp;
+}
+
+/**
+ * Get latest OTP request for an account
+ */
+export async function getLatestOtpRequestForAccount(
   authAccountId: string,
   otpPurpose: OtpPurpose,
 ) {
@@ -194,74 +216,74 @@ export async function generateOtp(params: {
 /**
  * Resend OTP
  */
-export async function resendOtp(params: {
-  authAccountId: string;
-  otpPurpose: OtpPurpose;
-  workspaceId?: string | null;
-}) {
-  if (!params.authAccountId || !params.otpPurpose) {
-    throwError(ERR.INVALID_INPUT, 'Invalid resend OTP params');
+export async function resendOtp(params: { verificationId: string }) {
+  if (!params.verificationId) {
+    throwError(ERR.INVALID_INPUT, 'Verification Id is required');
   }
 
-  const latest = await getLatestOtpRequest(
-    params.authAccountId,
-    params.otpPurpose,
-  );
+  /* ---------------- GET EXISTING OTP REQUEST ---------------- */
+  const otpRequest = await getOtpRequestByVerificationId(params.verificationId);
 
-  if (!latest) {
-    throwError(ERR.NOT_FOUND, 'OTP request not found');
-  }
-
-  if (hasExceededResends(latest)) {
+  /* ---------------- CHECK RESEND LIMIT ---------------- */
+  if (hasExceededResends(otpRequest)) {
     throwError(ERR.LIMIT_EXCEEDED, 'Maximum OTP resends exceeded');
   }
 
-  await incrementResendCount(latest.id);
+  /* ---------------- OPTIONAL COOLDOWN (RECOMMENDED) ---------------- */
+  const COOLDOWN_MS = 30 * 1000;
 
-  return generateOtp({
-    authAccountId: params.authAccountId,
-    workspaceId: params.workspaceId,
-    otpPurpose: params.otpPurpose,
+  const lastUpdated = otpRequest.updatedAt ?? otpRequest.createdAt;
+
+  if (lastUpdated && Date.now() - lastUpdated.getTime() < COOLDOWN_MS) {
+    throwError(ERR.LIMIT_EXCEEDED, 'Please wait before requesting another OTP');
+  }
+
+  /* ---------------- BUILD OTP UPDATE PAYLOAD ---------------- */
+  const { otp, payload } = buildOtpUpdatePayload({
+    existing: otpRequest,
   });
+
+  /* ---------------- UPDATE SAME ROW ---------------- */
+  await updateOtpRequest(otpRequest.id, payload);
+
+  /* ---------------- RETURN ---------------- */
+  return {
+    otp,
+    verificationId: otpRequest.verificationId, // SAME ID
+  };
 }
 
 /**
  * Verify OTP
  */
 export async function verifyOtp(params: {
-  authAccountId: string;
-  otpPurpose: OtpPurpose;
+  verificationId: string;
   otp: string;
 }) {
-  if (!params.authAccountId || !params.otpPurpose || !params.otp) {
+  if (!params.verificationId || !params.otp) {
     throwError(ERR.INVALID_INPUT, 'Invalid OTP verification params');
   }
 
-  const latest = await getLatestOtpRequest(
-    params.authAccountId,
-    params.otpPurpose,
-  );
+  const otpRequest = await getOtpRequestByVerificationId(params.verificationId);
 
-  if (!latest) {
-    throwError(ERR.NOT_FOUND, 'OTP request not found');
-  }
-
-  if (hasExceededAttempts(latest)) {
+  if (hasExceededAttempts(otpRequest)) {
     throwError(ERR.LIMIT_EXCEEDED, 'Maximum OTP attempts exceeded');
   }
 
-  if (isOtpExpired(latest)) {
+  if (isOtpExpired(otpRequest)) {
     throwError(ERR.OTP_EXPIRED, 'OTP expired');
   }
 
-  if (!compareOtp(params.otp, latest.otpHash)) {
-    await incrementOtpAttempts(latest.id);
+  if (!compareOtp(params.otp, otpRequest.otpHash)) {
+    await incrementOtpAttempts(otpRequest.id);
     throwError(ERR.OTP_INVALID, 'Invalid OTP');
   }
 
+  await deleteOtpRequest(otpRequest.id);
+
   return {
     success: true,
-    authAccountId: latest.authAccountId,
+    authAccountId: otpRequest.authAccountId,
   };
 }
 

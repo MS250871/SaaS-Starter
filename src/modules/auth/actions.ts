@@ -4,13 +4,22 @@ import { emailSchema, loginSchema, otpSchema, signupSchema } from './schema';
 import { signupWorkflow, loginWorkflow } from './workflows';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import {
-  type AuthCookies,
   setAuthCookies,
   setVerificationSession,
+  setUserSession,
+} from '@/lib/auth/auth-cookies';
+import { AuthCookies, verificationSessionSchema } from '@/lib/auth/auth.schema';
+import { verifyWorkflow } from './workflows';
+import {
+  getVerificationSession,
+  clearVerificationSession,
 } from '@/lib/auth/auth-cookies';
 import { sendOtp } from './services/otp.services';
 import { redirect } from 'next/navigation';
 import { getActor } from '@/lib/context/actor-context';
+import { ERR } from '@/lib/errors/codes';
+import { throwError } from '@/lib/errors/app-error';
+import { resendOtpWorkflow } from './workflows';
 
 export const signupAction = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
@@ -43,26 +52,22 @@ export const signupAction = createNavAction(async (formData: FormData) => {
 
   const result = await signupWorkflow(parsed);
 
-  try {
-    await sendOtp({
-      identifier: parsed.email,
-      otp: result.otp,
-      name: result.name,
-      brand: 'SkillMaxx',
-    });
-  } catch (e) {
-    console.error('Failed to send OTP:', e);
-    // We can choose to proceed without blocking the user, but log the error for investigation
-  }
+  await sendOtp({
+    identifier: result.identifier,
+    otp: result.otp,
+    name: result.name,
+    brand: 'SkillMaxx',
+  });
 
   await setVerificationSession({
     verificationId: result.verificationId,
     authAccountId: result.authAccountId,
-    otpPurpose: 'SIGNUP',
-    mode: 'email',
-    step: 'email',
+    otpPurpose: result.otpPurpose,
+    mode: result.mode,
+    step: result.step,
     identityId: result.identityId,
-    createdAt: Date.now(),
+    identifier: result.identifier,
+    createdAt: result.createdAt,
   });
 
   redirect(`/verify-otp?mode=${result.mode}`);
@@ -96,25 +101,22 @@ export const loginAction = createNavAction(async (formData: FormData) => {
 
   const result = await loginWorkflow(parsed);
 
-  try {
-    await sendOtp({
-      identifier: parsed.identifier,
-      otp: result.otp,
-      name: result.name,
-      brand: 'SkillMaxx',
-    });
-  } catch (e) {
-    console.error('Failed to send OTP:', e);
-  }
+  await sendOtp({
+    identifier: result.identifier,
+    otp: result.otp,
+    name: result.name,
+    brand: 'SkillMaxx',
+  });
 
   await setVerificationSession({
     verificationId: result.verificationId,
     authAccountId: result.authAccountId,
-    otpPurpose: 'LOGIN',
-    mode: 'email',
-    step: 'email',
+    otpPurpose: result.otpPurpose,
+    mode: result.mode,
+    step: result.step,
     identityId: result.identityId,
-    createdAt: Date.now(),
+    identifier: result.identifier,
+    createdAt: result.createdAt,
   });
 
   redirect(`/verify-otp?mode=${result.mode}`);
@@ -127,10 +129,43 @@ export async function googleAuthAction() {
   return {};
 }
 
-export async function verifyAction(formData: FormData) {
-  return {};
-}
+export const verifyAction = createNavAction(async (formData: FormData) => {
+  const raw = Object.fromEntries(formData.entries());
+  const parsed = otpSchema.parse(raw);
 
-export async function resendAction() {
-  return {};
-}
+  const verificationSession = await getVerificationSession();
+
+  if (!verificationSession?.verificationId) {
+    throwError(ERR.INVALID_STATE, 'Verification session missing');
+  }
+
+  const result = await verifyWorkflow({
+    otp: parsed.otp,
+    verificationSession,
+  });
+
+  await clearVerificationSession();
+
+  await setUserSession(result);
+
+  redirect('/post-login');
+});
+
+export const resendAction = createNavAction(async () => {
+  const verificationSession = await getVerificationSession();
+
+  if (!verificationSession?.verificationId) {
+    throwError(ERR.INVALID_STATE, 'Verification session missing');
+  }
+
+  const result = await resendOtpWorkflow({
+    verificationSession,
+  });
+
+  await sendOtp({
+    identifier: result.identifier,
+    otp: result.otp,
+    name: result.name,
+    brand: 'SkillMaxx',
+  });
+});

@@ -30,8 +30,11 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import type { Mode } from '../types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+type Mode = 'email' | 'phone';
+
+const RESEND_COOLDOWN = 30; // seconds
 
 export function VerifyForm({
   mode,
@@ -51,12 +54,26 @@ export function VerifyForm({
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const title = mode === 'email' ? 'Verify your email' : 'Verify your phone';
-  const description =
-    mode === 'email'
-      ? 'Enter the code we emailed you to verify your email address.'
-      : 'Enter the code we texted you to verify your phone number.';
+  const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
+  const [isCooldownActive, setIsCooldownActive] = useState(true);
 
+  /* ---------------- COUNTDOWN TIMER ---------------- */
+  useEffect(() => {
+    if (!isCooldownActive) return;
+
+    if (cooldown <= 0) {
+      setIsCooldownActive(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setCooldown((prev) => prev - 1);
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [cooldown, isCooldownActive]);
+
+  /* ---------------- VERIFY ---------------- */
   const onSubmit = async (data: OtpSchema) => {
     setLoading(true);
     setFormError(null);
@@ -67,6 +84,10 @@ export function VerifyForm({
       Object.entries(data).forEach(([k, v]) => {
         formData.append(k, String(v));
       });
+
+      if (mode) {
+        formData.append('mode', String(mode));
+      }
 
       await verifyAction(formData);
     } catch (err: any) {
@@ -93,6 +114,29 @@ export function VerifyForm({
       setFormError(err?.message || 'Something went wrong');
     }
   };
+
+  /* ---------------- RESEND ---------------- */
+  const handleResend = async () => {
+    if (isCooldownActive) return;
+
+    try {
+      await resendAction();
+
+      // 🔥 reset cooldown
+      setCooldown(RESEND_COOLDOWN);
+      setIsCooldownActive(true);
+    } catch (e) {
+      console.error('Resend failed', e);
+    }
+  };
+
+  const formatted = cooldown.toString().padStart(2, '0');
+
+  const title = mode === 'email' ? 'Verify your email' : 'Verify your phone';
+  const description =
+    mode === 'email'
+      ? 'Enter the code we emailed you to verify your email address.'
+      : 'Enter the code we texted you to verify your phone number.';
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -123,7 +167,7 @@ export function VerifyForm({
                         form.setValue('otp', val, { shouldValidate: true })
                       }
                     >
-                      <InputOTPGroup className="gap-2.5 *:data-[slot=input-otp-slot]:rounded-md *:data-[slot=input-otp-slot]:border">
+                      <InputOTPGroup className="gap-3 *:data-[slot=input-otp-slot]:rounded-md *:data-[slot=input-otp-slot]:border">
                         <InputOTPSlot index={0} />
                         <InputOTPSlot index={1} />
                         <InputOTPSlot index={2} />
@@ -163,20 +207,18 @@ export function VerifyForm({
 
                 {/* RESEND */}
                 <Field>
-                  <FieldDescription className="text-center">
+                  <FieldDescription className="text-start">
                     Didn’t receive the code?{' '}
                     <button
                       type="button"
-                      onClick={async () => {
-                        try {
-                          await resendAction();
-                        } catch (e) {
-                          console.error('Resend failed', e);
-                        }
-                      }}
-                      className="underline underline-offset-4 hover:text-primary"
+                      onClick={handleResend}
+                      disabled={isCooldownActive}
+                      className={cn(
+                        'underline underline-offset-4 hover:text-primary tabular-nums',
+                        isCooldownActive && 'opacity-50 cursor-not-allowed',
+                      )}
                     >
-                      Resend
+                      {isCooldownActive ? `Resend in ${formatted}s` : 'Resend'}
                     </button>
                   </FieldDescription>
                 </Field>

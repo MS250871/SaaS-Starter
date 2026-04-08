@@ -1,6 +1,6 @@
 export function otpTemplate({ otp, name }: { otp: string; name?: string }) {
   return {
-    subject: 'Your Bike Culture verification code',
+    subject: 'Your verification code',
     html: `
       <div style="font-family: Arial, sans-serif; padding: 24px;">
         <h2>Verify your email</h2>

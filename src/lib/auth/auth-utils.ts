@@ -1,12 +1,12 @@
 import crypto from 'crypto';
 import type { RequestContext } from '../context/request-context';
-import type { CreateInput } from '@/lib/crud/prisma-types';
+import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { OtpPurpose } from '@/generated/prisma/client';
 import {
   parsePhoneNumberFromString,
   type CountryCode,
 } from 'libphonenumber-js';
-
+import { deviceIdSchema } from '@/lib/auth/auth.schema';
 export const OTP_MAX_ATTEMPTS = 5;
 export const OTP_MAX_RESENDS = 3;
 export const OTP_EXPIRY_MINUTES = 10;
@@ -72,6 +72,26 @@ export function buildOtpPayload(params: {
   };
 }
 
+export function buildOtpUpdatePayload(params: {
+  existing: {
+    resendCount: number;
+  };
+}) {
+  const otp = generateOtp();
+
+  const payload: UpdateInput<'OtpRequest'> = {
+    otpHash: hashOtp(otp),
+    expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+    attempts: 0, // reset attempts
+    resendCount: params.existing.resendCount + 1,
+  };
+
+  return {
+    otp,
+    payload,
+  };
+}
+
 const DEFAULT_COUNTRY: CountryCode = 'IN';
 
 export function normalizePhone(
@@ -95,4 +115,16 @@ export function normalizePhone(
     valid: true,
     e164: parsed.number, // ✅ normalized
   };
+}
+
+export function ensureDeviceIdValue(raw?: string): string {
+  if (!raw) return randomUUID();
+
+  const parsed = deviceIdSchema.safeParse(raw);
+
+  if (!parsed.success) {
+    return randomUUID();
+  }
+
+  return parsed.data;
 }

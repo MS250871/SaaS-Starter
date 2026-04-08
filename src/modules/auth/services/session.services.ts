@@ -2,7 +2,8 @@ import { sessionCrud, sessionQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { SessionEndReason } from '@/generated/prisma/client';
 import type { Session } from '@/generated/prisma/client';
-import { getUserSession, SessionPayload } from '@/lib/auth/auth-cookies';
+import { getUserSession } from '@/lib/auth/auth-cookies';
+import { SessionPayload } from '@/lib/auth/auth.schema';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 

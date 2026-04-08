@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from '@/lib/auth/auth-utils';
 import { getRequestMetadata } from '@/lib/http/request-metadata';
+import { ensureDeviceIdValue } from '@/lib/auth/auth-utils';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -20,11 +21,10 @@ export async function injectRequestHeaders(
   const requestId = randomUUID();
 
   /* ---------------- DEVICE ID ---------------- */
-  let deviceId = req.cookies.get('device_id')?.value;
+  const existingDeviceId = req.cookies.get('device_id')?.value;
+  let deviceId = ensureDeviceIdValue(existingDeviceId);
 
-  if (!deviceId) {
-    deviceId = randomUUID();
-
+  if (!existingDeviceId || existingDeviceId !== deviceId) {
     res.cookies.set('device_id', deviceId, {
       httpOnly: true,
       secure: IS_PROD,
