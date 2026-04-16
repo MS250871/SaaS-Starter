@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { SessionPayload } from '@/lib/auth/auth-cookies';
+import type { SessionPayload } from '@/lib/auth/auth.schema';
 
 export function injectActorHeaders(
   res: NextResponse,
@@ -25,8 +25,8 @@ export function injectActorHeaders(
     res.headers.set('x-workspace-role', session.workspaceRole);
   }
 
-  if (session.platformRole) {
-    res.headers.set('x-platform-role', session.platformRole);
+  if (session.platformRoles?.length) {
+    res.headers.set('x-platform-roles', JSON.stringify(session.platformRoles));
   }
   if (session.permissions?.length) {
     res.headers.set('x-permissions', JSON.stringify(session.permissions));

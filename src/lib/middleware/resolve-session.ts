@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { decryptToken } from '@/lib/security/crypto';
-import type { SessionPayload } from '@/lib/auth/auth-cookies';
+import type { SessionPayload } from '@/lib/auth/auth.schema';
 
 export async function resolveSession(req: NextRequest) {
   const token = req.cookies.get('user_session')?.value;

@@ -1,11 +1,11 @@
 import crypto from 'crypto';
 import {
-  workspaceInviteCrud,
-  workspaceInviteQueries,
-} from '@/modules/workspace/db';
+  platformInviteCrud,
+  platformInviteQueries,
+} from '@/modules/platform/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { WorkspaceRole } from '@/generated/prisma/client';
+import { PlatformRole } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -19,10 +19,10 @@ export function generateInviteToken() {
 /**
  * Get invite by ID
  */
-export async function getInviteById(id: string) {
+export async function getPlatformInviteById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
-  const invite = await workspaceInviteQueries.byId(id);
+  const invite = await platformInviteQueries.byId(id);
   if (!invite) throwError(ERR.NOT_FOUND, 'Invite not found');
 
   return invite;
@@ -31,72 +31,72 @@ export async function getInviteById(id: string) {
 /**
  * Find invite by token
  */
-export async function findInviteByToken(token: string) {
+export async function findPlatformInviteByToken(token: string) {
   if (!token) throwError(ERR.INVALID_INPUT, 'Token is required');
 
-  return workspaceInviteQueries.findFirst({
+  return platformInviteQueries.findFirst({
     where: { token },
   });
 }
 
 /**
- * Create invite
+ * Create invite (generic)
  */
-export async function createInvite(data: CreateInput<'WorkspaceInvite'>) {
-  if (!data?.workspaceId || !data?.email) {
+export async function createPlatformInvite(
+  data: CreateInput<'PlatformInvite'>,
+) {
+  if (!data?.email) {
     throwError(ERR.INVALID_INPUT, 'Invalid invite data');
   }
 
   try {
-    return await workspaceInviteCrud.create({
+    return await platformInviteCrud.create({
       ...data,
       email: data.email.toLowerCase(),
       token: data.token ?? generateInviteToken(),
     });
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to create invite', undefined, e);
+    throwError(ERR.DB_ERROR, 'Failed to create platform invite', undefined, e);
   }
 }
 
 /**
- * Create workspace invite
+ * Create platform invite (typed helper)
  */
-export async function createWorkspaceInvite(params: {
-  workspaceId: string;
+export async function createPlatformInviteEntry(params: {
   email: string;
   invitedById?: string | null;
-  role?: WorkspaceRole;
+  role?: PlatformRole;
   expiresAt?: Date | null;
 }) {
-  if (!params.workspaceId || !params.email) {
+  if (!params.email) {
     throwError(ERR.INVALID_INPUT, 'Invalid invite params');
   }
 
   try {
-    return await workspaceInviteCrud.create({
-      workspaceId: params.workspaceId,
+    return await platformInviteCrud.create({
       email: params.email.toLowerCase(),
       invitedById: params.invitedById ?? undefined,
-      role: params.role ?? WorkspaceRole.STAFF,
+      role: params.role ?? PlatformRole.PLATFORM_STAFF,
       token: generateInviteToken(),
       expiresAt: params.expiresAt ?? undefined,
     });
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to create workspace invite', undefined, e);
+    throwError(ERR.DB_ERROR, 'Failed to create platform invite', undefined, e);
   }
 }
 
 /**
  * Update invite
  */
-export async function updateInvite(
+export async function updatePlatformInvite(
   id: string,
-  data: UpdateInput<'WorkspaceInvite'>,
+  data: UpdateInput<'PlatformInvite'>,
 ) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
   try {
-    return await workspaceInviteCrud.update(id, data);
+    return await platformInviteCrud.update(id, data);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to update invite', undefined, e);
   }
@@ -105,11 +105,11 @@ export async function updateInvite(
 /**
  * Accept invite
  */
-export async function acceptInvite(id: string) {
+export async function acceptPlatformInvite(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
   try {
-    return await workspaceInviteCrud.update(id, {
+    return await platformInviteCrud.update(id, {
       status: 'ACCEPTED',
     });
   } catch (e) {
@@ -120,11 +120,11 @@ export async function acceptInvite(id: string) {
 /**
  * Revoke invite
  */
-export async function revokeInvite(id: string) {
+export async function revokePlatformInvite(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
   try {
-    return await workspaceInviteCrud.update(id, {
+    return await platformInviteCrud.update(id, {
       status: 'REVOKED',
     });
   } catch (e) {
@@ -135,11 +135,11 @@ export async function revokeInvite(id: string) {
 /**
  * Expire invite
  */
-export async function expireInvite(id: string) {
+export async function expirePlatformInvite(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
   try {
-    return await workspaceInviteCrud.update(id, {
+    return await platformInviteCrud.update(id, {
       status: 'EXPIRED',
     });
   } catch (e) {
@@ -150,26 +150,21 @@ export async function expireInvite(id: string) {
 /**
  * Delete invite
  */
-export async function deleteInvite(id: string) {
+export async function deletePlatformInvite(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
 
   try {
-    return await workspaceInviteCrud.delete(id);
+    return await platformInviteCrud.delete(id);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to delete invite', undefined, e);
   }
 }
 
 /**
- * List workspace invites
+ * List platform invites
  */
-export async function listWorkspaceInvites(workspaceId: string) {
-  if (!workspaceId) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
-  }
-
-  return workspaceInviteQueries.many({
-    where: { workspaceId },
+export async function listPlatformInvites() {
+  return platformInviteQueries.many({
     orderBy: { createdAt: 'desc' },
   });
 }
@@ -177,7 +172,7 @@ export async function listWorkspaceInvites(workspaceId: string) {
 /**
  * Check expired
  */
-export function isInviteExpired(invite: { expiresAt?: Date | null }) {
+export function isPlatformInviteExpired(invite: { expiresAt?: Date | null }) {
   if (!invite.expiresAt) return false;
   return new Date() > invite.expiresAt;
 }
@@ -185,10 +180,10 @@ export function isInviteExpired(invite: { expiresAt?: Date | null }) {
 /**
  * Validate token
  */
-export async function validateInviteToken(token: string) {
+export async function validatePlatformInviteToken(token: string) {
   if (!token) throwError(ERR.INVALID_INPUT, 'Token is required');
 
-  const invite = await findInviteByToken(token);
+  const invite = await findPlatformInviteByToken(token);
 
   if (!invite) {
     throwError(ERR.NOT_FOUND, 'Invalid invite token');
@@ -196,7 +191,7 @@ export async function validateInviteToken(token: string) {
   if (invite.status !== 'PENDING') {
     throwError(ERR.INVALID_INPUT, 'Invite already used or revoked');
   }
-  if (isInviteExpired(invite)) {
+  if (isPlatformInviteExpired(invite)) {
     throwError(ERR.INVALID_INPUT, 'Invite has expired');
   }
 

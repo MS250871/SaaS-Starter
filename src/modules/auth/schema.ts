@@ -46,8 +46,7 @@ export const phoneSchemaStrict = z
    LOGIN
 ========================================================= */
 
-// ---------- FORM SCHEMA (UI) ----------
-
+// ---------- FORM SCHEMA ----------
 export const loginFormSchema = z.object({
   identifier: z
     .string()
@@ -56,10 +55,8 @@ export const loginFormSchema = z.object({
       (val) => {
         const identifierRaw = trim(val).replace(/\s+/g, '');
 
-        // ✅ email check
         if (emailSchema.safeParse(identifierRaw).success) return true;
 
-        // ✅ phone check (centralized)
         return normalizePhone(identifierRaw).valid;
       },
       {
@@ -72,11 +69,17 @@ export const loginFormSchema = z.object({
 
 export type LoginFormInput = z.input<typeof loginFormSchema>;
 
-// ---------- DOMAIN SCHEMA (normalized) ----------
-export const loginSchema = loginFormSchema.transform((data) => {
+// ---------- ACTION SCHEMA (optional for future) ----------
+export const loginActionSchema = loginFormSchema.extend({
+  entry: z.enum(['platform', 'workspace']),
+});
+
+export type LoginActionInput = z.input<typeof loginActionSchema>;
+
+// ---------- DOMAIN SCHEMA ----------
+export const loginSchema = loginActionSchema.transform((data) => {
   const identifierRaw = trim(data.identifier).replace(/\s+/g, '');
 
-  // ✅ email
   if (emailSchema.safeParse(identifierRaw).success) {
     return {
       ...data,
@@ -84,7 +87,6 @@ export const loginSchema = loginFormSchema.transform((data) => {
     };
   }
 
-  // ✅ phone (safe because already validated)
   const { e164 } = normalizePhone(identifierRaw);
 
   return {
@@ -99,20 +101,27 @@ export type LoginDomain = z.output<typeof loginSchema>;
    SIGNUP
 ========================================================= */
 
-// ---------- FORM SCHEMA (UI) ----------
+// ---------- FORM SCHEMA (UI ONLY) ----------
 export const signupFormSchema = z.object({
   firstName: z.string().min(2, 'First name too short'),
   lastName: z.string().min(2, 'Last name too short'),
   email: emailSchema,
   phone: phoneSchemaStrict,
   intent: z.enum(['free', 'paid']),
-  inviteToken: z.string().optional(),
 });
 
 export type SignupFormInput = z.input<typeof signupFormSchema>;
 
-// ---------- DOMAIN SCHEMA (normalized) ----------
-export const signupSchema = signupFormSchema.transform((data) => {
+// ---------- ACTION SCHEMA (FORM + SYSTEM DATA) ----------
+export const signupActionSchema = signupFormSchema.extend({
+  entry: z.enum(['platform', 'workspace']),
+  inviteToken: z.string().optional(),
+});
+
+export type SignupActionInput = z.input<typeof signupActionSchema>;
+
+// ---------- DOMAIN SCHEMA (normalized + safe) ----------
+export const signupSchema = signupActionSchema.transform((data) => {
   const firstName = capitalize(trim(data.firstName));
   const lastName = capitalize(trim(data.lastName));
   const email = toLower(trim(data.email));
@@ -123,23 +132,23 @@ export const signupSchema = signupFormSchema.transform((data) => {
     firstName,
     lastName,
     email,
-    phone: e164!, // E.164 here
+    phone: e164!, // E.164 normalized
+
+    // enforce safe defaults
+    entry: data.entry ?? 'platform',
   };
 });
 
 export type SignupDomain = z.output<typeof signupSchema>;
 
-/* =========================================================
-   OTP (no domain split needed)
-========================================================= */
-
+/* ========================================================= 
+  OTP (no domain split needed) 
+  ========================================================= */
 export const otpSchema = z.object({
   otp: z
     .string()
     .length(6, 'OTP must be 6 digits')
     .regex(/^\d+$/, 'Invalid OTP'),
-
   mode: z.enum(['email', 'phone']),
 });
-
 export type OtpSchema = z.infer<typeof otpSchema>;

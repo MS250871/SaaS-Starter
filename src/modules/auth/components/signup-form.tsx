@@ -28,16 +28,18 @@ import { Input } from '@/components/ui/input';
 import { GoogleButton } from './google-button';
 import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
-import type { AuthCookies } from '@/lib/auth/auth-cookies';
+import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { useState } from 'react';
 
 export function SignupForm({
   intent,
   invite,
+  entry,
   className,
 }: {
   intent: AuthCookies['intent'];
   invite?: string;
+  entry: AuthCookies['entry'];
   className?: string;
 }) {
   const form = useForm<SignupFormInput>({
@@ -64,6 +66,9 @@ export function SignupForm({
       if (invite) {
         formData.append('inviteToken', invite);
       }
+      const safeEntry =
+        entry === 'workspace' || entry === 'platform' ? entry : 'platform';
+      formData.append('entry', safeEntry);
 
       Object.entries(data).forEach(([k, v]) => {
         formData.append(k, String(v));

@@ -17,16 +17,31 @@ const enumOtpPurpose = z.enum([
   'MFA',
 ]);
 
+const enumAuthStep = z.enum([
+  'verify_phone',
+  'payment',
+  'workspace_select',
+  'workspace_create',
+  'finalize',
+]);
+
 /* =========================================================
    AUTH FLOW COOKIE
 ========================================================= */
 
 export const authCookiesSchema = z.object({
   flow: z.enum(['signup', 'login']),
+
+  entry: z.enum(['platform', 'workspace']),
+  mode: z.enum(['normal', 'invite']).default('normal'),
+
+  channel: z.enum(['web', 'mobile', 'api', 'oauth']).default('web'),
+
   intent: z.enum(['free', 'paid']).optional(),
-  entry: z.enum(['platform', 'workspace', 'invite']),
+
   inviteToken: z.string().optional(),
   workspaceId: z.string().nullable().optional(),
+
   createdAt: z.number(),
 });
 
@@ -65,7 +80,7 @@ export const sessionPayloadSchema = z.object({
   workspaceId: z.string().optional(),
   membershipId: z.string().optional(),
 
-  platformRole: enumPlatformRole.optional(),
+  platformRoles: z.array(enumPlatformRole).optional(),
   workspaceRole: enumWorkspaceRole.optional(),
 
   ip: z.string().optional(),

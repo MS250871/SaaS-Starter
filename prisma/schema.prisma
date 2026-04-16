@@ -26,6 +26,13 @@ enum PlatformRole {
   PLATFORM_STAFF
 }
 
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 enum OtpPurpose {
   LOGIN
   SIGNUP
@@ -82,11 +89,92 @@ enum Gender {
   PREFER_NOT_SAY
 }
 
+enum NotificationTargetType {
+  IDENTITY
+  CUSTOMER
+  BOTH
+  WORKSPACE
+  PLATFORM
+}
+
+enum SupportContextType {
+  PLATFORM
+  WORKSPACE
+  CUSTOMER
+}
 
 enum EntitlementSource {
   PLAN
   MANUAL
   SYSTEM
+}
+
+enum PaymentProvider {
+  STRIPE
+  RAZORPAY
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum PaymentType {
+  SIGNUP
+  UPGRADE
+  DOWNGRADE
+  RENEWAL
+  ONE_TIME
+  ADDON
+}
+
+enum ProductType {
+  SUBSCRIPTION
+  ONE_TIME
+}
+
+enum BillingInterval {
+  MONTHLY
+  YEARLY
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  UNPAID
+  EXPIRED
+  TRIALING
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum RefundReason {
+  USER_REQUEST
+  DUPLICATE
+  FRAUD
+  PAYMENT_ERROR
+  UPGRADE_ADJUSTMENT
+  DOWNGRADE_ADJUSTMENT
+  OTHER
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  INR
+  AUD
+  CAD
 }
 
 // -------------------- CORE MODELS --------------------
@@ -102,9 +190,6 @@ model Workspace {
 
   // Multi-domain support
   domains        WorkspaceDomain[]
-
-  // billing / subscription
-  subscriptions  WorkspaceSubscription[]
 
   // members & roles
   memberships    Membership[]
@@ -140,6 +225,11 @@ model Workspace {
   featureOverrides WorkspaceFeatureOverride[]
   limitOverrides WorkspaceLimitOverride[]
 
+  // billing
+  subscriptions Subscription[]
+  payments Payment[]
+  invoices Invoice[]
+
   // audit / webhooks
   adminAuditLogs AdminAuditLog[] 
 
@@ -149,7 +239,6 @@ model Workspace {
   @@index([isActive])
   @@index([createdAt])
   @@index([primaryEmail])
-  @@index([slug])
 }
 
 // workspace domains (CNAMEs / custom domains)
@@ -194,32 +283,6 @@ model Membership {
   @@index([workspaceId, role])
 }
 
-// workspace subscription
-model WorkspaceSubscription {
-  id                         String    @id @default(uuid()) @db.Uuid
-  workspaceId                String    @map("workspace_id") @db.Uuid
-  workspace                  Workspace @relation(fields: [workspaceId], references: [id])
-
-  plandId                     String?   @map("plan_id") @db.Uuid
-  plan                       Plan?     @relation(fields: [plandId], references: [id])
-
-  provider                   String    // e.g. stripe
-  providerSubscriptionId     String?   @map("provider_subscription_id") 
-  providerPlanId             String?   @map("provider_plan_id") 
-  providerPriceId            String?   @map("provider_price_id") 
-
-  status                     String    // active | past_due | cancelled
-  startedAt                  DateTime?
-  expiresAt                  DateTime?
-  metadata                   Json?
-
-  createdAt                  DateTime  @default(now()) @map("created_at")
-  updatedAt                  DateTime  @updatedAt @map("updated_at")
-
-  @@unique([provider, providerSubscriptionId])
-  @@index([workspaceId, status])
-}
-
 // Workspace invites (separate from Membership)
 model WorkspaceInvite {
   id          String   @id @default(uuid()) @db.Uuid
@@ -232,7 +295,7 @@ model WorkspaceInvite {
   invitedBy   Identity? @relation(fields: [invitedById], references: [id])
 
   token       String   @unique
-  status      String   @default("pending") // pending | accepted | revoked | expired
+  status      InviteStatus   @default(PENDING)
   expiresAt   DateTime?
   createdAt   DateTime @default(now()) @map("created_at")
 
@@ -273,6 +336,9 @@ model Identity {
   oauthAccounts OAuthAccount[]
   sessions Session[]
 
+  platformInvites PlatformInvite[]
+  platformMemberships PlatformMembership[]
+
   memberships Membership[]
   customers Customer[]
   permissions UserPermission[] @relation("UserPermissions")
@@ -283,10 +349,13 @@ model Identity {
   apiKeys ApiKey[]
   
   sentTickets SupportTicket[] @relation("CreatedTickets")
+  supportMessages SupportTicketMessage[] @relation("SentMessages")
   assignedTickets SupportTicket[] @relation("AssignedTickets")
   notifications Notification[]
 
-  @@index([email])
+  subscriptions Subscription[]
+  payments Payment[]
+  invoices Invoice[]  
 }
 
 model AuthAccount {
@@ -344,6 +413,11 @@ model Customer {
   externalId  String?   @map("external_id") // for external systems
 
   notifications Notification[]
+  subscriptions Subscription[]
+  payments Payment[]
+  invoices Invoice[]
+  supportTickets SupportTicket[] @relation("CreatedCustomerTickets")
+  supportMessages SupportTicketMessage[]
 
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -408,7 +482,6 @@ model Session {
   membershipId String? @map("membership_id") @db.Uuid
   membership   Membership? @relation(fields: [membershipId], references: [id])
 
-  platformRole PlatformRole? @map("platform_role")
   workspaceRole WorkspaceRole? @map("workspace_role") 
 
   ip        String?
@@ -430,11 +503,47 @@ model Session {
   createdAt DateTime  @default(now()) @map("created_at")
 
   @@index([identityId, isActive, createdAt])
+  @@index([workspaceId, isActive, createdAt])
   @@index([isActive, expiresAt])
   @@index([deviceId])
   @@index([deviceFingerprint])
   @@index([membershipId])
   @@index([workspaceId])
+}
+
+model PlatformInvite {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  email       String
+  role        PlatformRole
+
+  invitedById String?  @map("invited_by") @db.Uuid
+  invitedBy   Identity? @relation(fields: [invitedById], references: [id])
+
+  token       String   @unique
+  status      InviteStatus   @default(PENDING)
+  expiresAt   DateTime?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([email, status])
+  @@index([token])
+}
+
+model PlatformMembership {
+  id String @id @default(uuid()) @db.Uuid
+
+  identityId String @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
+
+  role PlatformRole
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([identityId, role])
+  @@index([identityId, isActive])
 }
 
 // Permission models
@@ -473,11 +582,11 @@ model RolePermission {
   @@unique([workspaceRole, permissionId])
   @@index([platformRole])
   @@index([workspaceRole])
-  // Note: platformRole and workspaceRole are mutually exclusive - only one can be set but ensure at least one is set 
+  @@index([permissionId])
 }
 
 model WorkspaceRolePermission {
-  id String @id @default(uuid())
+  id String @id @default(uuid()) @db.Uuid
 
   workspaceId String @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
@@ -521,7 +630,6 @@ model UserPermission {
   revokedAt DateTime? @map("revoked_at")
   createdAt DateTime  @default(now()) @map("created_at")
 
-  @@unique([identityId, workspaceId, permissionId])
   @@index([permissionId])
   @@index([identityId, workspaceId, isActive])
   @@index([expiresAt])
@@ -567,8 +675,13 @@ model AdminAuditLog {
 // Support / notifications / pages / blogs placeholders (kept from original)
 model SupportTicket {
   id String @id @default(uuid()) @db.Uuid
-  workspaceId String @map("workspace_id") @db.Uuid
-  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+
+  createdByCustomerId String? @map("created_by_customer_id") @db.Uuid
+  createdByCustomer Customer? @relation("CreatedCustomerTickets", fields: [createdByCustomerId], references: [id])
+  
+  contextType SupportContextType @map("context_type")
 
   createdById String? @map("created_by") @db.Uuid
   createdBy Identity? @relation("CreatedTickets", fields: [createdById], references: [id])
@@ -584,17 +697,28 @@ model SupportTicket {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   messages SupportTicketMessage[]
+
+  @@index([workspaceId, status])
+  @@index([workspaceId, createdAt])
+  @@index([contextType, createdAt])
+  @@index([createdById])
+  @@index([createdByCustomerId])
+  @@index([assignedToId])
 }
 
 model SupportTicketMessage {
   id       String @id @default(uuid()) @db.Uuid
   ticketId String @map("ticket_id") @db.Uuid
 
-  workspaceId String @map("workspace_id") @db.Uuid
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  senderIdentityId String? @map("sender_identity_id") @db.Uuid
+  senderIdentity Identity? @relation("SentMessages", fields: [senderIdentityId], references: [id])
+  senderCustomerId String? @map("sender_customer_id") @db.Uuid
+  senderCustomer Customer? @relation(fields: [senderCustomerId], references: [id])
 
   senderType SenderType @map("sender_type")
-  senderId   String?    @map("sender_id") @db.Uuid
 
   message        String
   isInternalNote Boolean  @default(false) @map("is_internal_note")
@@ -604,12 +728,15 @@ model SupportTicketMessage {
   ticket SupportTicket @relation(fields: [ticketId], references: [id])
 
   @@index([ticketId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([senderIdentityId, createdAt])
+  @@index([senderCustomerId, createdAt])
 }
 
 model Notification {
   id String @id @default(uuid()) @db.Uuid
-  workspaceId String @map("workspace_id") @db.Uuid
-  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String? @map("workspace_id") @db.Uuid
+  workspace Workspace? @relation(fields: [workspaceId], references: [id])
 
   recipientIdentityId String? @map("recipient_identity_id") @db.Uuid
   recipientIdentity Identity? @relation(fields: [recipientIdentityId], references: [id])
@@ -617,15 +744,20 @@ model Notification {
   recipientCustomerId String? @map("recipient_customer_id") @db.Uuid
   recipientCustomer Customer? @relation(fields: [recipientCustomerId], references: [id])
 
+  targetType NotificationTargetType @map("target_type")
   channel String
   payload Json
   isRead Boolean @default(false) @map("is_read")
 
   createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, createdAt])
+  @@index([recipientIdentityId, isRead, createdAt])
+  @@index([recipientCustomerId, isRead, createdAt])
+  @@index([workspaceId, isRead, createdAt])
 }
 
-// -------------------- ENTITLEMENTS --------------------
-
+// -------------------- ENTITLEMENTS -------------------- //
 
 model Plan {
   id          String   @id @default(uuid()) @db.Uuid
@@ -642,7 +774,7 @@ model Plan {
 
   features    PlanFeature[]
   limits      PlanLimit[]
-  subscriptions WorkspaceSubscription[]
+  products Product[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -766,4 +898,254 @@ model WorkspaceLimitOverride {
   @@unique([workspaceId, limitDefinitionId])
   @@index([workspaceId])
   @@index([limitDefinitionId])
+}
+
+model Product {
+  id String @id @default(uuid()) @db.Uuid
+
+  name String
+  code String @unique
+
+  planId String? @db.Uuid @map("plan_id") // link to entitlements
+  plan   Plan? @relation(fields: [planId], references: [id])
+
+  type ProductType
+  description String?
+
+  isActive Boolean @default(true) @map("is_active")  
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  prices Price[]
+  invoiceItems InvoiceItem[]
+
+  @@index([planId])
+  @@index([isActive]) 
+}
+
+model Price {
+  id String @id @default(uuid()) @db.Uuid
+
+  productId String @db.Uuid @map("product_id")
+  product   Product @relation(fields: [productId], references: [id])
+
+  amount   Int
+  currency Currency @default(INR)
+
+  interval BillingInterval? // null = one-time
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  subscriptions Subscription[]
+  payments Payment[]
+  invoiceItems InvoiceItem[]
+
+  @@index([productId])
+  @@index([productId, isActive])
+}
+
+model Subscription {
+  id String @id @default(uuid()) @db.Uuid
+
+  workspaceId String? @db.Uuid @map("workspace_id") // nullable for B2C saas where subscription is directly linked to an end-user identity
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  identityId String? @db.Uuid @map("identity_id") // for B2C saas where subscription is directly linked to an end-user identity
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where subscription is linked to a customer (end-user) within a workspace
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  priceId String @db.Uuid @map("price_id")
+  price   Price @relation(fields: [priceId], references: [id])
+
+  status SubscriptionStatus
+
+  currentPeriodStart DateTime @map("current_period_start")
+  currentPeriodEnd   DateTime @map("current_period_end")
+
+  cancelAtPeriodEnd Boolean @default(false)
+
+  provider PaymentProvider
+  providerSubscriptionId String? @map("provider_subscription_id") @unique
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  payments Payment[]
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([identityId, status])
+  @@index([customerId, status])
+  @@index([workspaceId, status])
+  @@index([priceId])  
+}
+
+model Payment {
+  id String @id @default(uuid()) @db.Uuid
+
+  workspaceId String? @db.Uuid @map("workspace_id") // B2B saas and B2B2C saas where payment is linked to a workspace
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  identityId String? @db.Uuid @map("identity_id") // for B2C saas where payment is directly linked to an end-user identity
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where payment is linked to a customer (end-user) within a workspace
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  priceId String? @db.Uuid @map("price_id")
+  price   Price? @relation(fields: [priceId], references: [id])
+
+  subscriptionId String? @db.Uuid @map("subscription_id")
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  type PaymentType  @default(ONE_TIME)
+
+  paymentProvider PaymentProvider @map("payment_provider") @default(RAZORPAY)
+
+  providerOrderId   String? @map("provider_order_id") @unique
+  providerPaymentId String? @map("provider_payment_id") @unique
+  providerSignature String? @map("provider_signature") 
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency Currency @default(INR)
+
+  paymentStatus PaymentStatus @map("payment_status") @default(PENDING)
+
+  description String?
+  metadata Json?
+
+  capturedAt DateTime? @map("captured_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  attempts PaymentAttempt[]
+  refunds  Refund[]
+  invoices Invoice[]
+
+  @@index([workspaceId])
+  @@index([paymentStatus, createdAt])
+  @@index([identityId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([subscriptionId])
+  @@index([workspaceId, paymentStatus])
+  @@index([identityId, paymentStatus])
+}
+
+model PaymentAttempt {
+  id String @id @default(uuid()) @db.Uuid
+
+  paymentId String @db.Uuid @map("payment_id")
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  attemptNumber Int @map("attempt_number") // for multiple attempts on the same payment
+
+  provider PaymentProvider @map("payment_provider") @default(RAZORPAY)
+
+  requestPayload  Json? @map("request_payload")
+  responsePayload Json? @map("response_payload")
+
+  status       String?
+  errorCode    String? @map("error_code")
+  errorMessage String? @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([paymentId])
+  @@unique([paymentId, attemptNumber])
+  @@index([paymentId, createdAt])
+}
+
+model Invoice {
+  id String @id @default(uuid()) @db.Uuid
+
+  paymentId String? @db.Uuid @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
+
+  workspaceId String? @db.Uuid @map("workspace_id") // nullable for B2C saas where invoice is directly linked to an end-user identity
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  identityId String? @db.Uuid @map("identity_id") // for B2C saas where invoice is directly linked to an end-user identity
+  identity   Identity? @relation(fields: [identityId], references: [id])
+
+  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where invoice is linked to a customer (end-user) within a workspace
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  invoiceNumber String @unique @map("invoice_number")
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency Currency @default(INR)
+
+  status PaymentStatus @default(PENDING)
+
+  issuedAt DateTime @default(now()) @map("issued_at")
+  paidAt   DateTime? @map("paid_at")
+
+  billingAddress  Json? @map("billing_address")
+  shippingAddress Json? @map("shipping_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  items InvoiceItem[]
+
+  @@index([workspaceId])
+  @@index([identityId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([paymentId])
+}
+
+model InvoiceItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  invoiceId String @db.Uuid @map("invoice_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+
+  productId String? @db.Uuid @map("product_id")
+  product   Product? @relation(fields: [productId], references: [id])
+
+  priceId String? @db.Uuid @map("price_id")
+  price   Price? @relation(fields: [priceId], references: [id])
+
+  quantity Int
+
+  unitPrice Decimal @db.Decimal(12, 2) @map("unit_price")
+  total     Decimal @db.Decimal(12, 2)
+  currency  Currency @default(INR)
+
+  metadata Json?
+
+  @@index([invoiceId])
+}
+
+model Refund {
+  id String @id @default(uuid()) @db.Uuid
+
+  paymentId String @db.Uuid @map("payment_id")
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  amount   Decimal @db.Decimal(12, 2)
+  currency Currency @default(INR)
+
+  status RefundStatus @default(PENDING)
+
+  reason RefundReason? @default(USER_REQUEST)
+  notes  String?
+
+  paymentProvider PaymentProvider @map("payment_provider") @default(RAZORPAY) 
+
+  providerRefundId String? @map("provider_refund_id") @unique
+
+  metadata Json?
+
+  processedAt DateTime? @map("processed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([paymentId])
+  @@index([status])
 }

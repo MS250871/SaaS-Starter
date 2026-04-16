@@ -34,7 +34,7 @@ type PermissionRecord = {
 type RolePermissionInput = {
   permissionId: string;
   workspaceRole?: WorkspaceRole;
-  platformRole?: PlatformRole;
+  platformRoles?: PlatformRole[];
 };
 
 type WorkspaceRolePermissionInput = {
@@ -57,7 +57,7 @@ type ResolvePermissionsParams = {
   identityId?: string;
   workspaceId?: string | null;
   workspaceRole?: WorkspaceRole | null;
-  platformRole?: PlatformRole | null;
+  platformRoles?: PlatformRole[] | null;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -156,7 +156,7 @@ export async function createRolePermission(data: RolePermissionInput) {
     throwError(ERR.INVALID_INPUT, 'permissionId is required');
   }
 
-  if (!data.workspaceRole && !data.platformRole) {
+  if (!data.workspaceRole && !data.platformRoles) {
     throwError(
       ERR.INVALID_INPUT,
       'Either workspaceRole or platformRole required',
@@ -452,23 +452,28 @@ function toPermissionKeySet(records: Array<{ permission?: { key: string } }>) {
 
 export async function getBaseRolePermissionKeys(params: {
   workspaceRole?: WorkspaceRole | null;
-  platformRole?: PlatformRole | null;
+  platformRoles?: PlatformRole[] | null;
 }) {
   const keys = new Set<string>();
 
+  /* ---------- WORKSPACE ROLE ---------- */
   if (params.workspaceRole) {
     const rolePermissions = await listRolePermissionsByWorkspaceRole(
       params.workspaceRole,
     );
+
     for (const permission of rolePermissions) {
       if (permission.permission?.key) keys.add(permission.permission.key);
     }
   }
 
-  if (params.platformRole) {
-    const rolePermissions = await listRolePermissionsByPlatformRole(
-      params.platformRole,
-    );
+  /* ---------- PLATFORM ROLES (MULTI) ---------- */
+  if (params.platformRoles?.length) {
+    const rolePermissions = await rolePermissionQueries.many({
+      where: { platformRole: { in: params.platformRoles } },
+      include: { permission: true },
+    });
+
     for (const permission of rolePermissions) {
       if (permission.permission?.key) keys.add(permission.permission.key);
     }
@@ -539,7 +544,7 @@ export async function applyUserPermissionOverrides(params: {
 export async function resolvePermissions(params: ResolvePermissionsParams) {
   const permissions = await getBaseRolePermissionKeys({
     workspaceRole: params.workspaceRole ?? null,
-    platformRole: params.platformRole ?? null,
+    platformRoles: params.platformRoles ?? [],
   });
 
   if (params.workspaceId && params.workspaceRole) {
