@@ -1,6 +1,6 @@
 import AuthBackLink from '@/components/layout/auth-back-link';
 import { LoginForm } from '@/modules/auth/components/login-form';
-import type { AuthCookies } from '@/lib/auth/auth-cookies';
+import type { AuthCookies } from '@/lib/auth/auth.schema';
 
 export default async function LoginPage({
   searchParams,

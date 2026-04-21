@@ -28,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { GoogleButton } from './google-button';
 import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
-import type { AuthCookies } from '@/lib/auth/auth-cookies';
+import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { useState } from 'react';
 
 export function LoginForm({

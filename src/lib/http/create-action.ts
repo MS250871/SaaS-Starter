@@ -1,4 +1,7 @@
-import { withActionContext } from '@/lib/request/withActionContext';
+import {
+  withActionContext,
+  withActionTxContext,
+} from '@/lib/request/withActionContext';
 import { handleError } from '@/lib/errors/app-error';
 
 type ApiSuccess<T> = {
@@ -18,11 +21,20 @@ type ApiError = {
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
-export function createAction<TArgs extends any[], TResult>(
+type CreateActionOptions = {
+  useTransaction?: boolean;
+};
+
+export function createAction<TArgs extends unknown[], TResult>(
   handler: (...args: TArgs) => Promise<TResult>,
+  options?: CreateActionOptions,
 ) {
   return async (...args: TArgs): Promise<ApiResponse<TResult>> => {
-    return withActionContext(async () => {
+    const runner = options?.useTransaction
+      ? withActionTxContext
+      : withActionContext;
+
+    return runner(async () => {
       try {
         const result = await handler(...args);
 
@@ -40,4 +52,10 @@ export function createAction<TArgs extends any[], TResult>(
       }
     });
   };
+}
+
+export function createTxAction<TArgs extends unknown[], TResult>(
+  handler: (...args: TArgs) => Promise<TResult>,
+) {
+  return createAction(handler, { useTransaction: true });
 }

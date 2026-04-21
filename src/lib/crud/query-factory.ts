@@ -52,12 +52,17 @@ function toDelegate<M extends string>(model: M) {
 }
 
 function getPrisma() {
-  try {
-    const ctx = getRequestContext();
-    return ctx.prisma ?? rootPrisma;
-  } catch {
-    return rootPrisma;
+  const ctx = getRequestContext();
+
+  if (!ctx.prisma) {
+    throwError(ERR.INTERNAL_ERROR, 'DB access without UnitOfWork');
   }
+
+  if (!ctx.rlsInitialized) {
+    throwError(ERR.INTERNAL_ERROR, 'RLS context not initialized');
+  }
+
+  return ctx.prisma;
 }
 
 function buildNestedWhere(
@@ -148,7 +153,8 @@ export function buildQueries<M extends ModelName>({
     const d = prisma[delegateName];
 
     if (!d) {
-      throw new Error(
+      throwError(
+        ERR.INTERNAL_ERROR,
         `Prisma delegate not found for model: ${model} → ${delegateName}`,
       );
     }
@@ -203,6 +209,12 @@ export function buildQueries<M extends ModelName>({
       select?: SelectInput<M>;
     }) {
       try {
+        if (workspaceScoped) {
+          throwError(
+            ERR.INTERNAL_ERROR,
+            `findUnique is not allowed on workspace-scoped model: ${model}. Use findFirst instead.`,
+          );
+        }
         return await delegate().findUnique({
           where: opts.where,
           include: opts.include,

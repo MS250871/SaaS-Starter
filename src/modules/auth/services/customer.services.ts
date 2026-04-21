@@ -27,7 +27,7 @@ export async function getCustomerByIdentityId(identityId: string) {
   if (!identityId) {
     throwError(ERR.INVALID_INPUT, 'Identity ID is required');
   }
-  const customer = await customerQueries.findUnique({ where: { identityId } });
+  const customer = await customerQueries.findFirst({ where: { identityId } });
 
   if (!customer) {
     throwError(ERR.NOT_FOUND, 'Customer not found');

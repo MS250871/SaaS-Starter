@@ -4,6 +4,7 @@ import type { ActorContext } from '@/lib/context/actor-context';
 import { buildActorContext } from '@/lib/context/build-actor';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
 
 export async function withRequestContext(
   req: Request,
@@ -34,10 +35,20 @@ export async function withRequestContext(
     req.headers.get('x-customer-id') ?? undefined,
     req.headers.get('x-platform-role') as any,
     req.headers.get('x-workspace-id') ?? undefined,
-    req.headers.get('x-workspace-role') as any,
+    req.headers.get('x-workspace-roles') as any,
     req.headers.get('x-membership-id') ?? undefined,
     permissions,
   );
 
   return runWithContext(requestContext, () => runWithActor(actor, handler));
+}
+
+/**
+ * Use this only for DB-only request routes.
+ */
+export async function withRequestTxContext(
+  req: Request,
+  handler: () => Promise<Response>,
+) {
+  return withRequestContext(req, () => withUnitOfWork(handler));
 }

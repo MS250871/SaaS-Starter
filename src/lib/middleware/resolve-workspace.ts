@@ -10,7 +10,7 @@ export async function resolveWorkspace(req: NextRequest) {
   const rootParts = rootDomain.split('.'); // ["platform", "localhost"]
 
   /* ---------------------------------------------------------------------- */
-  /* 1️⃣ API KEY                                                            */
+  /* 1️. API KEY                                                            */
   /* ---------------------------------------------------------------------- */
 
   const apiKey = extractApiKey(req);
@@ -20,14 +20,14 @@ export async function resolveWorkspace(req: NextRequest) {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* 2️⃣ CUSTOM DOMAIN                                                      */
+  /* 2️. CUSTOM DOMAIN                                                      */
   /* ---------------------------------------------------------------------- */
 
   const domainData = await redis.get(`domain:${host}`);
   if (domainData) return domainData as any;
 
   /* ---------------------------------------------------------------------- */
-  /* 3️⃣ SUBDOMAIN RESOLUTION                                               */
+  /* 3️. SUBDOMAIN RESOLUTION                                               */
   /* ---------------------------------------------------------------------- */
 
   // Example:
@@ -37,13 +37,13 @@ export async function resolveWorkspace(req: NextRequest) {
   if (parts.length === rootParts.length + 1) {
     const domainTail = parts.slice(1).join('.');
 
-    // ✅ PAID → workspace.platform.localhost
+    // PAID → workspace.platform.localhost
     if (domainTail === rootDomain) {
       const slug = parts[0];
       return (await redis.get(`slug:${slug}`)) as any;
     }
 
-    // ✅ FREE → platform.workspace.localhost
+    // FREE → platform.workspace.localhost
     if (parts[0] === rootParts[0]) {
       const slug = parts[1];
       return (await redis.get(`slug:${slug}`)) as any;

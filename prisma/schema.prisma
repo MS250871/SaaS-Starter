@@ -177,6 +177,37 @@ enum Currency {
   CAD
 }
 
+enum WebhookStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
+
+enum MediaStatus {
+  UPLOADING    // (optional) presigned flow started but not confirmed
+  UPLOADED     // file successfully uploaded to storage (B2)
+
+  PROCESSING   // async jobs running (resize, scan, etc.)
+  READY        // fully processed and usable (CDN ready)
+
+  FAILED       // processing failed
+  DELETED      // soft delete (logical removal)
+}
+
+enum MediaJobStatus {
+  PENDING
+  DONE
+  FAILED
+}
+
 // -------------------- CORE MODELS --------------------
 
 // Workspace (previously Tenant)
@@ -232,6 +263,11 @@ model Workspace {
 
   // audit / webhooks
   adminAuditLogs AdminAuditLog[] 
+
+  webhookEvents WebhookEvent[]
+  outboxEvents OutboxEvent[]
+  media Media[]
+  fileAttachments FileAttachment[]
 
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
@@ -356,6 +392,11 @@ model Identity {
   subscriptions Subscription[]
   payments Payment[]
   invoices Invoice[]  
+
+  webhookEvents WebhookEvent[]
+  outboxEvents OutboxEvent[]
+  media Media[]
+  fileAttachments FileAttachment[]
 }
 
 model AuthAccount {
@@ -418,6 +459,11 @@ model Customer {
   invoices Invoice[]
   supportTickets SupportTicket[] @relation("CreatedCustomerTickets")
   supportMessages SupportTicketMessage[]
+
+  webhookEvents WebhookEvent[]
+  outboxEvents OutboxEvent[]
+  media Media[]
+  fileAttachments FileAttachment[]
 
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -1147,5 +1193,148 @@ model Refund {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([paymentId])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+
+  provider      String   // stripe, razorpay
+  eventType     String @map("event_type") // e.g. invoice.paid, payment.failed
+  externalId    String @map("external_id")   // provider event id
+
+  payload       Json
+
+  status        WebhookStatus @default(RECEIVED)
+
+  attempts      Int      @default(0)
+  nextRetryAt   DateTime? @map("next_retry_at")
+  processedAt   DateTime? @map("processed_at")
+  error         String?
+
+  workspaceId   String? @map("workspace_id") @db.Uuid
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId    String? @map("identity_id") @db.Uuid
+  identity      Identity? @relation(fields: [identityId], references: [id])
+  customerId    String? @map("customer_id") @db.Uuid
+  customer      Customer? @relation(fields: [customerId], references: [id])
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, externalId])
+  @@index([status, nextRetryAt])
+  @@index([workspaceId])
+  @@index([identityId])
+  @@index([customerId])
+}
+
+model OutboxEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+
+  eventType     String @map("event_type") // e.g. send_email, webhook_notification
+  payload       Json
+
+  status        OutboxStatus @default(PENDING)
+  attempts      Int      @default(0)
+
+  nextRetryAt   DateTime? @map("next_retry_at")
+  scheduledAt   DateTime? @map("scheduled_at")
+  lockedAt      DateTime? @map("locked_at") // for distributed locking when processing
+
+  jobId         String? @map("job_id") // QStash message ID
+  processingKey String?  @unique @map("processing_key") // for idempotent processing
+
+  processedAt   DateTime? @map("processed_at")
+  lastError     String? @map("last_error")
+
+  workspaceId   String? @map("workspace_id") @db.Uuid
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId    String? @map("identity_id") @db.Uuid
+  identity      Identity? @relation(fields: [identityId], references: [id])
+  customerId    String? @map("customer_id") @db.Uuid
+  customer      Customer? @relation(fields: [customerId], references: [id])
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([status, nextRetryAt])
+  @@index([status, scheduledAt])
+  @@index([status, lockedAt])
+  @@index([scheduledAt])
+  @@index([lockedAt])
+}
+
+model Media {
+  id            String   @id @default(uuid()) @db.Uuid
+
+  fileName      String @map("file_name")
+  mimeType      String @map("mime_type")
+  size          Int
+
+  storageKey    String  @map("storage_key") // B2 key
+  url           String
+  cdnUrl        String? @map("cdn_url")
+
+  status        MediaStatus @default(UPLOADING)
+
+  checksum      String?  // integrity check
+  metadata      Json?
+
+  workspaceId   String? @map("workspace_id") @db.Uuid
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId    String? @map("identity_id") @db.Uuid
+  identity      Identity? @relation(fields: [identityId], references: [id])
+  customerId    String? @map("customer_id") @db.Uuid
+  customer      Customer? @relation(fields: [customerId], references: [id])
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  fileAttachments FileAttachment[]
+  mediaJobs MediaJob[]
+
+  @@index([workspaceId])
+  @@index([identityId])
+  @@index([customerId])
+  @@index([status])
+  @@unique([storageKey])
+}
+
+model FileAttachment {
+  id            String   @id @default(uuid()) @db.Uuid
+
+  mediaId       String @map("media_id") @db.Uuid
+  media         Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  entityType    String @map("entity_type")  // SUPPORT_TICKET, MESSAGE, etc.
+  entityId      String @map("entity_id")
+
+  workspaceId   String? @map("workspace_id") @db.Uuid
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId    String? @map("identity_id") @db.Uuid
+  identity      Identity? @relation(fields: [identityId], references: [id])
+  customerId    String? @map("customer_id") @db.Uuid
+  customer      Customer? @relation(fields: [customerId], references: [id])
+
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([entityType, entityId])
+  @@index([mediaId])
+  @@index([workspaceId])
+}
+
+model MediaJob {
+  id          String   @id @default(uuid()) @db.Uuid
+
+  mediaId     String @map("media_id") @db.Uuid
+  media       Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  jobType     String  @map("job_type") // THUMBNAIL, SCAN, etc.
+
+  status      MediaJobStatus @default(PENDING)
+  error       String?
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  processedAt DateTime? @map("processed_at")
+
+  @@index([mediaId])
   @@index([status])
 }

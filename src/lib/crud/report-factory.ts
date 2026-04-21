@@ -35,12 +35,17 @@ type ReportOptions = {
 };
 
 function getPrisma() {
-  try {
-    const ctx = getRequestContext();
-    return ctx.prisma ?? rootPrisma;
-  } catch {
-    return rootPrisma;
+  const ctx = getRequestContext();
+
+  if (!ctx.prisma) {
+    throwError(ERR.INTERNAL_ERROR, 'DB access without UnitOfWork');
   }
+
+  if (!ctx.rlsInitialized) {
+    throwError(ERR.INTERNAL_ERROR, 'RLS context not initialized');
+  }
+
+  return ctx.prisma;
 }
 
 function escapeIdentifier(id: string) {

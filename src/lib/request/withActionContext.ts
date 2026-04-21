@@ -7,6 +7,7 @@ import { buildActorContext } from '@/lib/context/build-actor';
 import type { ActorContext } from '@/lib/context/actor-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
 
 export async function withActionContext<T>(handler: () => Promise<T>) {
   const hdrs = await headers();
@@ -38,10 +39,17 @@ export async function withActionContext<T>(handler: () => Promise<T>) {
     hdrs.get('x-customer-id') ?? undefined,
     hdrs.get('x-platform-role') as any,
     hdrs.get('x-workspace-id') ?? undefined,
-    hdrs.get('x-workspace-role') as any,
+    hdrs.get('x-workspace-roles') as any,
     hdrs.get('x-membership-id') ?? undefined,
     permissions,
   );
 
   return runWithContext(requestContext, () => runWithActor(actor, handler));
+}
+
+/**
+ * Use this only for DB-only actions.
+ */
+export async function withActionTxContext<T>(handler: () => Promise<T>) {
+  return withActionContext(() => withUnitOfWork(handler));
 }

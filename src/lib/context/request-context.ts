@@ -27,6 +27,8 @@ export type RequestContext = {
   path?: string;
 
   prisma?: PrismaClient;
+
+  rlsInitialized?: boolean;
 };
 
 const storage = new AsyncLocalStorage<RequestContext>();

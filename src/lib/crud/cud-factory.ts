@@ -33,16 +33,21 @@ type Options<M extends ModelName> = {
 };
 
 function getPrisma() {
-  try {
-    const ctx = getRequestContext();
-    return ctx.prisma ?? rootPrisma;
-  } catch {
-    return rootPrisma;
+  const ctx = getRequestContext();
+
+  if (!ctx.prisma) {
+    throwError(ERR.INTERNAL_ERROR, 'DB access without UnitOfWork');
   }
+
+  if (!ctx.rlsInitialized) {
+    throwError(ERR.INTERNAL_ERROR, 'RLS context not initialized');
+  }
+
+  return ctx.prisma;
 }
 
 /* ---------------------------------------------------------
-   🔥 FIX: Proper Prisma delegate name (camelCase)
+  Proper Prisma delegate name (camelCase)
 --------------------------------------------------------- */
 function toDelegateName<M extends ModelName>(model: M): DelegateName<M> {
   return (model.charAt(0).toLowerCase() + model.slice(1)) as DelegateName<M>;
@@ -63,7 +68,8 @@ export function buildCud<M extends ModelName>({
     const d = prisma[delegateName];
 
     if (!d) {
-      throw new Error(
+      throwError(
+        ERR.INTERNAL_ERROR,
         `Prisma delegate not found for model: ${model} → ${delegateName}`,
       );
     }

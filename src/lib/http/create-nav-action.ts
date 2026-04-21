@@ -1,4 +1,7 @@
-import { withActionContext } from '@/lib/request/withActionContext';
+import {
+  withActionContext,
+  withActionTxContext,
+} from '@/lib/request/withActionContext';
 import { handleError, extractAppError } from '@/lib/errors/app-error';
 /**
  * Navigation Actions:
@@ -6,11 +9,24 @@ import { handleError, extractAppError } from '@/lib/errors/app-error';
  * - May redirect()
  * - Throw errors for UI handling
  */
-export function createNavAction<TArgs extends any[]>(
+type CreateNavActionOptions = {
+  useTransaction?: boolean;
+};
+
+type AppTaggedError = Error & {
+  __appError?: unknown;
+};
+
+export function createNavAction<TArgs extends unknown[]>(
   handler: (...args: TArgs) => Promise<void>,
+  options?: CreateNavActionOptions,
 ) {
   return async (...args: TArgs): Promise<void> => {
-    return withActionContext(async () => {
+    const runner = options?.useTransaction
+      ? withActionTxContext
+      : withActionContext;
+
+    return runner(async () => {
       try {
         await handler(...args);
       } catch (e) {
@@ -29,18 +45,24 @@ export function createNavAction<TArgs extends any[]>(
         if (existing) {
           //wrap in Error
           console.error('APP ERROR:', existing);
-          const err = new Error(existing.message);
-          (err as any).__appError = existing;
+          const err: AppTaggedError = new Error(existing.message);
+          err.__appError = existing;
           throw err;
         }
 
         const normalized = handleError(e);
 
         // ✅ wrap normalized error too
-        const err = new Error(normalized.message);
-        (err as any).__appError = normalized;
+        const err: AppTaggedError = new Error(normalized.message);
+        err.__appError = normalized;
         throw err;
       }
     });
   };
+}
+
+export function createTxNavAction<TArgs extends unknown[]>(
+  handler: (...args: TArgs) => Promise<void>,
+) {
+  return createNavAction(handler, { useTransaction: true });
 }
