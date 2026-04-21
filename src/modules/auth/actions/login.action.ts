@@ -17,7 +17,7 @@ import { redirect } from 'next/navigation';
 import { loginWorkflow } from '@/modules/auth/workflows/login.workflow';
 import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 
-export const loginAction = createNavAction(async (formData: FormData) => {
+const loginActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
 
   const parsed: LoginActionInput = loginActionSchema.parse(raw);
@@ -65,3 +65,7 @@ export const loginAction = createNavAction(async (formData: FormData) => {
 
   redirect(`/verify-otp?mode=${result.mode}`);
 });
+
+export async function loginAction(formData: FormData) {
+  return loginActionImpl(formData);
+}

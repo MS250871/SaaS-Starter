@@ -5,6 +5,7 @@ import { createNavAction } from '@/lib/http/create-nav-action';
 import {
   clearVerificationSession,
   getVerificationSession,
+  getUserSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
@@ -12,7 +13,7 @@ import { ERR } from '@/lib/errors/codes';
 import { otpSchema } from '@/modules/auth/schema';
 import { verifyWorkflow } from '@/modules/auth/workflows/verify.workflow';
 
-export const verifyAction = createNavAction(async (formData: FormData) => {
+const verifyActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
   const parsed = otpSchema.parse(raw);
 
@@ -22,13 +23,22 @@ export const verifyAction = createNavAction(async (formData: FormData) => {
     throwError(ERR.INVALID_STATE, 'Verification session missing');
   }
 
+  const currentSession = await getUserSession();
+
   const result = await verifyWorkflow({
     otp: parsed.otp,
     verificationSession,
+    currentSession,
   });
 
   await clearVerificationSession();
-  await setUserSession(result);
+  if (result.sessionPayload) {
+    await setUserSession(result.sessionPayload);
+  }
 
-  redirect('/post-login');
+  redirect(result.redirectTo);
 });
+
+export async function verifyAction(formData: FormData) {
+  return verifyActionImpl(formData);
+}

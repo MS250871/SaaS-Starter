@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isPublicRoute, isProtectedRoute } from './proxy-utils';
+import type { SessionPayload } from '@/lib/auth/auth.schema';
 
 const VERIFY_ROUTE = '/verify-otp';
+const VERIFY_PHONE_ROUTE = '/verify-phone';
 const POST_LOGIN_ROUTE = '/post-login';
 const CREATE_WORKSPACE_ROUTE = '/create-workspace';
 
 export function handleRouteGuards(
   req: NextRequest,
-  session: any,
+  session: SessionPayload | null,
 ): NextResponse | null {
   const { pathname } = req.nextUrl;
 
@@ -31,12 +33,19 @@ export function handleRouteGuards(
     return NextResponse.redirect(new URL('/login', req.url));
   }
 
-  // Verify OTP
-  // if (pathname === VERIFY_ROUTE) {
-  //   if (!verifySession || !authFlow) {
-  //     return NextResponse.redirect(new URL('/login', req.url));
-  //   }
-  // }
+  if (pathname === VERIFY_ROUTE && !verifySession) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+
+  if (pathname === VERIFY_PHONE_ROUTE) {
+    if (!hasSession) {
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+
+    if (!verifySession) {
+      return NextResponse.redirect(new URL(POST_LOGIN_ROUTE, req.url));
+    }
+  }
 
   // Create workspace
   if (pathname === CREATE_WORKSPACE_ROUTE) {

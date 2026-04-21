@@ -3,7 +3,8 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { otpSchema, type OtpSchema } from '@/modules/auth/schema';
-import { verifyAction, resendAction } from '../actions';
+import { verifyAction } from '@/modules/auth/actions/verify.action';
+import { resendAction } from '@/modules/auth/actions/resend.action';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { Logo } from '@/components/layout/logo';
 import { cn } from '@/lib/utils';
@@ -90,10 +91,11 @@ export function VerifyForm({
       }
 
       await verifyAction(formData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
 
-      const details = err?.details;
+      const error = err as { details?: unknown; message?: string } | undefined;
+      const details = error?.details;
 
       if (details && typeof details === 'object' && !Array.isArray(details)) {
         let mapped = false;
@@ -111,7 +113,7 @@ export function VerifyForm({
         if (mapped) return;
       }
 
-      setFormError(err?.message || 'Something went wrong');
+      setFormError(error?.message || 'Something went wrong');
     }
   };
 

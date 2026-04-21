@@ -9,7 +9,7 @@ export const outboxEventCrud = buildCud({
   model: 'OutboxEvent',
 
   // can belong to workspace → important for RLS
-  workspaceScoped: true,
+  workspaceScoped: false,
 
   // never soft delete → audit + retry safety
   softDelete: false,
@@ -21,5 +21,5 @@ export const outboxEventCrud = buildCud({
 export const outboxEventQueries = buildQueries({
   model: 'OutboxEvent',
 
-  workspaceScoped: true,
+  workspaceScoped: false,
 });

@@ -23,13 +23,13 @@ export const identityQueries = buildQueries({
  */
 export const customerCrud = buildCud({
   model: 'Customer',
-  workspaceScoped: true,
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const customerQueries = buildQueries({
   model: 'Customer',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });
 
 /**

@@ -79,13 +79,13 @@ export const workspaceSettingsQueries = buildQueries({
  */
 export const membershipCrud = buildCud({
   model: 'Membership',
-  workspaceScoped: true,
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const membershipQueries = buildQueries({
   model: 'Membership',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });
 
 /**

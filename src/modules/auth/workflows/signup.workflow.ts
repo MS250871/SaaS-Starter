@@ -3,7 +3,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import {
-  findAuthAccountByIdentifier,
+  findAuthAccountByTypeValue,
   createAuthAccountForIdentity,
 } from '@/modules/auth/services/authAccount.services';
 import { createIdentity } from '@/modules/auth/services/identity.services';
@@ -61,7 +61,10 @@ export async function signupWorkflow(input: SignupDomain) {
       }
     }
 
-    const existingEmail = await findAuthAccountByIdentifier(input.email);
+    const existingEmail = await findAuthAccountByTypeValue(
+      AuthAccountType.EMAIL,
+      input.email.toLowerCase(),
+    );
     const otpPurpose = input.inviteToken ? OtpPurpose.INVITE : OtpPurpose.SIGNUP;
 
     if (existingEmail) {

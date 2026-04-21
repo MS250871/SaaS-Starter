@@ -11,6 +11,7 @@ export function AuthButtons({
   isLoggedIn?: boolean;
   className?: string;
 }) {
+  isLoggedIn = !!isLoggedIn;
   return (
     <div className={cn('flex items-center gap-3', className)}>
       {isLoggedIn ? (

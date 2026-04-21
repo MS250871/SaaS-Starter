@@ -5,6 +5,7 @@ import {
   markOutboxEventDone,
   scheduleOutboxEventRetry,
 } from '@/modules/jobs/outbox-events.services';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { sendOtp } from './otp.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -70,7 +71,9 @@ export async function processOtpOutboxEvent(outboxEventId: string) {
     throwError(ERR.INVALID_INPUT, 'Outbox event ID is required');
   }
 
-  const claimed = await claimOutboxEventForProcessing(outboxEventId);
+  const claimed = await withUnitOfWork(() =>
+    claimOutboxEventForProcessing(outboxEventId),
+  );
 
   if (claimed.eventType !== AUTH_SEND_OTP_EVENT) {
     throwError(ERR.INVALID_INPUT, `Unsupported outbox event: ${claimed.eventType}`);
@@ -88,9 +91,14 @@ export async function processOtpOutboxEvent(outboxEventId: string) {
       brand: claimed.payload.brand,
     });
 
-    return await markOutboxEventDone(claimed.id);
+    return await withUnitOfWork(() => markOutboxEventDone(claimed.id));
   } catch (e) {
-    await scheduleOutboxEventRetry(claimed.id, e instanceof Error ? e.message : 'OTP delivery failed');
+    await withUnitOfWork(() =>
+      scheduleOutboxEventRetry(
+        claimed.id,
+        e instanceof Error ? e.message : 'OTP delivery failed',
+      ),
+    );
     throw e;
   }
 }
@@ -100,7 +108,9 @@ export async function replayOtpOutboxEvent(processingKey: string) {
     throwError(ERR.INVALID_INPUT, 'processingKey is required');
   }
 
-  const event = await findOutboxEventByProcessingKey(processingKey);
+  const event = await withUnitOfWork(() =>
+    findOutboxEventByProcessingKey(processingKey),
+  );
 
   if (!event) {
     throwError(ERR.NOT_FOUND, 'Outbox event not found');

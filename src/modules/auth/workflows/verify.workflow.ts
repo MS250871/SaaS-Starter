@@ -13,13 +13,19 @@ import { createSession } from '@/modules/auth/services/session.services';
 export type VerifyWorkflowInput = {
   otp: string;
   verificationSession: VerificationSession;
+  currentSession?: SessionPayload | null;
+};
+
+export type VerifyWorkflowResult = {
+  sessionPayload?: SessionPayload;
+  redirectTo: string;
 };
 
 export async function verifyWorkflow(
   input: VerifyWorkflowInput,
-): Promise<SessionPayload> {
+): Promise<VerifyWorkflowResult> {
   return withUnitOfWork(async () => {
-    const { otp, verificationSession } = input;
+    const { otp, verificationSession, currentSession } = input;
 
     const reqContext = getRequestContext();
     const deviceFingerprint = createFingerprint(reqContext);
@@ -34,6 +40,15 @@ export async function verifyWorkflow(
       verificationSession.otpPurpose === OtpPurpose.INVITE
     ) {
       await verifyAuthAccount(verificationSession.authAccountId);
+    }
+
+    if (
+      verificationSession.mode === 'phone' &&
+      currentSession?.identityId === verificationSession.identityId
+    ) {
+      return {
+        redirectTo: verificationSession.nextPath ?? '/post-login',
+      };
     }
 
     const identitySession = {
@@ -52,25 +67,28 @@ export async function verifyWorkflow(
     const session = await createSession(identitySession);
 
     return {
-      sessionId: session.id,
-      identityId: session.identityId,
-      workspaceId: session.workspaceId ?? undefined,
-      membershipId: session.membershipId ?? undefined,
-      platformRoles: [],
-      workspaceRole: session.workspaceRole ?? undefined,
-      ip: session.ip ?? undefined,
-      browser: session.browser ?? undefined,
-      os: session.os ?? undefined,
-      device: session.device ?? undefined,
-      deviceId: session.deviceId ?? undefined,
-      deviceFingerprint: session.deviceFingerprint ?? undefined,
-      userAgent: session.userAgent ?? undefined,
-      isActive: session.isActive,
-      permissions: [],
-      features: [],
-      limits: {},
-      createdAt: session.createdAt.getTime(),
-      expiresAt: session.expiresAt.getTime(),
+      sessionPayload: {
+        sessionId: session.id,
+        identityId: session.identityId,
+        workspaceId: session.workspaceId ?? undefined,
+        membershipId: session.membershipId ?? undefined,
+        platformRoles: [],
+        workspaceRole: session.workspaceRole ?? undefined,
+        ip: session.ip ?? undefined,
+        browser: session.browser ?? undefined,
+        os: session.os ?? undefined,
+        device: session.device ?? undefined,
+        deviceId: session.deviceId ?? undefined,
+        deviceFingerprint: session.deviceFingerprint ?? undefined,
+        userAgent: session.userAgent ?? undefined,
+        isActive: session.isActive,
+        permissions: [],
+        features: [],
+        limits: {},
+        createdAt: session.createdAt.getTime(),
+        expiresAt: session.expiresAt.getTime(),
+      },
+      redirectTo: verificationSession.nextPath ?? '/post-login',
     };
   });
 }

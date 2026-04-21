@@ -7,7 +7,7 @@ import { ERR } from '@/lib/errors/codes';
 import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import { resendOtpWorkflow } from '@/modules/auth/workflows/resend.workflow';
 
-export const resendAction = createNavAction(async () => {
+const resendActionImpl = createNavAction(async () => {
   const verificationSession = await getVerificationSession();
 
   if (!verificationSession?.verificationId) {
@@ -20,3 +20,7 @@ export const resendAction = createNavAction(async () => {
 
   await processOtpOutboxEvent(result.outboxEventId);
 });
+
+export async function resendAction() {
+  return resendActionImpl();
+}

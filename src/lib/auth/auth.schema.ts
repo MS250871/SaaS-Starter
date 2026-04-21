@@ -17,14 +17,6 @@ const enumOtpPurpose = z.enum([
   'MFA',
 ]);
 
-const enumAuthStep = z.enum([
-  'verify_phone',
-  'payment',
-  'workspace_select',
-  'workspace_create',
-  'finalize',
-]);
-
 /* =========================================================
    AUTH FLOW COOKIE
 ========================================================= */
@@ -62,6 +54,7 @@ export const verificationSessionSchema = z.object({
   identityId: z.string(),
 
   identifier: z.string(),
+  nextPath: z.string().optional(),
 
   createdAt: z.number(),
 });
@@ -76,6 +69,7 @@ export const sessionPayloadSchema = z.object({
   sessionId: z.string(),
 
   identityId: z.string(),
+  customerId: z.string().optional(),
 
   workspaceId: z.string().optional(),
   membershipId: z.string().optional(),

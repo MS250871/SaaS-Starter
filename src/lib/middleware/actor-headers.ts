@@ -13,6 +13,10 @@ export function injectActorHeaders(
     res.headers.set('x-identity-id', session.identityId);
   }
 
+  if (session.customerId) {
+    res.headers.set('x-customer-id', session.customerId);
+  }
+
   if (session.workspaceId) {
     res.headers.set('x-workspace-id', session.workspaceId);
   }
@@ -26,6 +30,7 @@ export function injectActorHeaders(
   }
 
   if (session.platformRoles?.length) {
+    res.headers.set('x-platform-role', session.platformRoles[0]);
     res.headers.set('x-platform-roles', JSON.stringify(session.platformRoles));
   }
   if (session.permissions?.length) {

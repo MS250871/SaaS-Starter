@@ -3,7 +3,8 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginFormSchema, type LoginFormInput } from '@/modules/auth/schema';
-import { loginAction, googleAuthAction } from '@/modules/auth/actions';
+import { loginAction } from '@/modules/auth/actions/login.action';
+import { googleAuthAction } from '@/modules/auth/actions/google-auth.action';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -61,10 +62,11 @@ export function LoginForm({
       });
 
       await loginAction(formData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
 
-      const details = err?.details;
+      const error = err as { details?: unknown; message?: string } | undefined;
+      const details = error?.details;
 
       if (details && typeof details === 'object' && !Array.isArray(details)) {
         let mapped = false;
@@ -82,7 +84,7 @@ export function LoginForm({
         if (mapped) return;
       }
 
-      setFormError(err?.message || 'Something went wrong');
+      setFormError(error?.message || 'Something went wrong');
     }
   };
 

@@ -1,13 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { Menu } from 'lucide-react';
 import { useState } from 'react';
 
 import { Logo } from './logo';
 import { Navigation } from './navigation';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
-import { Button } from '@/components/ui/button';
 import { MobileMenu } from './mobile-menu';
 import { AuthButtons } from './auth-buttons';
 

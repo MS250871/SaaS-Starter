@@ -18,7 +18,7 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const IS_PROD = process.env.NODE_ENV === 'production';
-const MAX_AGE = 60 * 10;
+const MAX_AGE = 15 * 60;
 const VERIFY_MAX_AGE = 15 * 60;
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
 const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365;

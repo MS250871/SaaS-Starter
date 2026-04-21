@@ -8,8 +8,8 @@ import { buildQueries } from '@/lib/crud/query-factory';
 export const webhookEventCrud = buildCud({
   model: 'WebhookEvent',
 
-  // multi-tenant aware (can belong to workspace)
-  workspaceScoped: true,
+  // global queue/audit table; rows may still reference workspace/customer/identity
+  workspaceScoped: false,
 
   // no soft delete (audit log)
   softDelete: false,
@@ -21,7 +21,7 @@ export const webhookEventCrud = buildCud({
 export const webhookEventQueries = buildQueries({
   model: 'WebhookEvent',
 
-  workspaceScoped: true,
+  workspaceScoped: false,
 
   // no active filter
 });

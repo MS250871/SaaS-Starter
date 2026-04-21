@@ -27,5 +27,12 @@ export function isPublicRoute(pathname: string) {
 }
 
 export function isProtectedRoute(pathname: string) {
-  return pathname.startsWith('/app') || pathname.startsWith('/dashboard');
+  return (
+    pathname.startsWith('/app') ||
+    pathname.startsWith('/dashboard') ||
+    pathname.startsWith('/platform') ||
+    pathname.startsWith('/customer') ||
+    pathname.startsWith('/select-workspace') ||
+    pathname.startsWith('/create-workspace')
+  );
 }

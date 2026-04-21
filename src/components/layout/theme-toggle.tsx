@@ -18,11 +18,11 @@ export function ThemeToggle() {
   return (
     <Button
       variant="outline"
-      size="icon"
+      size="icon-sm"
       className="border-muted-foreground/20 hover:bg-accent"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
-      {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      {isDark ? <Sun size={14} /> : <Moon size={14} />}
     </Button>
   );
 }

@@ -3,7 +3,8 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signupFormSchema, type SignupFormInput } from '@/modules/auth/schema';
-import { signupAction, googleAuthAction } from '@/modules/auth/actions';
+import { signupAction } from '@/modules/auth/actions/signup.action';
+import { googleAuthAction } from '@/modules/auth/actions/google-auth.action';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -76,10 +77,11 @@ export function SignupForm({
 
       // 🚀 navigation action (redirect happens on success)
       await signupAction(formData);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setLoading(false);
 
-      const details = err?.details;
+      const error = err as { details?: unknown; message?: string } | undefined;
+      const details = error?.details;
 
       // ✅ map only if it's a clean field-error object
       if (details && typeof details === 'object' && !Array.isArray(details)) {
@@ -99,7 +101,7 @@ export function SignupForm({
       }
 
       // ✅ fallback
-      setFormError(err?.message || 'Something went wrong');
+      setFormError(error?.message || 'Something went wrong');
     }
   };
   return (
