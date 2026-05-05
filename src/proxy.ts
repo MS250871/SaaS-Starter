@@ -6,9 +6,19 @@ import { resolveSession } from '@/lib/middleware/resolve-session';
 import { injectRequestHeaders } from '@/lib/middleware/request-headers';
 import { injectActorHeaders } from '@/lib/middleware/actor-headers';
 import { handleRouteGuards } from '@/lib/middleware/route-gaurds';
+import { resolveFreeWorkspacePath } from '@/lib/middleware/proxy-utils';
 
 export async function proxy(req: NextRequest) {
-  const res = NextResponse.next();
+  const freeWorkspacePath = resolveFreeWorkspacePath(req);
+  const normalizedPathname =
+    freeWorkspacePath?.rewrittenPathname ?? req.nextUrl.pathname;
+  const rewrittenUrl = req.nextUrl.clone();
+  rewrittenUrl.pathname = normalizedPathname;
+
+  const res =
+    normalizedPathname !== req.nextUrl.pathname
+      ? NextResponse.rewrite(rewrittenUrl)
+      : NextResponse.next();
 
   /* ---------------- WORKSPACE (FIRST) ---------------- */
   const workspace = await resolveWorkspace(req);
@@ -17,13 +27,13 @@ export async function proxy(req: NextRequest) {
   const session = await resolveSession(req);
 
   /* ---------------- REQUEST CONTEXT (IMPORTANT: AFTER workspace) ---------------- */
-  await injectRequestHeaders(req, res, workspace);
+  await injectRequestHeaders(req, res, workspace, normalizedPathname);
 
   /* ---------------- ACTOR CONTEXT ---------------- */
   injectActorHeaders(res, session);
 
   /* ---------------- ROUTE GUARDS ---------------- */
-  const guardResponse = handleRouteGuards(req, session);
+  const guardResponse = handleRouteGuards(req, session, normalizedPathname);
 
   if (guardResponse) return guardResponse;
 

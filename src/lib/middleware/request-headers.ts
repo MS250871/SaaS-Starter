@@ -16,6 +16,7 @@ export async function injectRequestHeaders(
   req: NextRequest,
   res: NextResponse,
   workspace?: WorkspaceContext | null,
+  pathOverride?: string,
 ) {
   /* ---------------- REQUEST ID ---------------- */
   const requestId = randomUUID();
@@ -59,7 +60,7 @@ export async function injectRequestHeaders(
     deviceId,
 
     method: req.method,
-    path: req.nextUrl.pathname,
+    path: pathOverride ?? req.nextUrl.pathname,
   };
 
   /* ---------------- SINGLE HEADER ---------------- */

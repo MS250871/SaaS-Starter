@@ -7,6 +7,7 @@ import Link from 'next/link';
 export function PricingCard({
   name,
   price,
+  priceHint,
   description,
   features,
   button,
@@ -15,6 +16,7 @@ export function PricingCard({
 }: {
   name: string;
   price: string;
+  priceHint?: string;
   description: string;
   features: string[];
   button: string;
@@ -34,6 +36,9 @@ export function PricingCard({
         <p className="text-muted-foreground text-sm">{description}</p>
 
         <div className="text-3xl font-bold pt-2">{price}</div>
+        {priceHint && (
+          <p className="text-xs text-muted-foreground">{priceHint}</p>
+        )}
       </CardHeader>
 
       <CardContent className="flex flex-col flex-1 space-y-6">

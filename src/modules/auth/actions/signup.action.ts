@@ -40,6 +40,8 @@ const signupActionImpl = createNavAction(async (formData: FormData) => {
     mode,
     channel: 'web',
     intent: parsed.intent,
+    planKey: parsed.planKey,
+    planName: parsed.planName,
     workspaceId,
     inviteToken: parsed.inviteToken,
     createdAt: Date.now(),

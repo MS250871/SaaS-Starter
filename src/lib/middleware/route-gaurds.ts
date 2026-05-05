@@ -6,16 +6,16 @@ const VERIFY_ROUTE = '/verify-otp';
 const VERIFY_PHONE_ROUTE = '/verify-phone';
 const POST_LOGIN_ROUTE = '/post-login';
 const CREATE_WORKSPACE_ROUTE = '/create-workspace';
+const PAYMENT_ROUTE = '/payment';
 
 export function handleRouteGuards(
   req: NextRequest,
   session: SessionPayload | null,
+  pathnameOverride?: string,
 ): NextResponse | null {
-  const { pathname } = req.nextUrl;
+  const pathname = pathnameOverride ?? req.nextUrl.pathname;
 
   const verifySession = req.cookies.get('verify_session')?.value;
-  const authFlow = req.cookies.get('auth_flow')?.value;
-
   const hasSession = !!session;
 
   // Logged in → block login/signup
@@ -49,9 +49,13 @@ export function handleRouteGuards(
 
   // Create workspace
   if (pathname === CREATE_WORKSPACE_ROUTE) {
-    if (!hasSession || authFlow !== 'signup') {
+    if (!hasSession) {
       return NextResponse.redirect(new URL('/login', req.url));
     }
+  }
+
+  if (pathname === PAYMENT_ROUTE && !hasSession) {
+    return NextResponse.redirect(new URL('/login', req.url));
   }
 
   return null;

@@ -1,11 +1,11 @@
-import { DestinationPlaceholder } from '@/components/layout/destination-placeholder';
+import { CreateWorkspaceForm } from '@/modules/workspace/components/create-workspace-form';
 
 export default function CreateWorkspacePage() {
   return (
-    <DestinationPlaceholder
-      route="/create-workspace"
-      title="Create Workspace Placeholder"
-      description="This is a temporary landing page for fresh signups who need to create their first workspace after finishing identity and phone verification."
-    />
+    <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+      <div className="w-full max-w-sm mt-6 xl:max-w-md">
+        <CreateWorkspaceForm />
+      </div>
+    </div>
   );
 }

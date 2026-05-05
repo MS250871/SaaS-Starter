@@ -65,13 +65,13 @@ export const workspaceInviteQueries = buildQueries({
  */
 export const workspaceSettingsCrud = buildCud({
   model: 'WorkspaceSettings',
-  workspaceScoped: true,
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const workspaceSettingsQueries = buildQueries({
   model: 'WorkspaceSettings',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });
 
 /**

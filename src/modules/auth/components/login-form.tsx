@@ -31,13 +31,16 @@ import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
 import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { useState } from 'react';
+import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 export function LoginForm({
   className,
   intent,
+  message,
 }: {
   className?: string;
   intent: AuthCookies['intent'];
+  message?: string;
 }) {
   const form = useForm<LoginFormInput>({
     resolver: zodResolver(loginFormSchema),
@@ -63,6 +66,10 @@ export function LoginForm({
 
       await loginAction(formData);
     } catch (err: unknown) {
+      if (isNextRedirectError(err)) {
+        throw err;
+      }
+
       setLoading(false);
 
       const error = err as { details?: unknown; message?: string } | undefined;
@@ -124,6 +131,14 @@ export function LoginForm({
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet>
               <FieldGroup>
+                {message && (
+                  <Field className="bg-amber-100/70 p-2 rounded-lg border border-amber-300">
+                    <FieldDescription className="text-center text-amber-900">
+                      {message}
+                    </FieldDescription>
+                  </Field>
+                )}
+
                 {/* Identifier */}
                 <Field>
                   <FieldLabel>Email or Phone Number</FieldLabel>

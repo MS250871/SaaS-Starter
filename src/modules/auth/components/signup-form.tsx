@@ -31,16 +31,23 @@ import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
 import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { useState } from 'react';
+import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 export function SignupForm({
   intent,
   invite,
   entry,
+  planKey,
+  planName,
+  message,
   className,
 }: {
   intent: AuthCookies['intent'];
   invite?: string;
   entry: AuthCookies['entry'];
+  planKey?: string;
+  planName?: string;
+  message?: string;
   className?: string;
 }) {
   const form = useForm<SignupFormInput>({
@@ -70,6 +77,12 @@ export function SignupForm({
       const safeEntry =
         entry === 'workspace' || entry === 'platform' ? entry : 'platform';
       formData.append('entry', safeEntry);
+      if (planKey) {
+        formData.append('planKey', planKey);
+      }
+      if (planName) {
+        formData.append('planName', planName);
+      }
 
       Object.entries(data).forEach(([k, v]) => {
         formData.append(k, String(v));
@@ -78,6 +91,10 @@ export function SignupForm({
       // 🚀 navigation action (redirect happens on success)
       await signupAction(formData);
     } catch (err: unknown) {
+      if (isNextRedirectError(err)) {
+        throw err;
+      }
+
       setLoading(false);
 
       const error = err as { details?: unknown; message?: string } | undefined;
@@ -119,7 +136,9 @@ export function SignupForm({
           </CardTitle>
 
           <CardDescription className="text-xs md:text-sm">
-            We’ll verify your email first, then your phone.
+            {planName
+              ? `You are signing up for the ${planName} plan. We will verify your email first, then your phone.`
+              : 'We will verify your email first, then your phone.'}
           </CardDescription>
         </CardHeader>
 
@@ -141,6 +160,14 @@ export function SignupForm({
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet className="gap-3">
               <FieldGroup className="gap-3 mt-3">
+                {message && (
+                  <Field className="bg-amber-100/70 p-2 rounded-lg border border-amber-300">
+                    <FieldDescription className="text-center text-amber-900">
+                      {message}
+                    </FieldDescription>
+                  </Field>
+                )}
+
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                   {/* First Name */}
                   <Field>

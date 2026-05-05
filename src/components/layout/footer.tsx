@@ -4,8 +4,7 @@ import { navItems } from '@/lib/nav/navigation.config';
 import { AuthButtons } from './auth-buttons';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 
-export function Footer({ sessionId }: { sessionId?: string }) {
-  const isLoggedIn = !!sessionId;
+export function Footer({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   return (
     <footer className="border-t bg-muted/20 mt-24">
       <div className="max-w-7xl mx-auto px-6 py-16">

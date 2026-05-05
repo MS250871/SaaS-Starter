@@ -1,0 +1,42 @@
+export const PRODUCTS_SEED = [
+  {
+    code: 'LMS_TRIAL',
+    name: 'LMS Free Trial',
+    planKey: 'trial',
+    type: 'SUBSCRIPTION',
+    description: '15-day LMS free trial with path-based domain.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_PRO_MONTHLY',
+    name: 'LMS Pro Monthly',
+    planKey: 'pro',
+    type: 'SUBSCRIPTION',
+    description: 'Monthly subscription for LMS Pro plan.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_PRO_YEARLY',
+    name: 'LMS Pro Yearly',
+    planKey: 'pro',
+    type: 'SUBSCRIPTION',
+    description: 'Yearly subscription for LMS Pro plan.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_BUSINESS_MONTHLY',
+    name: 'LMS Business Monthly',
+    planKey: 'business',
+    type: 'SUBSCRIPTION',
+    description: 'Monthly subscription for LMS Business plan.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_BUSINESS_YEARLY',
+    name: 'LMS Business Yearly',
+    planKey: 'business',
+    type: 'SUBSCRIPTION',
+    description: 'Yearly subscription for LMS Business plan.',
+    isActive: true,
+  },
+];

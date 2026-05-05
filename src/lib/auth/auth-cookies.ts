@@ -4,6 +4,12 @@ import { cookies } from 'next/headers';
 import { encryptToken, decryptToken } from '../security/crypto';
 import { randomUUID } from './auth-utils';
 import {
+  AUTH_FLOW_COOKIE_MAX_AGE_SECONDS,
+  DEVICE_ID_MAX_AGE_SECONDS,
+  USER_SESSION_COOKIE_BUFFER_SECONDS,
+  VERIFICATION_SESSION_MAX_AGE_SECONDS,
+} from './auth-config';
+import {
   authCookiesSchema,
   verificationSessionSchema,
   sessionPayloadSchema,
@@ -18,10 +24,6 @@ import {
 /* -------------------------------------------------------------------------- */
 
 const IS_PROD = process.env.NODE_ENV === 'production';
-const MAX_AGE = 15 * 60;
-const VERIFY_MAX_AGE = 15 * 60;
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
-const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365;
 
 /* -------------------------------------------------------------------------- */
 /*                               AUTH FLOW COOKIES                            */
@@ -37,7 +39,7 @@ export async function setAuthCookies({ data }: { data: AuthCookies }) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: MAX_AGE,
+    maxAge: AUTH_FLOW_COOKIE_MAX_AGE_SECONDS,
   });
 }
 
@@ -53,7 +55,10 @@ export async function getAuthCookie(): Promise<AuthCookies | null> {
 
     if (!validated.success) return null;
 
-    if (Date.now() - validated.data.createdAt > MAX_AGE * 1000) {
+    if (
+      Date.now() - validated.data.createdAt >
+      AUTH_FLOW_COOKIE_MAX_AGE_SECONDS * 1000
+    ) {
       return null;
     }
 
@@ -76,7 +81,7 @@ const VERIFY_COOKIE = 'verify_session';
 
 export async function setVerificationSession(
   payload: VerificationSession,
-  ttlSeconds: number = VERIFY_MAX_AGE,
+  ttlSeconds: number = VERIFICATION_SESSION_MAX_AGE_SECONDS,
 ) {
   const store = await cookies();
 
@@ -105,14 +110,15 @@ export async function getVerificationSession(): Promise<VerificationSession | nu
   const validated = verificationSessionSchema.safeParse(session);
 
   if (!validated.success) {
-    await clearVerificationSession();
     return null;
   }
 
   const data = validated.data;
 
-  if (Date.now() - data.createdAt > VERIFY_MAX_AGE * 1000) {
-    await clearVerificationSession();
+  if (
+    Date.now() - data.createdAt >
+    VERIFICATION_SESSION_MAX_AGE_SECONDS * 1000
+  ) {
     return null;
   }
 
@@ -164,7 +170,7 @@ export async function setUserSession(payload: SessionPayload) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: ttlSeconds + SESSION_MAX_AGE,
+    maxAge: ttlSeconds + USER_SESSION_COOKIE_BUFFER_SECONDS,
   });
 }
 
@@ -180,19 +186,16 @@ export async function getUserSession(): Promise<SessionPayload | null> {
   const validated = sessionPayloadSchema.safeParse(session);
 
   if (!validated.success) {
-    await clearUserSession();
     return null;
   }
 
   const data = validated.data;
 
   if (Date.now() > data.expiresAt) {
-    await clearUserSession();
     return null;
   }
 
   if (!data.isActive) {
-    await clearUserSession();
     return null;
   }
 
@@ -218,7 +221,7 @@ export async function setDeviceId(deviceId: string) {
     secure: IS_PROD,
     sameSite: 'lax',
     path: '/',
-    maxAge: DEVICE_ID_MAX_AGE,
+    maxAge: DEVICE_ID_MAX_AGE_SECONDS,
   });
 }
 

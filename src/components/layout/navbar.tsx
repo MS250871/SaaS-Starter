@@ -9,9 +9,8 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { MobileMenu } from './mobile-menu';
 import { AuthButtons } from './auth-buttons';
 
-export function Navbar({ sessionId }: { sessionId?: string }) {
+export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
   const [open, setOpen] = useState(false);
-  const isLoggedIn = !!sessionId;
 
   return (
     <div className="max-w-7xl mx-auto px-6">

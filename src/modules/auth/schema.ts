@@ -116,6 +116,8 @@ export type SignupFormInput = z.input<typeof signupFormSchema>;
 export const signupActionSchema = signupFormSchema.extend({
   entry: z.enum(['platform', 'workspace']),
   inviteToken: z.string().optional(),
+  planKey: z.string().optional(),
+  planName: z.string().optional(),
 });
 
 export type SignupActionInput = z.input<typeof signupActionSchema>;

@@ -11,7 +11,11 @@ import { getIdentityById } from '@/modules/auth/services/identity.services';
 import {
   findAuthAccountByTypeValue,
 } from '@/modules/auth/services/authAccount.services';
-import { generateOtp } from '@/modules/auth/services/otp.services';
+import {
+  generateOtp,
+  getLatestOtpRequestForAccount,
+  isOtpExpired,
+} from '@/modules/auth/services/otp.services';
 import { createSession } from '@/modules/auth/services/session.services';
 import { queueOtpDelivery } from '@/modules/auth/services/otp-outbox.services';
 import {
@@ -71,6 +75,7 @@ const WORKSPACE_REDIRECT = '/app';
 const CUSTOMER_REDIRECT = '/customer';
 const WORKSPACE_SELECT_REDIRECT = '/select-workspace';
 const WORKSPACE_CREATE_REDIRECT = '/create-workspace';
+const PAYMENT_REDIRECT = '/payment';
 const VERIFY_PHONE_REDIRECT = '/verify-phone';
 
 type WorkspaceMembershipSnapshot = {
@@ -196,22 +201,37 @@ async function buildPhoneVerificationResult(params: {
   identifier: string;
   name?: string;
 }): Promise<PostLoginResult> {
-  const otpResult = await generateOtp({
-    authAccountId: params.phoneAuthAccountId,
-    otpPurpose: OtpPurpose.SIGNUP,
-  });
+  const existingOtp = await getLatestOtpRequestForAccount(
+    params.phoneAuthAccountId,
+    OtpPurpose.SIGNUP,
+  );
 
-  const outboxEvent = await queueOtpDelivery({
-    identifier: params.identifier,
-    otp: otpResult.otp,
-    name: params.name,
-    brand: 'SkillMaxx',
-    verificationId: otpResult.verificationId,
-    identityId: params.identityId,
-  });
+  let verificationId: string;
+  let outboxEventId: string | undefined;
+
+  if (existingOtp && !isOtpExpired(existingOtp)) {
+    verificationId = existingOtp.verificationId;
+  } else {
+    const otpResult = await generateOtp({
+      authAccountId: params.phoneAuthAccountId,
+      otpPurpose: OtpPurpose.SIGNUP,
+    });
+
+    const outboxEvent = await queueOtpDelivery({
+      identifier: params.identifier,
+      otp: otpResult.otp,
+      name: params.name,
+      brand: 'SkillMaxx',
+      verificationId: otpResult.verificationId,
+      identityId: params.identityId,
+    });
+
+    verificationId = otpResult.verificationId;
+    outboxEventId = outboxEvent.id;
+  }
 
   const verificationSession: VerificationSession = {
-    verificationId: otpResult.verificationId,
+    verificationId,
     authAccountId: params.phoneAuthAccountId,
     otpPurpose: OtpPurpose.SIGNUP,
     mode: 'phone',
@@ -227,8 +247,7 @@ async function buildPhoneVerificationResult(params: {
     redirectTo: VERIFY_PHONE_REDIRECT,
     meta: {
       verificationSession,
-      otp: otpResult.otp,
-      outboxEventId: outboxEvent.id,
+      outboxEventId,
     },
   };
 }
@@ -388,7 +407,35 @@ export async function postLoginWorkflow(input: {
       ? await findCustomerByWorkspaceIdentity(requestedWorkspaceId, identityId)
       : null;
 
-    if (auth.flow === 'signup' && auth.mode === 'normal' && auth.entry === 'platform') {
+    if (
+      auth.flow === 'signup' &&
+      auth.mode === 'normal' &&
+      auth.entry === 'platform'
+    ) {
+      if (requestedWorkspaceId && requestedWorkspaceMembership) {
+        const finalSession = await buildFinalSessionWorkflow({
+          identitySession,
+          workspaceId: requestedWorkspaceId,
+          workspaceMembership: requestedWorkspaceMembership,
+        });
+
+        return {
+          finalSession,
+          redirectTo: WORKSPACE_REDIRECT,
+        };
+      }
+
+      if (requestedWorkspaceId && !requestedWorkspaceMembership) {
+        throwError(ERR.INVALID_STATE, 'Workspace owner membership missing');
+      }
+
+      if (auth.intent === 'paid') {
+        return {
+          nextStep: 'finalize',
+          redirectTo: PAYMENT_REDIRECT,
+        };
+      }
+
       return {
         nextStep: 'workspace_create',
         redirectTo: WORKSPACE_CREATE_REDIRECT,

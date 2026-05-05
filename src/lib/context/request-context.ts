@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { PrismaClient } from '@/generated/prisma/client';
+import type { Prisma, PrismaClient } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type DbClient = PrismaClient | Prisma.TransactionClient;
 
 type WorkspaceContext = {
   workspaceId: string;
@@ -26,7 +28,7 @@ export type RequestContext = {
   method?: string;
   path?: string;
 
-  prisma?: PrismaClient;
+  prisma?: DbClient;
 
   rlsInitialized?: boolean;
 };
@@ -47,7 +49,7 @@ export function getRequestContext(): RequestContext {
   return ctx;
 }
 
-export function setPrismaInContext(prisma: PrismaClient) {
+export function setPrismaInContext(prisma: DbClient) {
   const ctx = getRequestContext();
   ctx.prisma = prisma;
 }

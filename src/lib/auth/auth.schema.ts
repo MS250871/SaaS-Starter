@@ -30,6 +30,8 @@ export const authCookiesSchema = z.object({
   channel: z.enum(['web', 'mobile', 'api', 'oauth']).default('web'),
 
   intent: z.enum(['free', 'paid']).optional(),
+  planKey: z.string().optional(),
+  planName: z.string().optional(),
 
   inviteToken: z.string().optional(),
   workspaceId: z.string().nullable().optional(),

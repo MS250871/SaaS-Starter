@@ -32,6 +32,7 @@ import {
   InputOTPSlot,
 } from '@/components/ui/input-otp';
 import { useState, useEffect } from 'react';
+import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 type Mode = 'email' | 'phone';
 
@@ -92,6 +93,10 @@ export function VerifyForm({
 
       await verifyAction(formData);
     } catch (err: unknown) {
+      if (isNextRedirectError(err)) {
+        throw err;
+      }
+
       setLoading(false);
 
       const error = err as { details?: unknown; message?: string } | undefined;

@@ -4,6 +4,9 @@ import { OtpPurpose } from '@/generated/prisma/client';
 import {
   OTP_MAX_ATTEMPTS,
   OTP_MAX_RESENDS,
+  OTP_RESEND_COOLDOWN_MS,
+} from '@/lib/auth/auth-config';
+import {
   buildOtpPayload,
   buildOtpUpdatePayload,
   hashOtp,
@@ -230,11 +233,12 @@ export async function resendOtp(params: { verificationId: string }) {
   }
 
   /* ---------------- OPTIONAL COOLDOWN (RECOMMENDED) ---------------- */
-  const COOLDOWN_MS = 30 * 1000;
-
   const lastUpdated = otpRequest.updatedAt ?? otpRequest.createdAt;
 
-  if (lastUpdated && Date.now() - lastUpdated.getTime() < COOLDOWN_MS) {
+  if (
+    lastUpdated &&
+    Date.now() - lastUpdated.getTime() < OTP_RESEND_COOLDOWN_MS
+  ) {
     throwError(ERR.LIMIT_EXCEEDED, 'Please wait before requesting another OTP');
   }
 

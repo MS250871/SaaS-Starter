@@ -7,9 +7,7 @@ import {
   type CountryCode,
 } from 'libphonenumber-js';
 import { deviceIdSchema } from '@/lib/auth/auth.schema';
-export const OTP_MAX_ATTEMPTS = 5;
-export const OTP_MAX_RESENDS = 3;
-export const OTP_EXPIRY_MINUTES = 10;
+import { OTP_EXPIRY_MS } from '@/lib/auth/auth-config';
 
 export function createFingerprint(ctx: RequestContext) {
   const raw = `${ctx.browser}-${ctx.os}-${ctx.device}-${ctx.userAgent}`;
@@ -60,7 +58,7 @@ export function buildOtpPayload(params: {
 
     otpHash: hashOtp(otp),
 
-    expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+    expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
 
     attempts: 0,
     resendCount: 0,
@@ -81,7 +79,7 @@ export function buildOtpUpdatePayload(params: {
 
   const payload: UpdateInput<'OtpRequest'> = {
     otpHash: hashOtp(otp),
-    expiresAt: new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000),
+    expiresAt: new Date(Date.now() + OTP_EXPIRY_MS),
     attempts: 0, // reset attempts
     resendCount: params.existing.resendCount + 1,
   };

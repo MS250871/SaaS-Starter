@@ -1,8 +1,8 @@
-import type { PrismaClient } from '@/generated/prisma/client';
+import type { DbClient } from './request-context';
 import type { ActorContext } from '@/lib/context/actor-context';
 import { getRequestContext } from './request-context';
 
-export async function applyDbContext(tx: PrismaClient, actor: ActorContext) {
+export async function applyDbContext(tx: DbClient, actor: ActorContext) {
   const setIfPresent = async (key: string, value?: string) => {
     if (!value) return;
 

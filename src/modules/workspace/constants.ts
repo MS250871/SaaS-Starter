@@ -1,0 +1,17 @@
+export const reservedWorkspaceSlugs = [
+  'app',
+  'api',
+  'create-workspace',
+  'customer',
+  'dashboard',
+  'error-page',
+  'login',
+  'payment',
+  'platform',
+  'post-login',
+  'pricing',
+  'select-workspace',
+  'signup',
+  'verify-otp',
+  'verify-phone',
+] as const;
