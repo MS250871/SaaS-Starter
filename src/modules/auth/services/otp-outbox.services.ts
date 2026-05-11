@@ -9,6 +9,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { sendOtp } from './otp.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { hashOtp } from '@/lib/auth/auth-utils';
 
 const AUTH_SEND_OTP_EVENT = 'auth.send_otp';
 
@@ -59,7 +60,7 @@ export async function queueOtpDelivery(params: QueueOtpDeliveryParams) {
       brand: params.brand,
       verificationId: params.verificationId,
     },
-    processingKey: `auth:send-otp:${params.verificationId}`,
+    processingKey: `auth:send-otp:${params.verificationId}:${hashOtp(params.otp)}`,
     workspaceId: params.workspaceId ?? undefined,
     identityId: params.identityId ?? undefined,
     customerId: params.customerId ?? undefined,

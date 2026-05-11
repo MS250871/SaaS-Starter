@@ -11,15 +11,9 @@ export async function withPublicContext<T>(fn: () => Promise<T>) {
     },
     () =>
       runWithActor(
-        buildActorContext(
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          [],
-        ),
+        buildActorContext({
+          permissions: [],
+        }),
         () => withUnitOfWork(fn),
       ),
   );

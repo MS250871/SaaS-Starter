@@ -1,13 +1,16 @@
 -- This is an empty migration.
 
 /* =========================================================
-   MEMBERSHIP - ONLY ONE OWNER PER WORKSPACE
+   MEMBERSHIP OWNER LOOKUP
 ========================================================= */
 DROP INDEX IF EXISTS one_owner_per_workspace;
 
-CREATE UNIQUE INDEX IF NOT EXISTS one_owner_per_workspace
+DROP INDEX IF EXISTS membership_active_owner_idx;
+
+CREATE INDEX IF NOT EXISTS membership_active_owner_idx
 ON "Membership" ("workspace_id")
-WHERE role = 'OWNER';
+WHERE is_active = true
+  AND role_system_key = 'WORKSPACE_OWNER';
 
 /* =========================================================
     SESSION ROLE & MEMBERSHIP CONSISTENCY
@@ -18,9 +21,18 @@ DROP CONSTRAINT IF EXISTS session_role_snapshot_check;
 ALTER TABLE "Session"
 ADD CONSTRAINT session_role_snapshot_check
 CHECK (
-  (membership_id IS NULL AND workspace_role IS NULL)
+  (
+    membership_id IS NULL
+    AND workspace_role_definition_id IS NULL
+    AND workspace_role_key IS NULL
+    AND workspace_role_system_key IS NULL
+  )
   OR
-  (membership_id IS NOT NULL AND workspace_role IS NOT NULL)
+  (
+    membership_id IS NOT NULL
+    AND workspace_role_definition_id IS NOT NULL
+    AND workspace_role_key IS NOT NULL
+  )
 );
 
 /* =========================================================
@@ -58,18 +70,16 @@ WHERE is_primary = true;
 
 
 /* =========================================================
-   ROLE PERMISSION XOR CHECK
+   ONE DEFAULT ROLE PER SCOPE
 ========================================================= */
 ALTER TABLE "RolePermission"
 DROP CONSTRAINT IF EXISTS role_permission_xor_check;
 
-ALTER TABLE "RolePermission"
-ADD CONSTRAINT role_permission_xor_check
-CHECK (
-  (platform_role IS NOT NULL AND workspace_role IS NULL)
-  OR
-  (platform_role IS NULL AND workspace_role IS NOT NULL)
-);
+DROP INDEX IF EXISTS one_default_role_definition_per_scope;
+
+CREATE UNIQUE INDEX IF NOT EXISTS one_default_role_definition_per_scope
+ON "RoleDefinition" ("scope")
+WHERE is_default = true;
 
 /* =========================================================
    USER PERMISSION GLOBAL UNIQUE (workspace NULL)
@@ -319,7 +329,7 @@ ADD CONSTRAINT support_ticket_creator_check
 CHECK (
   (
     context_type = 'PLATFORM'
-    AND workspace_id IS NULL
+    AND workspace_id IS NOT NULL
     AND created_by IS NOT NULL
     AND created_by_customer_id IS NULL
   )

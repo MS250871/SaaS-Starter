@@ -16,6 +16,7 @@ import {
 } from '@/modules/entitlements/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -337,56 +338,58 @@ export async function resolveEntitlements(params: {
   workspaceId: string;
   planId?: string | null;
 }) {
-  if (!params.workspaceId) {
-    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
-  }
+  return withUnitOfWork(async () => {
+    if (!params.workspaceId) {
+      throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+    }
 
-  const features = new Set<string>();
-  const limits = new Map<string, number>();
+    const features = new Set<string>();
+    const limits = new Map<string, number>();
 
-  if (params.planId) {
-    const planFeatures = await listPlanFeatures(params.planId);
+    if (params.planId) {
+      const planFeatures = await listPlanFeatures(params.planId);
 
-    for (const pf of planFeatures) {
-      if (pf.isEnabled && pf.feature?.key) {
-        features.add(pf.feature.key);
+      for (const pf of planFeatures) {
+        if (pf.isEnabled && pf.feature?.key) {
+          features.add(pf.feature.key);
+        }
+      }
+
+      const planLimits = await listPlanLimits(params.planId);
+
+      for (const pl of planLimits) {
+        if (pl.limitDefinition?.key) {
+          limits.set(pl.limitDefinition.key, pl.valueInt);
+        }
       }
     }
 
-    const planLimits = await listPlanLimits(params.planId);
+    const featureOverrides = await listWorkspaceFeatureOverrides(
+      params.workspaceId,
+    );
 
-    for (const pl of planLimits) {
-      if (pl.limitDefinition?.key) {
-        limits.set(pl.limitDefinition.key, pl.valueInt);
-      }
+    for (const fo of featureOverrides) {
+      const key = fo.feature?.key;
+      if (!key) continue;
+
+      if (fo.isEnabled) features.add(key);
+      else features.delete(key);
     }
-  }
 
-  const featureOverrides = await listWorkspaceFeatureOverrides(
-    params.workspaceId,
-  );
+    const limitOverrides = await listWorkspaceLimitOverrides(params.workspaceId);
 
-  for (const fo of featureOverrides) {
-    const key = fo.feature?.key;
-    if (!key) continue;
+    for (const lo of limitOverrides) {
+      const key = lo.limitDefinition?.key;
+      if (!key) continue;
 
-    if (fo.isEnabled) features.add(key);
-    else features.delete(key);
-  }
+      limits.set(key, lo.valueInt);
+    }
 
-  const limitOverrides = await listWorkspaceLimitOverrides(params.workspaceId);
-
-  for (const lo of limitOverrides) {
-    const key = lo.limitDefinition?.key;
-    if (!key) continue;
-
-    limits.set(key, lo.valueInt);
-  }
-
-  return {
-    features: Array.from(features),
-    limits: Object.fromEntries(limits),
-  };
+    return {
+      features: Array.from(features),
+      limits: Object.fromEntries(limits),
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------- */

@@ -2,69 +2,69 @@ import { buildCud } from '@/lib/crud/cud-factory';
 import { buildQueries } from '@/lib/crud/query-factory';
 
 /* -------------------------------------------------------------------------- */
-/*                           PERMISSION (GLOBAL)                               */
+/*                           PERMISSION (GLOBAL)                              */
 /* -------------------------------------------------------------------------- */
 
 export const permissionCrud = buildCud({
   model: 'Permission',
-  workspaceScoped: false, // ❗ FIXED (global)
+  workspaceScoped: false,
   activeField: 'isActive',
   softDelete: false,
 });
 
 export const permissionQueries = buildQueries({
   model: 'Permission',
-  workspaceScoped: false, // ❗ FIXED
+  workspaceScoped: false,
   defaultActiveFilter: true,
   activeField: 'isActive',
 });
 
 /* -------------------------------------------------------------------------- */
-/*                          ROLE PERMISSION (GLOBAL)                           */
+/*                          ROLE PERMISSION (GLOBAL)                          */
 /* -------------------------------------------------------------------------- */
 
 export const rolePermissionCrud = buildCud({
   model: 'RolePermission',
-  workspaceScoped: false, // ❗ global defaults
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const rolePermissionQueries = buildQueries({
   model: 'RolePermission',
   workspaceScoped: false,
-  defaultActiveFilter: false, // no isActive
+  defaultActiveFilter: false,
 });
 
 /* -------------------------------------------------------------------------- */
-/*                 WORKSPACE ROLE PERMISSION (TENANT OVERRIDE)                 */
+/*                 WORKSPACE ROLE PERMISSION (ROW-OWNED TABLE)                */
 /* -------------------------------------------------------------------------- */
 
 export const workspaceRolePermissionCrud = buildCud({
   model: 'WorkspaceRolePermission',
-  workspaceScoped: true, // ✅ scoped
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const workspaceRolePermissionQueries = buildQueries({
   model: 'WorkspaceRolePermission',
-  workspaceScoped: true,
+  workspaceScoped: false,
   defaultActiveFilter: false,
 });
 
 /* -------------------------------------------------------------------------- */
-/*                           USER PERMISSION                                   */
+/*                           USER PERMISSION                                  */
 /* -------------------------------------------------------------------------- */
 
 export const userPermissionCrud = buildCud({
   model: 'UserPermission',
-  workspaceScoped: true,
+  workspaceScoped: false,
   activeField: 'isActive',
   softDelete: false,
 });
 
 export const userPermissionQueries = buildQueries({
   model: 'UserPermission',
-  workspaceScoped: true,
+  workspaceScoped: false,
   defaultActiveFilter: true,
   activeField: 'isActive',
 });

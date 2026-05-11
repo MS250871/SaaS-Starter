@@ -1,33 +1,73 @@
-// lib/context/build-actor.ts
+import type { ActorContext } from "./actor-context"
+import {
+  isPlatformAdminSystemKey,
+  toPlatformRoleSystemKey,
+  toWorkspaceRoleSystemKey,
+  type PlatformRoleSystemKey,
+} from "@/modules/roles/role.types"
 
-import type { ActorContext } from './actor-context';
-import type { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
+type BuildActorContextParams = {
+  identityId?: string
+  customerId?: string
+  platformRole?: string
+  platformRoleKeys?: string[]
+  platformRoleSystemKeys?: string[]
+  workspaceId?: string
+  workspaceRole?: string
+  workspaceRoleKey?: string
+  workspaceRoleSystemKey?: string
+  membershipId?: string
+  permissions?: string[]
+}
 
 export function buildActorContext(
-  identityId?: string,
-  customerId?: string,
-  platformRole?: PlatformRole,
-  workspaceId?: string,
-  workspaceRole?: WorkspaceRole,
-  membershipId?: string,
-  permissions: string[] = [],
+  params: BuildActorContextParams = {},
 ): ActorContext {
-  const isPlatformAdmin = platformRole === 'PLATFORM_ADMIN';
+  const platformRoleKeys = Array.from(
+    new Set(
+      [params.platformRole, ...(params.platformRoleKeys ?? [])].filter(
+        (value): value is string => Boolean(value),
+      ),
+    ),
+  )
 
-  let actorType: ActorContext['actorType'] = 'system';
+  const platformRoleSystemKeys = Array.from(
+    new Set(
+      [
+        ...(params.platformRoleSystemKeys ?? []).map(toPlatformRoleSystemKey),
+        ...platformRoleKeys.map(toPlatformRoleSystemKey),
+      ].filter((value): value is PlatformRoleSystemKey => Boolean(value)),
+    ),
+  ) as PlatformRoleSystemKey[]
 
-  if (identityId) actorType = 'identity';
-  if (customerId) actorType = 'customer';
+  const workspaceRoleKey = params.workspaceRoleKey ?? params.workspaceRole
+  const workspaceRoleSystemKey =
+    toWorkspaceRoleSystemKey(params.workspaceRoleSystemKey) ??
+    toWorkspaceRoleSystemKey(workspaceRoleKey)
+
+  const primaryPlatformRole =
+    platformRoleKeys[0] ?? platformRoleSystemKeys[0] ?? undefined
+
+  const isPlatformAdmin = platformRoleSystemKeys.some(isPlatformAdminSystemKey)
+
+  let actorType: ActorContext["actorType"] = "system"
+
+  if (params.identityId) actorType = "identity"
+  if (params.customerId) actorType = "customer"
 
   return {
     actorType,
-    identityId,
-    customerId,
-    platformRole,
+    identityId: params.identityId,
+    customerId: params.customerId,
+    platformRole: primaryPlatformRole,
+    platformRoleKeys,
+    platformRoleSystemKeys,
     isPlatformAdmin,
-    workspaceId,
-    workspaceRole,
-    membershipId,
-    permissions,
-  };
+    workspaceId: params.workspaceId,
+    workspaceRole: workspaceRoleKey,
+    workspaceRoleKey,
+    workspaceRoleSystemKey,
+    membershipId: params.membershipId,
+    permissions: params.permissions ?? [],
+  }
 }

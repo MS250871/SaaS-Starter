@@ -8,10 +8,14 @@ import {
   getAuthCookie,
   getVerificationSession,
   getUserSession,
+  setAuthCookies,
+  setVerificationSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
 import { otpSchema } from '@/modules/auth/schema';
 import { verifyWorkflow } from '@/modules/auth/workflows/verify.workflow';
+import { postLoginWorkflow } from '@/modules/auth/workflows/post-login.workflow';
+import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 
 async function redirectForExpiredVerification(): Promise<never> {
   const auth = await getAuthCookie();
@@ -73,6 +77,45 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
   await clearVerificationSession();
   if (result.sessionPayload) {
     await setUserSession(result.sessionPayload);
+  }
+
+  if (result.redirectTo === '/post-login') {
+    const auth = await getAuthCookie();
+    const identitySession = result.sessionPayload ?? currentSession;
+
+    if (!auth || !identitySession?.identityId) {
+      redirect(result.redirectTo);
+    }
+
+    const postLoginResult = await postLoginWorkflow({
+      identitySession,
+      auth,
+    });
+
+    if ('redirectTo' in postLoginResult && !('finalSession' in postLoginResult)) {
+      if (postLoginResult.meta?.verificationSession) {
+        await setVerificationSession(postLoginResult.meta.verificationSession);
+        await setAuthCookies({
+          data: {
+            ...auth,
+            createdAt: Date.now(),
+          },
+        });
+      }
+
+      if (postLoginResult.meta?.outboxEventId) {
+        await processOtpOutboxEvent(postLoginResult.meta.outboxEventId);
+      }
+
+      redirect(postLoginResult.redirectTo);
+    }
+
+    if ('finalSession' in postLoginResult && postLoginResult.finalSession) {
+      await setUserSession(postLoginResult.finalSession);
+      await clearAuthCookie();
+
+      redirect(postLoginResult.redirectTo ?? '/dashboard');
+    }
   }
 
   redirect(result.redirectTo);

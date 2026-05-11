@@ -11,19 +11,19 @@ const adapter = new PrismaNeon({
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  console.log('🌱 Seeding permissions...');
+  console.log('Seeding permissions...');
 
   const result = await prisma.permission.createMany({
     data: PERMISSION_SEED,
     skipDuplicates: true,
   });
 
-  console.log(`✅ Seeded ${result.count} permissions`);
+  console.log(`Seeded ${result.count} permissions`);
 }
 
 main()
-  .catch((e) => {
-    console.error('❌ Seeding failed:', e);
+  .catch((error) => {
+    console.error('Seeding failed:', error);
     process.exit(1);
   })
   .finally(async () => {

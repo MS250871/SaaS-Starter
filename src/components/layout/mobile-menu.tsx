@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { navItems } from '@/lib/nav/navigation.config';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { AuthButtons } from './auth-buttons';
 
@@ -11,10 +10,12 @@ export function MobileMenu({
   open,
   setOpen,
   isLoggedIn,
+  dashboardHref = "/app",
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   isLoggedIn: boolean;
+  dashboardHref?: string;
 }) {
   return (
     <>
@@ -58,6 +59,7 @@ export function MobileMenu({
           <AuthButtons
             className="w-full justify-start"
             isLoggedIn={isLoggedIn}
+            dashboardHref={dashboardHref}
           />
         </div>
       </div>

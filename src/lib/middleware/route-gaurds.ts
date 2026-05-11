@@ -8,6 +8,14 @@ const POST_LOGIN_ROUTE = '/post-login';
 const CREATE_WORKSPACE_ROUTE = '/create-workspace';
 const PAYMENT_ROUTE = '/payment';
 
+function isInviteAuthRoute(req: NextRequest, pathname: string) {
+  if (!isPublicRoute(pathname)) {
+    return false;
+  }
+
+  return !!req.nextUrl.searchParams.get('invite');
+}
+
 export function handleRouteGuards(
   req: NextRequest,
   session: SessionPayload | null,
@@ -19,7 +27,7 @@ export function handleRouteGuards(
   const hasSession = !!session;
 
   // Logged in → block login/signup
-  if (hasSession && isPublicRoute(pathname)) {
+  if (hasSession && isPublicRoute(pathname) && !isInviteAuthRoute(req, pathname)) {
     return NextResponse.redirect(new URL(POST_LOGIN_ROUTE, req.url));
   }
 

@@ -1,13 +1,9 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/layout/theme-provider';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { appFontVariablesClassName } from '@/lib/fonts';
 
 export const metadata: Metadata = {
   title: 'Create Next App',
@@ -23,10 +19,12 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={cn('font-sans', inter.variable)}
+      className={cn('font-sans', appFontVariablesClassName)}
     >
       <body className="antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

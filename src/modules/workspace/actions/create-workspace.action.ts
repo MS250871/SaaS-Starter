@@ -2,10 +2,13 @@
 
 import { redirect } from 'next/navigation';
 import { createNavAction } from '@/lib/http/create-nav-action';
+import { runWithActor } from '@/lib/context/actor-context';
 import {
+  clearAuthCookie,
   getAuthCookie,
   getUserSession,
   setAuthCookies,
+  setUserSession,
 } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -16,6 +19,10 @@ import {
   type CreateWorkspaceDomain,
 } from '@/modules/workspace/schema';
 import { createWorkspaceWorkflow } from '@/modules/workspace/workflows/create-workspace.workflow';
+import {
+  buildFinalSessionWorkflow,
+  resolveWorkspaceSurfaceRedirect,
+} from '@/modules/auth/workflows/post-login.workflow';
 import {
   buildWorkspaceRoutingCachePayload,
   cacheWorkspaceSlug,
@@ -60,12 +67,20 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
     redirect('/post-login');
   }
 
-  const result = await createWorkspaceWorkflow({
-    identityId: identitySession.identityId,
-    workspaceName: domain.workspaceName,
-    workspaceSlug: domain.workspaceSlug,
-    intent: auth.intent,
-  });
+  const result = await runWithActor(
+    {
+      actorType: 'system',
+      permissions: [],
+      isPlatformAdmin: true,
+    },
+    () =>
+      createWorkspaceWorkflow({
+        identityId: identitySession.identityId,
+        workspaceName: domain.workspaceName,
+        workspaceSlug: domain.workspaceSlug,
+        intent: auth.intent,
+      }),
+  );
 
   await cacheWorkspaceSlug(
     result.slug,
@@ -85,7 +100,27 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
     },
   });
 
-  redirect('/post-login');
+  const finalSession = await buildFinalSessionWorkflow({
+    identitySession,
+    workspaceId: result.workspaceId,
+    workspaceMembership: {
+      id: result.membershipId,
+      workspaceId: result.workspaceId,
+      roleDefinitionId: result.roleDefinitionId,
+      roleKey: result.roleKey,
+      roleSystemKey: result.roleSystemKey ?? undefined,
+    },
+  });
+
+  await setUserSession(finalSession);
+  await clearAuthCookie();
+
+  redirect(
+    await resolveWorkspaceSurfaceRedirect({
+      workspaceId: result.workspaceId,
+      fallbackPath: '/app',
+    }),
+  );
 });
 
 export async function createWorkspaceAction(formData: FormData) {

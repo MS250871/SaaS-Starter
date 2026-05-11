@@ -1,332 +1,117 @@
-require('dotenv').config();
+import "dotenv/config"
 
+import { PrismaClient } from "../src/generated/prisma/client"
+import { PrismaNeon } from "@prisma/adapter-neon"
 import {
-  PrismaClient,
-  WorkspaceRole,
-  PlatformRole,
-} from '../src/generated/prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
+  ROLE_DEFINITION_SEED,
+  ROLE_PERMISSION_KEY_MAP,
+} from "./data/roleDefinitions"
 
 const adapter = new PrismaNeon({
   connectionString: process.env.DATABASE_URL,
-});
+})
 
-const prisma = new PrismaClient({ adapter });
+const prisma = new PrismaClient({ adapter })
 
 type PermissionRecord = {
-  id: string;
-  key: string;
-};
-
-const WORKSPACE_ROLE_PERMISSIONS: Record<WorkspaceRole, string[]> = {
-  OWNER: [
-    'workspace.*',
-    'membership.*',
-    'invite.*',
-    'customer.*',
-    'session.*',
-    'notification.*',
-    'support.*',
-    'apikey.*',
-    'subscription.*',
-    'audit.read',
-    'audit.get',
-    'audit.export',
-    'identity.read',
-    'identity.updateProfile',
-    'identity.activate',
-    'identity.deactivate',
-    'identity.changeEmail',
-    'identity.changePhone',
-    'identity.addAuthAccount',
-    'identity.removeAuthAccount',
-    'role.read',
-    'permission.read',
-    'workspaceRolePermission.*',
-  ],
-
-  ADMIN: [
-    'workspace.read',
-    'workspace.update',
-    'workspace.domain.*',
-    'workspace.settings.*',
-    'workspace.theme.update',
-    'workspace.config.update',
-
-    'membership.*',
-    'invite.*',
-
-    'customer.*',
-
-    'session.read',
-    'session.list',
-    'session.terminate',
-    'session.revokeByDevice',
-    'session.revokeForMembership',
-
-    'notification.*',
-    'support.*',
-
-    'apikey.*',
-
-    'subscription.read',
-    'subscription.list',
-    'subscription.update',
-    'subscription.cancel',
-
-    'audit.read',
-    'audit.get',
-
-    'identity.read',
-    'identity.updateProfile',
-    'identity.changeEmail',
-    'identity.changePhone',
-    'identity.addAuthAccount',
-    'identity.removeAuthAccount',
-
-    'role.read',
-    'permission.read',
-
-    'workspaceRolePermission.read',
-    'workspaceRolePermission.update',
-  ],
-
-  STAFF: [
-    'workspace.read',
-    'workspace.settings.read',
-
-    'membership.read',
-
-    'customer.read',
-    'customer.list',
-    'customer.updateProfile',
-
-    'identity.read',
-    'identity.updateProfile',
-
-    'session.read',
-    'session.list',
-
-    'notification.read',
-    'notification.list',
-    'notification.markRead',
-
-    'support.create',
-    'support.reply',
-    'support.list',
-
-    'role.read',
-  ],
-
-  VIEWER: [
-    'workspace.read',
-    'workspace.settings.read',
-
-    'membership.read',
-
-    'customer.read',
-    'customer.list',
-
-    'identity.read',
-
-    'session.read',
-
-    'notification.read',
-    'notification.list',
-
-    'support.list',
-  ],
-};
-
-const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, string[]> = {
-  PLATFORM_ADMIN: ['*'],
-
-  PLATFORM_STAFF: [
-    'workspace.read',
-    'workspace.settings.read',
-
-    'membership.read',
-
-    'identity.read',
-    'identity.updateProfile',
-    'identity.activate',
-    'identity.deactivate',
-
-    'customer.read',
-    'customer.list',
-    'customer.updateProfile',
-    'customer.activate',
-    'customer.deactivate',
-
-    'session.read',
-    'session.list',
-    'session.terminate',
-    'session.revokeByDevice',
-    'session.revokeForMembership',
-
-    'notification.read',
-    'notification.list',
-    'notification.markRead',
-
-    'support.create',
-    'support.assign',
-    'support.updateStatus',
-    'support.updatePriority',
-    'support.reply',
-    'support.internalNote',
-    'support.close',
-    'support.reopen',
-    'support.list',
-    'support.readMessages',
-
-    'audit.read',
-    'audit.get',
-
-    'role.read',
-    'permission.read',
-    'workspaceRolePermission.read',
-
-    'subscription.read',
-    'subscription.list',
-  ],
-
-  SUPPORT_AGENT: [
-    'workspace.read',
-    'workspace.settings.read',
-
-    'identity.read',
-
-    'customer.read',
-    'customer.list',
-
-    'session.read',
-    'session.list',
-    'session.revokeByDevice',
-    'session.revokeForMembership',
-
-    'notification.read',
-    'notification.list',
-    'notification.markRead',
-
-    'support.*',
-
-    'audit.read',
-    'audit.get',
-  ],
-
-  BILLING_AGENT: [
-    'workspace.read',
-    'workspace.settings.read',
-
-    'identity.read',
-
-    'customer.read',
-    'customer.list',
-
-    'session.read',
-    'session.list',
-
-    'notification.read',
-    'notification.list',
-
-    'subscription.*',
-
-    'audit.read',
-    'audit.get',
-  ],
-};
+  id: string
+  key: string
+}
 
 function resolvePermissions(
   allPermissions: PermissionRecord[],
   keys: string[],
 ): string[] {
-  if (keys.includes('*')) {
-    return allPermissions.map((p) => p.id);
+  if (keys.includes("*")) {
+    return allPermissions.map((permission) => permission.id)
   }
 
-  const resolved: string[] = [];
+  const resolved: string[] = []
 
   for (const key of keys) {
-    if (key.endsWith('.*')) {
-      const prefix = key.slice(0, -2);
+    if (key.endsWith(".*")) {
+      const prefix = key.slice(0, -2)
+
       for (const permission of allPermissions) {
-        if (permission.key.startsWith(prefix + '.')) {
-          resolved.push(permission.id);
+        if (permission.key.startsWith(`${prefix}.`)) {
+          resolved.push(permission.id)
         }
       }
-      continue;
+
+      continue
     }
 
-    const match = allPermissions.find((p) => p.key === key);
+    const match = allPermissions.find((permission) => permission.key === key)
+
     if (match) {
-      resolved.push(match.id);
+      resolved.push(match.id)
     }
   }
 
-  return [...new Set(resolved)];
+  return [...new Set(resolved)]
 }
 
-async function seedWorkspaceRolePermissions(
-  permissions: PermissionRecord[],
-): Promise<void> {
-  for (const role of Object.values(WorkspaceRole)) {
-    const keys = WORKSPACE_ROLE_PERMISSIONS[role];
-    const permissionIds = resolvePermissions(permissions, keys);
+async function seedRolePermissions(permissions: PermissionRecord[]) {
+  for (const roleSeed of ROLE_DEFINITION_SEED) {
+    const permissionKeys = ROLE_PERMISSION_KEY_MAP[roleSeed.systemKey]
+    const permissionIds = resolvePermissions(permissions, permissionKeys)
 
-    const data = permissionIds.map((permissionId: string) => ({
-      workspaceRole: role,
-      permissionId,
-    }));
+    const roleDefinition = await prisma.roleDefinition.findUnique({
+      where: {
+        scope_key: {
+          scope: roleSeed.scope,
+          key: roleSeed.key,
+        },
+      },
+      select: {
+        id: true,
+      },
+    })
 
-    if (data.length > 0) {
-      await prisma.rolePermission.createMany({
-        data,
-        skipDuplicates: true,
-      });
+    if (!roleDefinition) {
+      throw new Error(
+        `Role definition missing for ${roleSeed.scope}:${roleSeed.key}. Run seed-role-definitions first.`,
+      )
     }
-  }
-}
 
-async function seedPlatformRolePermissions(
-  permissions: PermissionRecord[],
-): Promise<void> {
-  for (const role of Object.values(PlatformRole)) {
-    const keys = PLATFORM_ROLE_PERMISSIONS[role];
-    const permissionIds = resolvePermissions(permissions, keys);
+    await prisma.rolePermission.deleteMany({
+      where: {
+        roleDefinitionId: roleDefinition.id,
+      },
+    })
 
-    const data = permissionIds.map((permissionId: string) => ({
-      platformRole: role,
-      permissionId,
-    }));
-
-    if (data.length > 0) {
-      await prisma.rolePermission.createMany({
-        data,
-        skipDuplicates: true,
-      });
+    if (permissionIds.length === 0) {
+      continue
     }
+
+    await prisma.rolePermission.createMany({
+      data: permissionIds.map((permissionId) => ({
+        roleDefinitionId: roleDefinition.id,
+        permissionId,
+      })),
+      skipDuplicates: true,
+    })
   }
 }
 
 async function main() {
-  console.log('🌱 Seeding role permissions...');
-
   const permissions = await prisma.permission.findMany({
-    where: { isActive: true },
-    select: { id: true, key: true },
-  });
+    select: {
+      id: true,
+      key: true,
+    },
+  })
 
-  await seedWorkspaceRolePermissions(permissions);
-  await seedPlatformRolePermissions(permissions);
+  await seedRolePermissions(permissions)
 
-  console.log('✅ Role permissions seeded successfully');
+  console.log("Role permissions seeded successfully")
 }
 
 main()
-  .catch((e) => {
-    console.error('❌ Seeding failed:', e);
-    process.exit(1);
+  .catch((error) => {
+    console.error("Seeding failed:", error)
+    process.exit(1)
   })
   .finally(async () => {
-    await prisma.$disconnect();
-  });
+    await prisma.$disconnect()
+  })

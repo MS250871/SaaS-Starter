@@ -71,7 +71,7 @@ export type LoginFormInput = z.input<typeof loginFormSchema>;
 
 // ---------- ACTION SCHEMA (optional for future) ----------
 export const loginActionSchema = loginFormSchema.extend({
-  entry: z.enum(['platform', 'workspace']),
+  entry: z.enum(['platform', 'workspace']).optional(),
 });
 
 export type LoginActionInput = z.input<typeof loginActionSchema>;

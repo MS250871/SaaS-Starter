@@ -1,13 +1,8 @@
 import { z } from 'zod';
-
-const enumWorkspaceRole = z.enum(['OWNER', 'ADMIN', 'STAFF', 'VIEWER']);
-
-const enumPlatformRole = z.enum([
-  'PLATFORM_ADMIN',
-  'BILLING_AGENT',
-  'SUPPORT_AGENT',
-  'PLATFORM_STAFF',
-]);
+import {
+  platformRoleSystemKeySchema,
+  workspaceRoleSystemKeySchema,
+} from '@/modules/roles/role.types';
 
 const enumOtpPurpose = z.enum([
   'LOGIN',
@@ -76,8 +71,17 @@ export const sessionPayloadSchema = z.object({
   workspaceId: z.string().optional(),
   membershipId: z.string().optional(),
 
-  platformRoles: z.array(enumPlatformRole).optional(),
-  workspaceRole: enumWorkspaceRole.optional(),
+  workspaceRoleId: z.string().optional(),
+  workspaceRoleKey: z.string().optional(),
+  workspaceRoleSystemKey: workspaceRoleSystemKeySchema.optional(),
+
+  platformRoleIds: z.array(z.string()).optional(),
+  platformRoleKeys: z.array(z.string()).optional(),
+  platformRoleSystemKeys: z.array(platformRoleSystemKeySchema).optional(),
+
+  // Compatibility aliases kept during the refactor.
+  platformRoles: z.array(z.string()).optional(),
+  workspaceRole: z.string().optional(),
 
   ip: z.string().optional(),
   browser: z.string().optional(),

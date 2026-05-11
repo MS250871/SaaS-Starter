@@ -16,6 +16,20 @@ export async function applyDbContext(tx: DbClient, actor: ActorContext) {
   await setIfPresent('app.workspace_id', actor.workspaceId);
   await setIfPresent('app.membership_id', actor.membershipId);
 
+  if ((actor.platformRoleKeys?.length ?? 0) > 0) {
+    await setIfPresent(
+      'app.platform_role_keys',
+      JSON.stringify(actor.platformRoleKeys),
+    );
+  }
+
+  if ((actor.platformRoleSystemKeys?.length ?? 0) > 0) {
+    await setIfPresent(
+      'app.platform_role_system_keys',
+      JSON.stringify(actor.platformRoleSystemKeys),
+    );
+  }
+
   if (actor.platformRole) {
     await setIfPresent('app.platform_role', actor.platformRole);
   }

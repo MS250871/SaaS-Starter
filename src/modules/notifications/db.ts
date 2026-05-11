@@ -5,19 +5,37 @@ import { buildQueries } from '@/lib/crud/query-factory';
  * Notifications
  *
  * Used for:
- * - system notifications
- * - email notifications
  * - in-app alerts
- * - customer or identity messages
+ * - customer or identity inbox items
  */
 
 export const notificationCrud = buildCud({
   model: 'Notification',
-  workspaceScoped: true,
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const notificationQueries = buildQueries({
   model: 'Notification',
-  workspaceScoped: true,
+  workspaceScoped: false,
+});
+
+/**
+ * Notification deliveries
+ *
+ * Used for:
+ * - email delivery attempts
+ * - SMS delivery attempts
+ * - future WhatsApp / push / webhook channel delivery state
+ */
+
+export const notificationDeliveryCrud = buildCud({
+  model: 'NotificationDelivery',
+  workspaceScoped: false,
+  softDelete: false,
+});
+
+export const notificationDeliveryQueries = buildQueries({
+  model: 'NotificationDelivery',
+  workspaceScoped: false,
 });

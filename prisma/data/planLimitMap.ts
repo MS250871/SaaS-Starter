@@ -66,7 +66,7 @@ export const planLimitMap: Record<string, Record<string, number>> = {
     max_monthly_video_bandwidth_gb: 10000,
     max_monthly_email_notifications: 500000,
     max_api_requests_per_month: 2000000,
-    max_custom_domains: 3,
+    max_custom_domains: 1,
     max_subdomains: 5,
     max_groups_or_batches: 500,
     max_active_branches: 50,

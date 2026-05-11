@@ -1,0 +1,8 @@
+-- Intentionally left as a no-op.
+--
+-- The DNS-record tables and WorkspaceDomain.updated_at column are created in
+-- the later migration:
+--   20260506193000_workspace_domain_dns_verification
+--
+-- This earlier timestamp was generated out of order, which caused shadow DB
+-- failures when it tried to alter columns/tables that did not exist yet.

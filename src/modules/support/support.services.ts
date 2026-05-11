@@ -6,7 +6,7 @@ import {
 } from '@/modules/support/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { SenderType } from '@/generated/prisma/client';
+import { SenderType, SupportContextType } from '@/generated/prisma/client';
 import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -58,6 +58,7 @@ export async function createWorkspaceSupportTicket(params: {
   try {
     return await supportTicketCrud.create({
       workspaceId: params.workspaceId,
+      contextType: SupportContextType.WORKSPACE,
       title: params.title,
       body: params.body,
       status: params.status ?? 'open',
@@ -67,6 +68,35 @@ export async function createWorkspaceSupportTicket(params: {
     });
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create workspace ticket', undefined, e);
+  }
+}
+
+export async function createPlatformSupportTicket(params: {
+  workspaceId: string;
+  title: string;
+  body: string;
+  status?: string;
+  priority?: string | null;
+  createdById?: string | null;
+  assignedToId?: string | null;
+}) {
+  if (!params.workspaceId || !params.title || !params.body) {
+    throwError(ERR.INVALID_INPUT, 'Invalid platform support ticket params');
+  }
+
+  try {
+    return await supportTicketCrud.create({
+      workspaceId: params.workspaceId,
+      contextType: SupportContextType.PLATFORM,
+      title: params.title,
+      body: params.body,
+      status: params.status ?? 'open',
+      priority: params.priority ?? undefined,
+      createdById: params.createdById ?? undefined,
+      assignedToId: params.assignedToId ?? undefined,
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create platform ticket', undefined, e);
   }
 }
 
@@ -263,11 +293,18 @@ export async function addSupportTicketReply(params: {
   }
 
   try {
+    const senderFields =
+      params.senderType === SenderType.IDENTITY
+        ? { senderIdentityId: params.senderId ?? undefined }
+        : params.senderType === SenderType.CUSTOMER
+          ? { senderCustomerId: params.senderId ?? undefined }
+          : {};
+
     return await supportTicketMessageCrud.create({
       ticketId: params.ticketId,
       workspaceId: params.workspaceId,
       senderType: params.senderType,
-      senderId: params.senderId ?? undefined,
+      ...senderFields,
       message: params.message,
       attachments: params.attachments,
       isInternalNote: false,
@@ -292,8 +329,8 @@ export async function addSupportTicketInternalNote(params: {
     return await supportTicketMessageCrud.create({
       ticketId: params.ticketId,
       workspaceId: params.workspaceId,
-      senderType: SenderType.SYSTEM,
-      senderId: params.senderId ?? undefined,
+      senderType: SenderType.IDENTITY,
+      senderIdentityId: params.senderId ?? undefined,
       message: params.message,
       attachments: params.attachments,
       isInternalNote: true,

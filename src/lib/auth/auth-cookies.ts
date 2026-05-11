@@ -153,6 +153,24 @@ export async function updateVerificationSession(
 
 const SESSION_COOKIE = 'user_session';
 
+export async function readUserSessionCookiePayload(): Promise<SessionPayload | null> {
+  const store = await cookies();
+  const token = store.get(SESSION_COOKIE)?.value;
+
+  if (!token) return null;
+
+  const session = await decryptToken<unknown>(token);
+  if (!session) return null;
+
+  const validated = sessionPayloadSchema.safeParse(session);
+
+  if (!validated.success) {
+    return null;
+  }
+
+  return validated.data;
+}
+
 export async function setUserSession(payload: SessionPayload) {
   const store = await cookies();
 
@@ -175,21 +193,9 @@ export async function setUserSession(payload: SessionPayload) {
 }
 
 export async function getUserSession(): Promise<SessionPayload | null> {
-  const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
+  const data = await readUserSessionCookiePayload();
 
-  if (!token) return null;
-
-  const session = await decryptToken<unknown>(token);
-  if (!session) return null;
-
-  const validated = sessionPayloadSchema.safeParse(session);
-
-  if (!validated.success) {
-    return null;
-  }
-
-  const data = validated.data;
+  if (!data) return null;
 
   if (Date.now() > data.expiresAt) {
     return null;

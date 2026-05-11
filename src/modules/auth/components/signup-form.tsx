@@ -132,13 +132,15 @@ export function SignupForm({
           <FieldSeparator />
 
           <CardTitle className="text-sm md:text-lg mt-2 font-medium">
-            Create your account
+            {invite ? 'Accept your workspace invite' : 'Create your account'}
           </CardTitle>
 
           <CardDescription className="text-xs md:text-sm">
-            {planName
-              ? `You are signing up for the ${planName} plan. We will verify your email first, then your phone.`
-              : 'We will verify your email first, then your phone.'}
+            {invite
+              ? 'Create or confirm your account to accept this workspace invite. We will verify your email first, then your phone.'
+              : planName
+                ? `You are signing up for the ${planName} plan. We will verify your email first, then your phone.`
+                : 'We will verify your email first, then your phone.'}
           </CardDescription>
         </CardHeader>
 
@@ -235,8 +237,14 @@ export function SignupForm({
                 {/* LOGIN */}
                 <Field>
                   <FieldDescription className="text-center">
-                    Already have an account?{' '}
-                    <Link href={`/login?intent=${intent}`}>Login here</Link>
+                    {invite ? (
+                      'Use this invite flow even if you already have an account.'
+                    ) : (
+                      <>
+                        Already have an account?{' '}
+                        <Link href={`/login?intent=${intent}`}>Login here</Link>
+                      </>
+                    )}
                   </FieldDescription>
                 </Field>
               </FieldGroup>

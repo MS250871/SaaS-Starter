@@ -12,18 +12,9 @@ datasource db {
   provider = "postgresql"
 }
 
-enum WorkspaceRole {
-  OWNER
-  ADMIN
-  STAFF
-  VIEWER
-}
-
-enum PlatformRole {
-  PLATFORM_ADMIN
-  BILLING_AGENT
-  SUPPORT_AGENT
-  PLATFORM_STAFF
+enum RoleScope {
+  WORKSPACE
+  PLATFORM
 }
 
 enum InviteStatus {
@@ -31,6 +22,37 @@ enum InviteStatus {
   ACCEPTED
   REVOKED
   EXPIRED
+}
+
+enum WorkspaceDomainType {
+  SUBDOMAIN
+  CUSTOM
+}
+
+enum WorkspaceDomainStatus {
+  PENDING_VERIFICATION
+  VERIFIED
+  FAILED
+  DISABLED
+}
+
+enum WorkspaceDomainRoutingMode {
+  CNAME
+  APEX_A
+}
+
+enum DnsRecordType {
+  A
+  AAAA
+  CNAME
+  TXT
+  CAA
+  MX
+}
+
+enum DomainVerificationPurpose {
+  OWNERSHIP
+  ROUTING
 }
 
 enum OtpPurpose {
@@ -95,6 +117,22 @@ enum NotificationTargetType {
   BOTH
   WORKSPACE
   PLATFORM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  SENT
+  DELIVERED
+  FAILED
+  CANCELLED
 }
 
 enum SupportContextType {
@@ -192,14 +230,14 @@ enum OutboxStatus {
 }
 
 enum MediaStatus {
-  UPLOADING    // (optional) presigned flow started but not confirmed
-  UPLOADED     // file successfully uploaded to storage (B2)
+  UPLOADING // (optional) presigned flow started but not confirmed
+  UPLOADED // file successfully uploaded to storage (B2)
 
-  PROCESSING   // async jobs running (resize, scan, etc.)
-  READY        // fully processed and usable (CDN ready)
+  PROCESSING // async jobs running (resize, scan, etc.)
+  READY // fully processed and usable (CDN ready)
 
-  FAILED       // processing failed
-  DELETED      // soft delete (logical removal)
+  FAILED // processing failed
+  DELETED // soft delete (logical removal)
 }
 
 enum MediaJobStatus {
@@ -212,65 +250,66 @@ enum MediaJobStatus {
 
 // Workspace (previously Tenant)
 model Workspace {
-  id             String                @id @default(uuid()) @db.Uuid
-  name           String
-  slug           String                @unique
-  defaultDomain  String?               @map("default_domain")
-  primaryEmail   String?               @map("primary_email")
-  isActive       Boolean               @default(true) @map("is_active")
+  id            String  @id @default(uuid()) @db.Uuid
+  name          String
+  slug          String  @unique
+  defaultDomain String? @map("default_domain")
+  primaryEmail  String? @map("primary_email")
+  isActive      Boolean @default(true) @map("is_active")
 
   // Multi-domain support
-  domains        WorkspaceDomain[]
+  domains WorkspaceDomain[]
 
   // members & roles
-  memberships    Membership[]
+  memberships Membership[]
 
   // customers (end-users of a workspace product)
-  customers      Customer[]
+  customers Customer[]
 
   // auth
-  otpRequests    OtpRequest[]
-  sessions       Session[]
+  otpRequests OtpRequest[]
+  sessions    Session[]
 
   // settings & history
-  settings       WorkspaceSettings?
+  settings WorkspaceSettings?
 
   // permissions
-  userPermissions UserPermission[]
+  userPermissions          UserPermission[]
   workspaceRolePermissions WorkspaceRolePermission[]
 
   // invites
-  invites        WorkspaceInvite[]
+  invites WorkspaceInvite[]
 
   // api keys
-  apiKeys        ApiKey[]
+  apiKeys ApiKey[]
 
   // support
-  supportTickets SupportTicket[]
+  supportTickets  SupportTicket[]
   supportMessages SupportTicketMessage[]
 
   // notifications
-  notifications  Notification[] 
+  notifications          Notification[]
+  notificationDeliveries NotificationDelivery[]
 
   // features & limits
   featureOverrides WorkspaceFeatureOverride[]
-  limitOverrides WorkspaceLimitOverride[]
+  limitOverrides   WorkspaceLimitOverride[]
 
   // billing
   subscriptions Subscription[]
-  payments Payment[]
-  invoices Invoice[]
+  payments      Payment[]
+  invoices      Invoice[]
 
   // audit / webhooks
-  adminAuditLogs AdminAuditLog[] 
+  adminAuditLogs AdminAuditLog[]
 
-  webhookEvents WebhookEvent[]
-  outboxEvents OutboxEvent[]
-  media Media[]
+  webhookEvents   WebhookEvent[]
+  outboxEvents    OutboxEvent[]
+  media           Media[]
   fileAttachments FileAttachment[]
 
-  createdAt      DateTime              @default(now()) @map("created_at")
-  updatedAt      DateTime              @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([isActive])
   @@index([createdAt])
@@ -279,136 +318,207 @@ model Workspace {
 
 // workspace domains (CNAMEs / custom domains)
 model WorkspaceDomain {
-  id         String    @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  workspace  Workspace @relation(fields: [workspaceId], references: [id])
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  domain     String   // e.g. workspace.com or acme.platform.com
-  isPrimary  Boolean  @default(false) @map("is_primary")
-  isVerified Boolean  @default(false) @map("is_verified")
+  domain                String // e.g. workspace.com or acme.platform.com
+  type                  WorkspaceDomainType        @default(CUSTOM)
+  routingMode           WorkspaceDomainRoutingMode @default(CNAME) @map("routing_mode")
+  status                WorkspaceDomainStatus      @default(PENDING_VERIFICATION)
+  target                String?
+  verificationToken     String?                    @unique @map("verification_token")
+  isPrimary             Boolean                    @default(false) @map("is_primary")
+  isVerified            Boolean                    @default(false) @map("is_verified")
+  verifiedAt            DateTime?                  @map("verified_at")
+  lastCheckedAt         DateTime?                  @map("last_checked_at")
+  lastVerificationError String?                    @map("last_verification_error")
 
-  createdAt  DateTime @default(now()) @map("created_at")
+  dnsRecords WorkspaceDomainDnsRecord[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([domain])
   @@index([workspaceId, isPrimary])
+  @@index([workspaceId, status])
+}
+
+model WorkspaceDomainDnsRecord {
+  id                String          @id @default(uuid()) @db.Uuid
+  workspaceDomainId String          @map("workspace_domain_id") @db.Uuid
+  workspaceDomain   WorkspaceDomain @relation(fields: [workspaceDomainId], references: [id], onDelete: Cascade)
+
+  type          DnsRecordType
+  purpose       DomainVerificationPurpose
+  host          String
+  expectedValue String                    @map("expected_value")
+  isRequired    Boolean                   @default(true) @map("is_required")
+  isMatched     Boolean                   @default(false) @map("is_matched")
+  matchedValue  String?                   @map("matched_value")
+  lastCheckedAt DateTime?                 @map("last_checked_at")
+  lastError     String?                   @map("last_error")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceDomainId, type, host, expectedValue])
+  @@index([workspaceDomainId, purpose])
 }
 
 // memberships: join table Identity <-> Workspace (many-to-many)
+model RoleDefinition {
+  id            String    @id @default(uuid()) @db.Uuid
+  scope         RoleScope
+  key           String
+  name          String
+  description   String?
+  isSystem      Boolean   @default(false) @map("is_system")
+  systemKey     String?   @map("system_key")
+  hierarchyRank Int?      @map("hierarchy_rank")
+  isDefault     Boolean   @default(false) @map("is_default")
+  isAssignable  Boolean   @default(true) @map("is_assignable")
+  isActive      Boolean   @default(true) @map("is_active")
+
+  workspaceMemberships     Membership[]              @relation("WorkspaceMembershipRoleDefinition")
+  workspaceInvites         WorkspaceInvite[]         @relation("WorkspaceInviteRoleDefinition")
+  platformMemberships      PlatformMembership[]      @relation("PlatformMembershipRoleDefinition")
+  platformInvites          PlatformInvite[]          @relation("PlatformInviteRoleDefinition")
+  sessionWorkspaceRoles    Session[]                 @relation("SessionWorkspaceRoleDefinition")
+  rolePermissions          RolePermission[]
+  workspaceRolePermissions WorkspaceRolePermission[]
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([scope, key])
+  @@unique([scope, systemKey])
+  @@index([scope, isActive])
+}
+
 model Membership {
-  id        String        @id @default(uuid()) @db.Uuid
- 
-  workspaceId String      @map("workspace_id") @db.Uuid
-  workspace Workspace     @relation(fields: [workspaceId], references: [id])
+  id String @id @default(uuid()) @db.Uuid
 
-  identityId String      @map("identity_id") @db.Uuid
-  identity  Identity     @relation(fields: [identityId], references: [id])
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  role      WorkspaceRole @default(STAFF)
-  isActive  Boolean       @default(true) @map("is_active")
+  identityId String   @map("identity_id") @db.Uuid
+  identity   Identity @relation(fields: [identityId], references: [id])
+
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation("WorkspaceMembershipRoleDefinition", fields: [roleDefinitionId], references: [id])
+  roleKey          String         @map("role_key")
+  roleSystemKey    String?        @map("role_system_key")
+  isActive         Boolean        @default(true) @map("is_active")
 
   sessions  Session[]
   // optional temporary access expiry
-  expiresAt DateTime?     @map("expires_at")
+  expiresAt DateTime? @map("expires_at")
 
-  version   Int           @default(1)
+  version Int @default(1)
 
-  createdAt DateTime      @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([workspaceId, identityId])
   @@index([identityId])
-  @@index([workspaceId, role])
+  @@index([workspaceId, roleDefinitionId])
+  @@index([workspaceId, roleSystemKey])
 }
 
 // Workspace invites (separate from Membership)
 model WorkspaceInvite {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  email       String
-  role        WorkspaceRole @default(STAFF)
-  invitedById String?  @map("invited_by") @db.Uuid
-  invitedBy   Identity? @relation(fields: [invitedById], references: [id])
+  email            String
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation("WorkspaceInviteRoleDefinition", fields: [roleDefinitionId], references: [id])
+  roleKey          String         @map("role_key")
+  roleSystemKey    String?        @map("role_system_key")
+  invitedById      String?        @map("invited_by") @db.Uuid
+  invitedBy        Identity?      @relation(fields: [invitedById], references: [id])
 
-  token       String   @unique
-  status      InviteStatus   @default(PENDING)
-  expiresAt   DateTime?
-  createdAt   DateTime @default(now()) @map("created_at")
+  token     String       @unique
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime?
+  createdAt DateTime     @default(now()) @map("created_at")
 
   @@index([workspaceId, status])
   @@index([token, workspaceId])
   @@index([email, workspaceId])
+  @@index([workspaceId, roleDefinitionId])
 }
 
 model WorkspaceSettings {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  themes      Json // free-form JSON for theme settings (colors, fonts, etc.)
-  
-  settings    Json // free-form JSON for extensible settings (branding, flags)
+  themes Json // free-form JSON for theme settings (colors, fonts, etc.)
 
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  createdAt   DateTime @default(now()) @map("created_at")
+  settings Json // free-form JSON for extensible settings (branding, flags)
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([workspaceId])
 }
 
 model Identity {
-  id        String @id @default(uuid()) @db.Uuid
+  id        String  @id @default(uuid()) @db.Uuid
   firstName String? @map("first_name") @db.VarChar(255)
   lastName  String? @map("last_name") @db.VarChar(255)
 
-  email     String? @unique
-  phone     String? @unique
+  email String? @unique
+  phone String? @unique
 
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  authAccounts AuthAccount[]
+  authAccounts  AuthAccount[]
   oauthAccounts OAuthAccount[]
-  sessions Session[]
+  sessions      Session[]
 
-  platformInvites PlatformInvite[]
+  platformInvites     PlatformInvite[]
   platformMemberships PlatformMembership[]
 
-  memberships Membership[]
-  customers Customer[]
-  permissions UserPermission[] @relation("UserPermissions")
-  permissionsGranted UserPermission[] @relation("PermissionGrantedBy")
-  permissionsRevoked UserPermission[] @relation("PermissionRevokedBy")
-  adminAuditLogs AdminAuditLog[]
-  invites WorkspaceInvite[]
-  apiKeys ApiKey[]
-  
-  sentTickets SupportTicket[] @relation("CreatedTickets")
+  memberships        Membership[]
+  customers          Customer[]
+  permissions        UserPermission[]  @relation("UserPermissions")
+  permissionsGranted UserPermission[]  @relation("PermissionGrantedBy")
+  permissionsRevoked UserPermission[]  @relation("PermissionRevokedBy")
+  adminAuditLogs     AdminAuditLog[]
+  invites            WorkspaceInvite[]
+  apiKeys            ApiKey[]
+
+  sentTickets     SupportTicket[]        @relation("CreatedTickets")
   supportMessages SupportTicketMessage[] @relation("SentMessages")
-  assignedTickets SupportTicket[] @relation("AssignedTickets")
-  notifications Notification[]
+  assignedTickets SupportTicket[]        @relation("AssignedTickets")
+  notifications   Notification[]
 
   subscriptions Subscription[]
-  payments Payment[]
-  invoices Invoice[]  
+  payments      Payment[]
+  invoices      Invoice[]
 
-  webhookEvents WebhookEvent[]
-  outboxEvents OutboxEvent[]
-  media Media[]
+  webhookEvents   WebhookEvent[]
+  outboxEvents    OutboxEvent[]
+  media           Media[]
   fileAttachments FileAttachment[]
 }
 
 model AuthAccount {
   id String @id @default(uuid()) @db.Uuid
 
-  identityId String @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation(fields: [identityId], references: [id])
 
-  type  AuthAccountType   // EMAIL | PHONE
-  value String   // email address or phone number
+  type  AuthAccountType // EMAIL | PHONE
+  value String // email address or phone number
 
-  isVerified Boolean @default(false) @map("is_verified")
+  isVerified Boolean   @default(false) @map("is_verified")
   verifiedAt DateTime? @map("verified_at")
 
   passwordHash String? @map("password_hash")
@@ -424,18 +534,18 @@ model AuthAccount {
 
 // OAuth linked accounts for Identities (Google, etc.)
 model OAuthAccount {
-  id                 String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  identityId String @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation(fields: [identityId], references: [id])
 
-  provider           String   // 'google', 'github', etc.
-  providerAccountId  String   @map("provider_account_id")
-  accessToken        String? @map("access_token")
-  refreshToken       String? @map("refresh_token")
-  scope              String? 
+  provider          String // 'google', 'github', etc.
+  providerAccountId String  @map("provider_account_id")
+  accessToken       String? @map("access_token")
+  refreshToken      String? @map("refresh_token")
+  scope             String?
 
-  createdAt          DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([provider, providerAccountId])
   @@index([identityId])
@@ -443,30 +553,30 @@ model OAuthAccount {
 
 // Customers (end-users of a workspace product)
 model Customer {
-  id          String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  identityId String @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation(fields: [identityId], references: [id])
 
-  workspaceId String   @map("workspace_id") @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  externalId  String?   @map("external_id") // for external systems
+  externalId String? @map("external_id") // for external systems
 
-  notifications Notification[]
-  subscriptions Subscription[]
-  payments Payment[]
-  invoices Invoice[]
-  supportTickets SupportTicket[] @relation("CreatedCustomerTickets")
+  notifications   Notification[]
+  subscriptions   Subscription[]
+  payments        Payment[]
+  invoices        Invoice[]
+  supportTickets  SupportTicket[]        @relation("CreatedCustomerTickets")
   supportMessages SupportTicketMessage[]
 
-  webhookEvents WebhookEvent[]
-  outboxEvents OutboxEvent[]
-  media Media[]
+  webhookEvents   WebhookEvent[]
+  outboxEvents    OutboxEvent[]
+  media           Media[]
   fileAttachments FileAttachment[]
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([workspaceId, identityId])
   @@index([workspaceId])
@@ -474,41 +584,51 @@ model Customer {
 
 // API keys (tenant/workspace scoped)
 model ApiKey {
-  id         String   @id @default(uuid()) @db.Uuid
-  workspaceId String  @map("workspace_id") @db.Uuid
-  workspace  Workspace @relation(fields: [workspaceId], references: [id])
+  id          String    @id @default(uuid()) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  key        String   @unique
+  name        String    @default("API Key")
+  key         String?   @unique // legacy raw secret during transition to hash-only storage
+  keyPrefix   String?   @map("key_prefix")
+  keyHash     String?   @unique @map("key_hash")
   description String?
-  scopes     String[] // e.g. ["orders:read","orders:write"]
-  createdById String? @map("created_by") @db.Uuid
-  createdBy  Identity? @relation(fields: [createdById], references: [id])
+  scopes      String[] // e.g. ["orders:read","orders:write"]
+  createdById String?   @map("created_by") @db.Uuid
+  createdBy   Identity? @relation(fields: [createdById], references: [id])
 
-  isActive   Boolean  @default(true) @map("is_active")
+  isActive   Boolean   @default(true) @map("is_active")
   expiresAt  DateTime?
+  lastUsedAt DateTime? @map("last_used_at")
+  revokedAt  DateTime? @map("revoked_at")
 
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   @@index([workspaceId, isActive])
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, lastUsedAt])
+  @@index([createdById])
+  @@index([keyPrefix])
 }
-
 
 // OTP requests (for email/phone OTP)
 model OtpRequest {
-  id             String    @id @default(uuid()) @db.Uuid
-  authAccountId  String    @map("auth_account_id") @db.Uuid
-  authAccount    AuthAccount @relation(fields: [authAccountId], references: [id])
+  id            String      @id @default(uuid()) @db.Uuid
+  authAccountId String      @map("auth_account_id") @db.Uuid
+  authAccount   AuthAccount @relation(fields: [authAccountId], references: [id])
 
-  workspaceId    String?   @map("workspace_id") @db.Uuid
-  workspace      Workspace? @relation(fields: [workspaceId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  verificationId String   @map("verification_id") @unique @db.Uuid
+  verificationId String     @unique @map("verification_id") @db.Uuid
   otpPurpose     OtpPurpose @map("otp_purpose")
-  otpHash        String    @map("otp_hash")
-  expiresAt      DateTime  @map("expires_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
-  attempts       Int       @default(0) @db.SmallInt
-  resendCount    Int       @default(0) @map("resend_count") @db.SmallInt
+  otpHash        String     @map("otp_hash")
+  expiresAt      DateTime   @map("expires_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+  attempts       Int        @default(0) @db.SmallInt
+  resendCount    Int        @default(0) @map("resend_count") @db.SmallInt
 
   @@index([authAccountId, otpPurpose, createdAt])
   @@index([expiresAt])
@@ -516,37 +636,40 @@ model OtpRequest {
 
 // Sessions 
 model Session {
-  id        String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  identityId String  @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation(fields: [identityId], references: [id])
 
   // workspace context - nullable for platform-wide sessions
-  workspaceId String? @map("workspace_id") @db.Uuid
-  workspace  Workspace? @relation(fields: [workspaceId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  membershipId String? @map("membership_id") @db.Uuid
+  membershipId String?     @map("membership_id") @db.Uuid
   membership   Membership? @relation(fields: [membershipId], references: [id])
 
-  workspaceRole WorkspaceRole? @map("workspace_role") 
+  workspaceRoleDefinitionId String?         @map("workspace_role_definition_id") @db.Uuid
+  workspaceRoleDefinition   RoleDefinition? @relation("SessionWorkspaceRoleDefinition", fields: [workspaceRoleDefinitionId], references: [id])
+  workspaceRoleKey          String?         @map("workspace_role_key")
+  workspaceRoleSystemKey    String?         @map("workspace_role_system_key")
 
-  ip        String?
-  browser   String?
-  os        String?
-  device    String?
-  deviceId  String?   @map("device_id")
+  ip                String?
+  browser           String?
+  os                String?
+  device            String?
+  deviceId          String? @map("device_id")
   deviceFingerprint String? @map("device_fingerprint")
-  userAgent String?   @map("user_agent")
+  userAgent         String? @map("user_agent")
 
-  isActive  Boolean   @default(true) @map("is_active")
+  isActive Boolean @default(true) @map("is_active")
 
-  expiresAt DateTime @map("expires_at")
-  endedAt   DateTime? @map("ended_at")
+  expiresAt   DateTime          @map("expires_at")
+  endedAt     DateTime?         @map("ended_at")
   endedReason SessionEndReason? @map("ended_reason")
 
   lastSeenAt DateTime? @map("last_seen_at")
 
-  createdAt DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([identityId, isActive, createdAt])
   @@index([workspaceId, isActive, createdAt])
@@ -555,58 +678,67 @@ model Session {
   @@index([deviceFingerprint])
   @@index([membershipId])
   @@index([workspaceId])
+  @@index([workspaceRoleDefinitionId])
 }
 
 model PlatformInvite {
-  id          String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  email       String
-  role        PlatformRole
+  email            String
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation("PlatformInviteRoleDefinition", fields: [roleDefinitionId], references: [id])
+  roleKey          String         @map("role_key")
+  roleSystemKey    String?        @map("role_system_key")
 
-  invitedById String?  @map("invited_by") @db.Uuid
+  invitedById String?   @map("invited_by") @db.Uuid
   invitedBy   Identity? @relation(fields: [invitedById], references: [id])
 
-  token       String   @unique
-  status      InviteStatus   @default(PENDING)
-  expiresAt   DateTime?
+  token     String       @unique
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime?
 
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([email, status])
   @@index([token])
+  @@index([roleDefinitionId])
 }
 
 model PlatformMembership {
   id String @id @default(uuid()) @db.Uuid
 
-  identityId String @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation(fields: [identityId], references: [id])
 
-  role PlatformRole
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation("PlatformMembershipRoleDefinition", fields: [roleDefinitionId], references: [id])
+  roleKey          String         @map("role_key")
+  roleSystemKey    String?        @map("role_system_key")
 
   isActive Boolean @default(true)
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@unique([identityId, role])
+  @@unique([identityId, roleDefinitionId])
   @@index([identityId, isActive])
+  @@index([identityId, roleSystemKey])
 }
 
 // Permission models
 model Permission {
-  id          String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  key         String @unique
+  key         String  @unique
   name        String?
   description String?
   entity      String
-  isActive    Boolean  @default(true) @map("is_active")
+  isActive    Boolean @default(true) @map("is_active")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  userPermissions UserPermission[]
-  rolePermissions RolePermission[]
+  userPermissions          UserPermission[]
+  rolePermissions          RolePermission[]
   workspaceRolePermissions WorkspaceRolePermission[]
 
   @@index([entity])
@@ -616,57 +748,56 @@ model Permission {
 model RolePermission {
   id String @id @default(uuid()) @db.Uuid
 
-  workspaceRole WorkspaceRole? @map("workspace_role")
-  platformRole PlatformRole? @map("platform_role")
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation(fields: [roleDefinitionId], references: [id])
 
-  permissionId String   @map("permission_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
   permission   Permission @relation(fields: [permissionId], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@unique([platformRole, permissionId])
-  @@unique([workspaceRole, permissionId])
-  @@index([platformRole])
-  @@index([workspaceRole])
+  @@unique([roleDefinitionId, permissionId])
+  @@index([roleDefinitionId])
   @@index([permissionId])
 }
 
 model WorkspaceRolePermission {
   id String @id @default(uuid()) @db.Uuid
 
-  workspaceId String @map("workspace_id") @db.Uuid
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-  workspaceRole WorkspaceRole @map("workspace_role")
+  workspaceId      String         @map("workspace_id") @db.Uuid
+  workspace        Workspace      @relation(fields: [workspaceId], references: [id])
+  roleDefinitionId String         @map("role_definition_id") @db.Uuid
+  roleDefinition   RoleDefinition @relation(fields: [roleDefinitionId], references: [id])
 
-  permissionId String  @map("permission_id") @db.Uuid
-  permission Permission @relation(fields: [permissionId], references: [id])
+  permissionId String     @map("permission_id") @db.Uuid
+  permission   Permission @relation(fields: [permissionId], references: [id])
 
   isAllowed Boolean @default(true)
 
-  @@unique([workspaceId, workspaceRole, permissionId])
-  @@index([workspaceId, workspaceRole])
+  @@unique([workspaceId, roleDefinitionId, permissionId])
+  @@index([workspaceId, roleDefinitionId])
   @@index([permissionId])
 }
 
 model UserPermission {
   id String @id @default(uuid()) @db.Uuid
 
-  identityId String @map("identity_id") @db.Uuid
+  identityId String   @map("identity_id") @db.Uuid
   identity   Identity @relation("UserPermissions", fields: [identityId], references: [id])
 
-  workspaceId String? @map("workspace_id") @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  permissionId String   @map("permission_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
   permission   Permission @relation(fields: [permissionId], references: [id])
 
-  grantedById String? @map("granted_by") @db.Uuid
+  grantedById String?   @map("granted_by") @db.Uuid
   grantedBy   Identity? @relation("PermissionGrantedBy", fields: [grantedById], references: [id])
 
-  revokedById String? @map("revoked_by") @db.Uuid
+  revokedById String?   @map("revoked_by") @db.Uuid
   revokedBy   Identity? @relation("PermissionRevokedBy", fields: [revokedById], references: [id])
 
-  effect      PermissionEffect @default(ALLOW)
+  effect PermissionEffect @default(ALLOW)
 
   source      PermissionSource @default(MANUAL)
   isActive    Boolean          @default(true) @map("is_active")
@@ -686,10 +817,10 @@ model UserPermission {
 model AdminAuditLog {
   id String @id @default(uuid()) @db.Uuid
 
-  adminIdentityId String @map("admin_identity_id") @db.Uuid
+  adminIdentityId String   @map("admin_identity_id") @db.Uuid
   adminIdentity   Identity @relation(fields: [adminIdentityId], references: [id])
 
-  workspaceId String? @map("workspace_id") @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
   adminEmail String? @map("admin_email")
@@ -718,31 +849,32 @@ model AdminAuditLog {
   @@index([createdAt])
   @@index([severity])
 }
+
 // Support / notifications / pages / blogs placeholders (kept from original)
 model SupportTicket {
-  id String @id @default(uuid()) @db.Uuid
-  workspaceId String? @map("workspace_id") @db.Uuid
-  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  createdByCustomerId String? @map("created_by_customer_id") @db.Uuid
-  createdByCustomer Customer? @relation("CreatedCustomerTickets", fields: [createdByCustomerId], references: [id])
-  
+  createdByCustomerId String?   @map("created_by_customer_id") @db.Uuid
+  createdByCustomer   Customer? @relation("CreatedCustomerTickets", fields: [createdByCustomerId], references: [id])
+
   contextType SupportContextType @map("context_type")
 
-  createdById String? @map("created_by") @db.Uuid
-  createdBy Identity? @relation("CreatedTickets", fields: [createdById], references: [id])
+  createdById String?   @map("created_by") @db.Uuid
+  createdBy   Identity? @relation("CreatedTickets", fields: [createdById], references: [id])
 
-  assignedToId String? @map("assigned_to") @db.Uuid
-  assignedTo Identity? @relation("AssignedTickets", fields: [assignedToId], references: [id])
+  assignedToId String?   @map("assigned_to") @db.Uuid
+  assignedTo   Identity? @relation("AssignedTickets", fields: [assignedToId], references: [id])
 
-  title String
-  body  String
-  status String
+  title    String
+  body     String
+  status   String
   priority String?
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  messages SupportTicketMessage[]
+  createdAt DateTime               @default(now()) @map("created_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+  messages  SupportTicketMessage[]
 
   @@index([workspaceId, status])
   @@index([workspaceId, createdAt])
@@ -756,13 +888,13 @@ model SupportTicketMessage {
   id       String @id @default(uuid()) @db.Uuid
   ticketId String @map("ticket_id") @db.Uuid
 
-  workspaceId String? @map("workspace_id") @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  senderIdentityId String? @map("sender_identity_id") @db.Uuid
-  senderIdentity Identity? @relation("SentMessages", fields: [senderIdentityId], references: [id])
-  senderCustomerId String? @map("sender_customer_id") @db.Uuid
-  senderCustomer Customer? @relation(fields: [senderCustomerId], references: [id])
+  senderIdentityId String?   @map("sender_identity_id") @db.Uuid
+  senderIdentity   Identity? @relation("SentMessages", fields: [senderIdentityId], references: [id])
+  senderCustomerId String?   @map("sender_customer_id") @db.Uuid
+  senderCustomer   Customer? @relation(fields: [senderCustomerId], references: [id])
 
   senderType SenderType @map("sender_type")
 
@@ -780,20 +912,25 @@ model SupportTicketMessage {
 }
 
 model Notification {
-  id String @id @default(uuid()) @db.Uuid
-  workspaceId String? @map("workspace_id") @db.Uuid
-  workspace Workspace? @relation(fields: [workspaceId], references: [id])
+  id          String     @id @default(uuid()) @db.Uuid
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  recipientIdentityId String? @map("recipient_identity_id") @db.Uuid
-  recipientIdentity Identity? @relation(fields: [recipientIdentityId], references: [id])
+  recipientIdentityId String?   @map("recipient_identity_id") @db.Uuid
+  recipientIdentity   Identity? @relation(fields: [recipientIdentityId], references: [id])
 
-  recipientCustomerId String? @map("recipient_customer_id") @db.Uuid
-  recipientCustomer Customer? @relation(fields: [recipientCustomerId], references: [id])
+  recipientCustomerId String?   @map("recipient_customer_id") @db.Uuid
+  recipientCustomer   Customer? @relation(fields: [recipientCustomerId], references: [id])
 
+  type       String
   targetType NotificationTargetType @map("target_type")
-  channel String
-  payload Json
-  isRead Boolean @default(false) @map("is_read")
+  title      String?
+  body       String?
+  payload    Json
+  isRead     Boolean                @default(false) @map("is_read")
+  readAt     DateTime?              @map("read_at")
+
+  deliveries NotificationDelivery[]
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -803,23 +940,56 @@ model Notification {
   @@index([workspaceId, isRead, createdAt])
 }
 
+model NotificationDelivery {
+  id String @id @default(uuid()) @db.Uuid
+
+  notificationId String       @map("notification_id") @db.Uuid
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  channel  NotificationChannel
+  provider String?
+  status   NotificationDeliveryStatus @default(PENDING)
+
+  recipient String
+  subject   String?
+  content   String?
+  payload   Json?
+
+  providerMessageId String? @map("provider_message_id")
+  errorMessage      String? @map("error_message")
+
+  sentAt      DateTime? @map("sent_at")
+  deliveredAt DateTime? @map("delivered_at")
+  failedAt    DateTime? @map("failed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@index([notificationId])
+  @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
+  @@index([channel, status])
+}
+
 // -------------------- ENTITLEMENTS -------------------- //
 
 model Plan {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
   name        String
   description String?
 
-  isActive    Boolean  @default(true) @map("is_active")
-  isPublic    Boolean  @default(true) @map("is_public")
-  sortOrder   Int      @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+  isPublic  Boolean @default(true) @map("is_public")
+  sortOrder Int     @default(0) @map("sort_order")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  features    PlanFeature[]
-  limits      PlanLimit[]
+  features PlanFeature[]
+  limits   PlanLimit[]
   products Product[]
 
   @@index([isActive])
@@ -827,18 +997,18 @@ model Plan {
 }
 
 model Feature {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
   name        String
   description String?
   category    String?
-  isActive    Boolean  @default(true) @map("is_active")
-  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean @default(true) @map("is_active")
+  sortOrder   Int     @default(0) @map("sort_order")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  planFeatures PlanFeature[]
+  planFeatures       PlanFeature[]
   workspaceOverrides WorkspaceFeatureOverride[]
 
   @@index([category, isActive])
@@ -846,19 +1016,19 @@ model Feature {
 }
 
 model LimitDefinition {
-  id          String   @id @default(uuid()) @db.Uuid
-  key         String   @unique
+  id          String  @id @default(uuid()) @db.Uuid
+  key         String  @unique
   name        String
   description String?
-  unit        String?  // e.g. users, projects, GB, seats
+  unit        String? // e.g. users, projects, GB, seats
 
-  isActive    Boolean  @default(true) @map("is_active")
-  sortOrder   Int      @default(0) @map("sort_order")
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  planLimits   PlanLimit[]
+  planLimits         PlanLimit[]
   workspaceOverrides WorkspaceLimitOverride[]
 
   @@index([isActive])
@@ -867,17 +1037,17 @@ model LimitDefinition {
 }
 
 model PlanFeature {
-  id         String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  planId     String   @map("plan_id") @db.Uuid
-  plan       Plan     @relation(fields: [planId], references: [id])
+  planId String @map("plan_id") @db.Uuid
+  plan   Plan   @relation(fields: [planId], references: [id])
 
-  featureId  String   @map("feature_id") @db.Uuid
-  feature    Feature  @relation(fields: [featureId], references: [id])
+  featureId String  @map("feature_id") @db.Uuid
+  feature   Feature @relation(fields: [featureId], references: [id])
 
-  isEnabled  Boolean  @default(true) @map("is_enabled")
+  isEnabled Boolean @default(true) @map("is_enabled")
 
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([planId, featureId])
   @@index([featureId])
@@ -885,17 +1055,17 @@ model PlanFeature {
 }
 
 model PlanLimit {
-  id               String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  planId           String   @map("plan_id") @db.Uuid
-  plan             Plan     @relation(fields: [planId], references: [id])
+  planId String @map("plan_id") @db.Uuid
+  plan   Plan   @relation(fields: [planId], references: [id])
 
-  limitDefinitionId String  @map("limit_definition_id") @db.Uuid
+  limitDefinitionId String          @map("limit_definition_id") @db.Uuid
   limitDefinition   LimitDefinition @relation(fields: [limitDefinitionId], references: [id])
 
-  valueInt         Int      @map("value_int")
+  valueInt Int @map("value_int")
 
-  createdAt        DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([planId, limitDefinitionId])
   @@index([limitDefinitionId])
@@ -903,21 +1073,21 @@ model PlanLimit {
 }
 
 model WorkspaceFeatureOverride {
-  id          String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  workspaceId  String   @map("workspace_id") @db.Uuid
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  featureId    String   @map("feature_id") @db.Uuid
-  feature      Feature  @relation(fields: [featureId], references: [id])
+  featureId String  @map("feature_id") @db.Uuid
+  feature   Feature @relation(fields: [featureId], references: [id])
 
-  isEnabled    Boolean  @map("is_enabled")
+  isEnabled Boolean @map("is_enabled")
 
-  source       EntitlementSource @default(MANUAL)
-  reason       String?
+  source EntitlementSource @default(MANUAL)
+  reason String?
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([workspaceId, featureId])
   @@index([workspaceId])
@@ -925,21 +1095,21 @@ model WorkspaceFeatureOverride {
 }
 
 model WorkspaceLimitOverride {
-  id               String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  workspaceId      String   @map("workspace_id") @db.Uuid
-  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String    @map("workspace_id") @db.Uuid
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
-  limitDefinitionId String  @map("limit_definition_id") @db.Uuid
+  limitDefinitionId String          @map("limit_definition_id") @db.Uuid
   limitDefinition   LimitDefinition @relation(fields: [limitDefinitionId], references: [id])
 
-  valueInt         Int      @map("value_int")
+  valueInt Int @map("value_int")
 
-  source           EntitlementSource @default(MANUAL)
-  reason           String?
+  source EntitlementSource @default(MANUAL)
+  reason String?
 
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([workspaceId, limitDefinitionId])
   @@index([workspaceId])
@@ -952,28 +1122,28 @@ model Product {
   name String
   code String @unique
 
-  planId String? @db.Uuid @map("plan_id") // link to entitlements
-  plan   Plan? @relation(fields: [planId], references: [id])
+  planId String? @map("plan_id") @db.Uuid // link to entitlements
+  plan   Plan?   @relation(fields: [planId], references: [id])
 
-  type ProductType
+  type        ProductType
   description String?
 
-  isActive Boolean @default(true) @map("is_active")  
+  isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  prices Price[]
+  prices       Price[]
   invoiceItems InvoiceItem[]
 
   @@index([planId])
-  @@index([isActive]) 
+  @@index([isActive])
 }
 
 model Price {
   id String @id @default(uuid()) @db.Uuid
 
-  productId String @db.Uuid @map("product_id")
+  productId String  @map("product_id") @db.Uuid
   product   Product @relation(fields: [productId], references: [id])
 
   amount   Int
@@ -986,8 +1156,8 @@ model Price {
   createdAt DateTime @default(now()) @map("created_at")
 
   subscriptions Subscription[]
-  payments Payment[]
-  invoiceItems InvoiceItem[]
+  payments      Payment[]
+  invoiceItems  InvoiceItem[]
 
   @@index([productId])
   @@index([productId, isActive])
@@ -996,17 +1166,17 @@ model Price {
 model Subscription {
   id String @id @default(uuid()) @db.Uuid
 
-  workspaceId String? @db.Uuid @map("workspace_id") // nullable for B2C saas where subscription is directly linked to an end-user identity
+  workspaceId String?    @map("workspace_id") @db.Uuid // nullable for B2C saas where subscription is directly linked to an end-user identity
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  identityId String? @db.Uuid @map("identity_id") // for B2C saas where subscription is directly linked to an end-user identity
+  identityId String?   @map("identity_id") @db.Uuid // for B2C saas where subscription is directly linked to an end-user identity
   identity   Identity? @relation(fields: [identityId], references: [id])
 
-  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where subscription is linked to a customer (end-user) within a workspace
+  customerId String?   @map("customer_id") @db.Uuid // for B2B2C saas where subscription is linked to a customer (end-user) within a workspace
   customer   Customer? @relation(fields: [customerId], references: [id])
 
-  priceId String @db.Uuid @map("price_id")
-  price   Price @relation(fields: [priceId], references: [id])
+  priceId String @map("price_id") @db.Uuid
+  price   Price  @relation(fields: [priceId], references: [id])
 
   status SubscriptionStatus
 
@@ -1015,8 +1185,8 @@ model Subscription {
 
   cancelAtPeriodEnd Boolean @default(false)
 
-  provider PaymentProvider
-  providerSubscriptionId String? @map("provider_subscription_id") @unique
+  provider               PaymentProvider
+  providerSubscriptionId String?         @unique @map("provider_subscription_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1028,46 +1198,46 @@ model Subscription {
   @@index([identityId, status])
   @@index([customerId, status])
   @@index([workspaceId, status])
-  @@index([priceId])  
+  @@index([priceId])
 }
 
 model Payment {
   id String @id @default(uuid()) @db.Uuid
 
-  workspaceId String? @db.Uuid @map("workspace_id") // B2B saas and B2B2C saas where payment is linked to a workspace
+  workspaceId String?    @map("workspace_id") @db.Uuid // B2B saas and B2B2C saas where payment is linked to a workspace
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  identityId String? @db.Uuid @map("identity_id") // for B2C saas where payment is directly linked to an end-user identity
+  identityId String?   @map("identity_id") @db.Uuid // for B2C saas where payment is directly linked to an end-user identity
   identity   Identity? @relation(fields: [identityId], references: [id])
 
-  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where payment is linked to a customer (end-user) within a workspace
+  customerId String?   @map("customer_id") @db.Uuid // for B2B2C saas where payment is linked to a customer (end-user) within a workspace
   customer   Customer? @relation(fields: [customerId], references: [id])
 
-  priceId String? @db.Uuid @map("price_id")
-  price   Price? @relation(fields: [priceId], references: [id])
+  priceId String? @map("price_id") @db.Uuid
+  price   Price?  @relation(fields: [priceId], references: [id])
 
-  subscriptionId String? @db.Uuid @map("subscription_id")
+  subscriptionId String?       @map("subscription_id") @db.Uuid
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
 
-  type PaymentType  @default(ONE_TIME)
+  type PaymentType @default(ONE_TIME)
 
-  paymentProvider PaymentProvider @map("payment_provider") @default(RAZORPAY)
+  paymentProvider PaymentProvider @default(RAZORPAY) @map("payment_provider")
 
-  providerOrderId   String? @map("provider_order_id") @unique
-  providerPaymentId String? @map("provider_payment_id") @unique
-  providerSignature String? @map("provider_signature") 
+  providerOrderId   String? @unique @map("provider_order_id")
+  providerPaymentId String? @unique @map("provider_payment_id")
+  providerSignature String? @map("provider_signature")
 
-  amount   Decimal @db.Decimal(12, 2)
+  amount   Decimal  @db.Decimal(12, 2)
   currency Currency @default(INR)
 
-  paymentStatus PaymentStatus @map("payment_status") @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
 
   description String?
-  metadata Json?
+  metadata    Json?
 
   capturedAt DateTime? @map("captured_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
   attempts PaymentAttempt[]
   refunds  Refund[]
@@ -1085,12 +1255,12 @@ model Payment {
 model PaymentAttempt {
   id String @id @default(uuid()) @db.Uuid
 
-  paymentId String @db.Uuid @map("payment_id")
+  paymentId String  @map("payment_id") @db.Uuid
   payment   Payment @relation(fields: [paymentId], references: [id])
 
   attemptNumber Int @map("attempt_number") // for multiple attempts on the same payment
 
-  provider PaymentProvider @map("payment_provider") @default(RAZORPAY)
+  provider PaymentProvider @default(RAZORPAY) @map("payment_provider")
 
   requestPayload  Json? @map("request_payload")
   responsePayload Json? @map("response_payload")
@@ -1101,34 +1271,34 @@ model PaymentAttempt {
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([paymentId])
   @@unique([paymentId, attemptNumber])
+  @@index([paymentId])
   @@index([paymentId, createdAt])
 }
 
 model Invoice {
   id String @id @default(uuid()) @db.Uuid
 
-  paymentId String? @db.Uuid @map("payment_id")
+  paymentId String?  @map("payment_id") @db.Uuid
   payment   Payment? @relation(fields: [paymentId], references: [id])
 
-  workspaceId String? @db.Uuid @map("workspace_id") // nullable for B2C saas where invoice is directly linked to an end-user identity
+  workspaceId String?    @map("workspace_id") @db.Uuid // nullable for B2C saas where invoice is directly linked to an end-user identity
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  identityId String? @db.Uuid @map("identity_id") // for B2C saas where invoice is directly linked to an end-user identity
+  identityId String?   @map("identity_id") @db.Uuid // for B2C saas where invoice is directly linked to an end-user identity
   identity   Identity? @relation(fields: [identityId], references: [id])
 
-  customerId String? @db.Uuid @map("customer_id") // for B2B2C saas where invoice is linked to a customer (end-user) within a workspace
+  customerId String?   @map("customer_id") @db.Uuid // for B2B2C saas where invoice is linked to a customer (end-user) within a workspace
   customer   Customer? @relation(fields: [customerId], references: [id])
 
   invoiceNumber String @unique @map("invoice_number")
 
-  amount   Decimal @db.Decimal(12, 2)
+  amount   Decimal  @db.Decimal(12, 2)
   currency Currency @default(INR)
 
   status PaymentStatus @default(PENDING)
 
-  issuedAt DateTime @default(now()) @map("issued_at")
+  issuedAt DateTime  @default(now()) @map("issued_at")
   paidAt   DateTime? @map("paid_at")
 
   billingAddress  Json? @map("billing_address")
@@ -1148,19 +1318,19 @@ model Invoice {
 model InvoiceItem {
   id String @id @default(uuid()) @db.Uuid
 
-  invoiceId String @db.Uuid @map("invoice_id")
+  invoiceId String  @map("invoice_id") @db.Uuid
   invoice   Invoice @relation(fields: [invoiceId], references: [id])
 
-  productId String? @db.Uuid @map("product_id")
+  productId String?  @map("product_id") @db.Uuid
   product   Product? @relation(fields: [productId], references: [id])
 
-  priceId String? @db.Uuid @map("price_id")
-  price   Price? @relation(fields: [priceId], references: [id])
+  priceId String? @map("price_id") @db.Uuid
+  price   Price?  @relation(fields: [priceId], references: [id])
 
   quantity Int
 
-  unitPrice Decimal @db.Decimal(12, 2) @map("unit_price")
-  total     Decimal @db.Decimal(12, 2)
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  total     Decimal  @db.Decimal(12, 2)
   currency  Currency @default(INR)
 
   metadata Json?
@@ -1171,10 +1341,10 @@ model InvoiceItem {
 model Refund {
   id String @id @default(uuid()) @db.Uuid
 
-  paymentId String @db.Uuid @map("payment_id")
+  paymentId String  @map("payment_id") @db.Uuid
   payment   Payment @relation(fields: [paymentId], references: [id])
 
-  amount   Decimal @db.Decimal(12, 2)
+  amount   Decimal  @db.Decimal(12, 2)
   currency Currency @default(INR)
 
   status RefundStatus @default(PENDING)
@@ -1182,44 +1352,44 @@ model Refund {
   reason RefundReason? @default(USER_REQUEST)
   notes  String?
 
-  paymentProvider PaymentProvider @map("payment_provider") @default(RAZORPAY) 
+  paymentProvider PaymentProvider @default(RAZORPAY) @map("payment_provider")
 
-  providerRefundId String? @map("provider_refund_id") @unique
+  providerRefundId String? @unique @map("provider_refund_id")
 
   metadata Json?
 
   processedAt DateTime? @map("processed_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([paymentId])
   @@index([status])
 }
 
 model WebhookEvent {
-  id            String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  provider      String   // stripe, razorpay
-  eventType     String @map("event_type") // e.g. invoice.paid, payment.failed
-  externalId    String @map("external_id")   // provider event id
+  provider   String // stripe, razorpay
+  eventType  String @map("event_type") // e.g. invoice.paid, payment.failed
+  externalId String @map("external_id") // provider event id
 
-  payload       Json
+  payload Json
 
-  status        WebhookStatus @default(RECEIVED)
+  status WebhookStatus @default(RECEIVED)
 
-  attempts      Int      @default(0)
-  nextRetryAt   DateTime? @map("next_retry_at")
-  processedAt   DateTime? @map("processed_at")
-  error         String?
+  attempts    Int       @default(0)
+  nextRetryAt DateTime? @map("next_retry_at")
+  processedAt DateTime? @map("processed_at")
+  error       String?
 
-  workspaceId   String? @map("workspace_id") @db.Uuid
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
-  identityId    String? @map("identity_id") @db.Uuid
-  identity      Identity? @relation(fields: [identityId], references: [id])
-  customerId    String? @map("customer_id") @db.Uuid
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId  String?    @map("identity_id") @db.Uuid
+  identity    Identity?  @relation(fields: [identityId], references: [id])
+  customerId  String?    @map("customer_id") @db.Uuid
+  customer    Customer?  @relation(fields: [customerId], references: [id])
 
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([provider, externalId])
   @@index([status, nextRetryAt])
@@ -1229,32 +1399,32 @@ model WebhookEvent {
 }
 
 model OutboxEvent {
-  id            String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  eventType     String @map("event_type") // e.g. send_email, webhook_notification
-  payload       Json
+  eventType String @map("event_type") // e.g. send_email, webhook_notification
+  payload   Json
 
-  status        OutboxStatus @default(PENDING)
-  attempts      Int      @default(0)
+  status   OutboxStatus @default(PENDING)
+  attempts Int          @default(0)
 
-  nextRetryAt   DateTime? @map("next_retry_at")
-  scheduledAt   DateTime? @map("scheduled_at")
-  lockedAt      DateTime? @map("locked_at") // for distributed locking when processing
+  nextRetryAt DateTime? @map("next_retry_at")
+  scheduledAt DateTime? @map("scheduled_at")
+  lockedAt    DateTime? @map("locked_at") // for distributed locking when processing
 
   jobId         String? @map("job_id") // QStash message ID
-  processingKey String?  @unique @map("processing_key") // for idempotent processing
+  processingKey String? @unique @map("processing_key") // for idempotent processing
 
-  processedAt   DateTime? @map("processed_at")
-  lastError     String? @map("last_error")
+  processedAt DateTime? @map("processed_at")
+  lastError   String?   @map("last_error")
 
-  workspaceId   String? @map("workspace_id") @db.Uuid
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
-  identityId    String? @map("identity_id") @db.Uuid
-  identity      Identity? @relation(fields: [identityId], references: [id])
-  customerId    String? @map("customer_id") @db.Uuid
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId  String?    @map("identity_id") @db.Uuid
+  identity    Identity?  @relation(fields: [identityId], references: [id])
+  customerId  String?    @map("customer_id") @db.Uuid
+  customer    Customer?  @relation(fields: [customerId], references: [id])
 
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([status, nextRetryAt])
   @@index([status, scheduledAt])
@@ -1264,58 +1434,58 @@ model OutboxEvent {
 }
 
 model Media {
-  id            String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  fileName      String @map("file_name")
-  mimeType      String @map("mime_type")
-  size          Int
+  fileName String @map("file_name")
+  mimeType String @map("mime_type")
+  size     Int
 
-  storageKey    String  @map("storage_key") // B2 key
-  url           String
-  cdnUrl        String? @map("cdn_url")
+  storageKey String  @map("storage_key") // B2 key
+  url        String
+  cdnUrl     String? @map("cdn_url")
 
-  status        MediaStatus @default(UPLOADING)
+  status MediaStatus @default(UPLOADING)
 
-  checksum      String?  // integrity check
-  metadata      Json?
+  checksum String? // integrity check
+  metadata Json?
 
-  workspaceId   String? @map("workspace_id") @db.Uuid
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
-  identityId    String? @map("identity_id") @db.Uuid
-  identity      Identity? @relation(fields: [identityId], references: [id])
-  customerId    String? @map("customer_id") @db.Uuid
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId  String?    @map("identity_id") @db.Uuid
+  identity    Identity?  @relation(fields: [identityId], references: [id])
+  customerId  String?    @map("customer_id") @db.Uuid
+  customer    Customer?  @relation(fields: [customerId], references: [id])
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   fileAttachments FileAttachment[]
-  mediaJobs MediaJob[]
+  mediaJobs       MediaJob[]
 
+  @@unique([storageKey])
   @@index([workspaceId])
   @@index([identityId])
   @@index([customerId])
   @@index([status])
-  @@unique([storageKey])
 }
 
 model FileAttachment {
-  id            String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  mediaId       String @map("media_id") @db.Uuid
-  media         Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  mediaId String @map("media_id") @db.Uuid
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
 
-  entityType    String @map("entity_type")  // SUPPORT_TICKET, MESSAGE, etc.
-  entityId      String @map("entity_id")
+  entityType String @map("entity_type") // SUPPORT_TICKET, MESSAGE, etc.
+  entityId   String @map("entity_id")
 
-  workspaceId   String? @map("workspace_id") @db.Uuid
-  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
-  identityId    String? @map("identity_id") @db.Uuid
-  identity      Identity? @relation(fields: [identityId], references: [id])
-  customerId    String? @map("customer_id") @db.Uuid
-  customer      Customer? @relation(fields: [customerId], references: [id])
+  workspaceId String?    @map("workspace_id") @db.Uuid
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  identityId  String?    @map("identity_id") @db.Uuid
+  identity    Identity?  @relation(fields: [identityId], references: [id])
+  customerId  String?    @map("customer_id") @db.Uuid
+  customer    Customer?  @relation(fields: [customerId], references: [id])
 
-  createdAt     DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([entityType, entityId])
   @@index([mediaId])
@@ -1323,16 +1493,16 @@ model FileAttachment {
 }
 
 model MediaJob {
-  id          String   @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
-  mediaId     String @map("media_id") @db.Uuid
-  media       Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
-  jobType     String  @map("job_type") // THUMBNAIL, SCAN, etc.
+  mediaId String @map("media_id") @db.Uuid
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  jobType String @map("job_type") // THUMBNAIL, SCAN, etc.
 
-  status      MediaJobStatus @default(PENDING)
-  error       String?
+  status MediaJobStatus @default(PENDING)
+  error  String?
 
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
   processedAt DateTime? @map("processed_at")
 
   @@index([mediaId])

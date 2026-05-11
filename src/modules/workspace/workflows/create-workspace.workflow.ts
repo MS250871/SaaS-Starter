@@ -1,10 +1,10 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { WorkspaceRole } from '@/generated/prisma/client';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
+import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/role.services';
 import { createMembership } from '@/modules/workspace/services/membership.services';
 import { createWorkspaceSettings } from '@/modules/workspace/services/setting.services';
 import {
@@ -40,6 +40,7 @@ export async function createWorkspaceWorkflow(input: {
 
     const identity = await getIdentityById(input.identityId);
     const rootDomain = getWorkspaceRootDomain();
+    const ownerRole = await getWorkspaceOwnerRoleDefinition();
 
     const workspace = await createWorkspace({
       name: input.workspaceName,
@@ -51,7 +52,9 @@ export async function createWorkspaceWorkflow(input: {
     const membership = await createMembership({
       workspaceId: workspace.id,
       identityId: input.identityId,
-      role: WorkspaceRole.OWNER,
+      roleDefinitionId: ownerRole.id,
+      roleKey: ownerRole.key,
+      roleSystemKey: ownerRole.systemKey ?? undefined,
     });
 
     let trialStartsAt: Date | null = null;
@@ -71,6 +74,7 @@ export async function createWorkspaceWorkflow(input: {
 
       const subscription = await createSubscription({
         workspaceId: workspace.id,
+        identityId: input.identityId,
         priceId: price.id,
         status: 'TRIALING',
         provider: 'RAZORPAY',
@@ -99,6 +103,9 @@ export async function createWorkspaceWorkflow(input: {
     return {
       workspaceId: workspace.id,
       membershipId: membership.id,
+      roleDefinitionId: membership.roleDefinitionId,
+      roleKey: membership.roleKey,
+      roleSystemKey: membership.roleSystemKey,
       slug: workspace.slug,
       isActive: workspace.isActive,
       primaryDomain: workspace.defaultDomain,

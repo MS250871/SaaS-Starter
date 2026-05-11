@@ -1,7 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import type {
+  PlatformRoleSystemKey,
+  WorkspaceRoleSystemKey,
+} from '@/modules/roles/role.types';
 
 export type ActorContext = {
   actorType: 'identity' | 'customer' | 'system';
@@ -9,11 +12,15 @@ export type ActorContext = {
   identityId?: string;
   customerId?: string;
 
-  platformRole?: PlatformRole;
+  platformRole?: string;
+  platformRoleKeys?: string[];
+  platformRoleSystemKeys?: PlatformRoleSystemKey[];
   isPlatformAdmin?: boolean;
 
   workspaceId?: string;
-  workspaceRole?: WorkspaceRole;
+  workspaceRole?: string;
+  workspaceRoleKey?: string;
+  workspaceRoleSystemKey?: WorkspaceRoleSystemKey;
   membershipId?: string;
   permissions: string[];
 };

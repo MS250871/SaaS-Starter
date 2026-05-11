@@ -19,6 +19,7 @@ html {
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-icon: var(--sidebar-icon);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
@@ -82,6 +83,7 @@ html {
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-icon: oklch(0.556 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 }
@@ -116,6 +118,7 @@ html {
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-icon: oklch(0.708 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
 }
@@ -177,4 +180,72 @@ html {
   background-image:
     linear-gradient(to right, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+}
+
+.workspace-surface {
+  --primary: var(--workspace-primary, var(--primary));
+  --primary-foreground: var(
+    --workspace-primary-foreground,
+    var(--primary-foreground)
+  );
+  --ring: var(--workspace-primary, var(--ring));
+  --accent: var(--workspace-accent, var(--accent));
+  --accent-foreground: var(
+    --workspace-accent-foreground,
+    var(--accent-foreground)
+  );
+  --workspace-accent-soft-current: var(--workspace-accent-soft-light);
+  --workspace-accent-border-current: var(--workspace-accent-border-light);
+  --sidebar-primary: var(--workspace-sidebar-primary, var(--sidebar-primary));
+  --sidebar-primary-foreground: var(
+    --workspace-sidebar-primary-foreground,
+    var(--sidebar-primary-foreground)
+  );
+  --sidebar-accent: var(
+    --workspace-sidebar-accent-light,
+    var(--sidebar-accent)
+  );
+  --sidebar-accent-foreground: var(
+    --workspace-sidebar-accent-foreground-light,
+    var(--sidebar-accent-foreground)
+  );
+  --sidebar-icon: var(--workspace-sidebar-icon, var(--sidebar-icon));
+  --sidebar-ring: var(--workspace-sidebar-ring, var(--sidebar-ring));
+  font-family: var(--workspace-body-font, var(--font-sans));
+}
+
+.workspace-surface :is(h1, h2, h3, h4, h5, h6, [data-workspace-heading]) {
+  font-family: var(--workspace-heading-font, var(--font-sans));
+}
+
+.workspace-surface [data-slot="badge"][data-variant="secondary"] {
+  background-color: var(--workspace-accent-soft-current);
+  color: var(--accent);
+  border-color: var(--workspace-accent-border-current);
+}
+
+.workspace-surface .workspace-info-card {
+  border-color: var(--workspace-accent-border-current);
+  background-color: var(--card);
+}
+
+.workspace-surface .workspace-info-label {
+  color: var(--accent);
+}
+
+.workspace-surface .workspace-info-value {
+  color: var(--primary);
+}
+
+.dark .workspace-surface {
+  --workspace-accent-soft-current: var(--workspace-accent-soft-dark);
+  --workspace-accent-border-current: var(--workspace-accent-border-dark);
+  --sidebar-accent: var(
+    --workspace-sidebar-accent-dark,
+    var(--sidebar-accent)
+  );
+  --sidebar-accent-foreground: var(
+    --workspace-sidebar-accent-foreground-dark,
+    var(--sidebar-accent-foreground)
+  );
 }

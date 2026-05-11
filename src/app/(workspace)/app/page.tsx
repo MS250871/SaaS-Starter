@@ -1,11 +1,25 @@
-import { DestinationPlaceholder } from '@/components/layout/destination-placeholder';
+import { WorkspaceOverviewPanel } from "@/modules/workspace/components/workspace-admin-dashboard"
+import { getWorkspaceOverviewPageData } from "@/modules/workspace/server/workspace-admin-page-data"
 
-export default function WorkspaceAppPage() {
+export default async function WorkspaceAppPage() {
+  const { actor, requestContext, workspaceSummary, workspaceId } =
+    await getWorkspaceOverviewPageData()
+
+  if (!workspaceId || !workspaceSummary) {
+    return (
+      <div className="flex min-h-svh items-center justify-center p-6">
+        <div className="rounded-xl border bg-background p-8 text-sm text-muted-foreground shadow-sm">
+          Workspace context missing for this route.
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <DestinationPlaceholder
-      route="/app"
-      title="Workspace Dashboard Placeholder"
-      description="This is a temporary landing page for workspace members after post-login. We can turn this into the real workspace dashboard flow next."
+    <WorkspaceOverviewPanel
+      workspace={workspaceSummary}
+      actor={actor}
+      requestContext={requestContext}
     />
-  );
+  )
 }

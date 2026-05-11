@@ -7,16 +7,18 @@ import { cn } from '@/lib/utils';
 export function AuthButtons({
   isLoggedIn,
   className,
+  dashboardHref = "/app",
 }: {
   isLoggedIn?: boolean;
   className?: string;
+  dashboardHref?: string;
 }) {
   isLoggedIn = !!isLoggedIn;
   return (
     <div className={cn('flex items-center gap-3', className)}>
       {isLoggedIn ? (
         <>
-          <Link href="/dashboard" aria-label="Open dashboard">
+          <Link href={dashboardHref} aria-label="Open dashboard">
             <Button variant="outline" size="sm">
               Dashboard
             </Button>

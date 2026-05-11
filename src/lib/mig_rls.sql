@@ -1,8 +1,8 @@
 -- ============================================================
 -- RLS MIGRATION (Neon/PostgreSQL + Prisma raw SQL)
 -- Assumes app.* variables are already set via SET LOCAL in a transaction.
--- Global/reference tables intentionally left without RLS:
--- Permission, RolePermission,
+-- Global/reference tables that remain readable across the app:
+-- RoleDefinition, Permission, RolePermission,
 -- Plan, Feature, LimitDefinition, PlanFeature, PlanLimit, Product, Price
 -- ============================================================
 
@@ -51,6 +51,52 @@ AS $$
   SELECT nullif(current_setting('app.platform_role', true), '');
 $$;
 
+CREATE OR REPLACE FUNCTION app.current_platform_role_keys()
+RETURNS text[]
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT coalesce(
+    ARRAY(
+      SELECT jsonb_array_elements_text(
+        coalesce(nullif(current_setting('app.platform_role_keys', true), ''), '[]')::jsonb
+      )
+    ),
+    ARRAY[]::text[]
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION app.current_platform_role_system_keys()
+RETURNS text[]
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT coalesce(
+    ARRAY(
+      SELECT jsonb_array_elements_text(
+        coalesce(nullif(current_setting('app.platform_role_system_keys', true), ''), '[]')::jsonb
+      )
+    ),
+    ARRAY[]::text[]
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION app.has_platform_role_key(p_role_key text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT p_role_key = ANY(app.current_platform_role_keys());
+$$;
+
+CREATE OR REPLACE FUNCTION app.has_platform_role_system_key(p_system_key text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT p_system_key = ANY(app.current_platform_role_system_keys());
+$$;
+
 CREATE OR REPLACE FUNCTION app.current_actor_type()
 RETURNS text
 LANGUAGE sql
@@ -73,7 +119,9 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT coalesce(current_setting('app.is_platform_admin', true), '') = 'true'
-      OR coalesce(app.current_platform_role(), '') = 'PLATFORM_ADMIN';
+      OR app.has_platform_role_system_key('PLATFORM_ADMIN')
+      OR app.has_platform_role_key('platform-admin')
+      OR coalesce(app.current_platform_role(), '') IN ('PLATFORM_ADMIN', 'platform-admin');
 $$;
 
 CREATE OR REPLACE FUNCTION app.is_platform_staff()
@@ -81,9 +129,13 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT coalesce(app.current_platform_role(), '') IN
-    ('PLATFORM_ADMIN', 'BILLING_AGENT', 'SUPPORT_AGENT', 'PLATFORM_STAFF')
-     OR app.is_platform_admin();
+  SELECT app.is_platform_admin()
+      OR app.has_platform_role_system_key('PLATFORM_STAFF')
+      OR app.has_platform_role_system_key('PLATFORM_BILLING_AGENT')
+      OR app.has_platform_role_system_key('PLATFORM_SUPPORT_AGENT')
+      OR app.has_platform_role_key('platform-staff')
+      OR app.has_platform_role_key('billing-agent')
+      OR app.has_platform_role_key('support-agent');
 $$;
 
 CREATE OR REPLACE FUNCTION app.is_platform_billing()
@@ -92,7 +144,8 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT app.is_platform_admin()
-      OR coalesce(app.current_platform_role(), '') = 'BILLING_AGENT';
+      OR app.has_platform_role_system_key('PLATFORM_BILLING_AGENT')
+      OR app.has_platform_role_key('billing-agent');
 $$;
 
 CREATE OR REPLACE FUNCTION app.is_platform_support()
@@ -101,7 +154,8 @@ LANGUAGE sql
 STABLE
 AS $$
   SELECT app.is_platform_admin()
-      OR coalesce(app.current_platform_role(), '') = 'SUPPORT_AGENT';
+      OR app.has_platform_role_system_key('PLATFORM_SUPPORT_AGENT')
+      OR app.has_platform_role_key('support-agent');
 $$;
 
 CREATE OR REPLACE FUNCTION app.can_view_workspace(p_workspace_id uuid)
@@ -131,7 +185,7 @@ AS $$
         WHERE m.workspace_id = p_workspace_id
           AND m.identity_id = app.current_identity_id()
           AND m.is_active = true
-          AND m.role IN ('OWNER', 'ADMIN')
+          AND m.role_system_key IN ('WORKSPACE_OWNER', 'WORKSPACE_ADMIN')
       );
 $$;
 
@@ -1406,7 +1460,7 @@ WITH CHECK (
       JOIN "Identity" i
         ON i.id = app.current_identity_id()
       WHERE pi.email = i.email
-        AND pi.role = "PlatformMembership".role
+        AND pi.role_definition_id = "PlatformMembership".role_definition_id
         AND pi.status = 'PENDING'
     )
   )
@@ -1649,6 +1703,9 @@ ALTER TABLE "Permission" FORCE ROW LEVEL SECURITY;
 ALTER TABLE "RolePermission" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "RolePermission" FORCE ROW LEVEL SECURITY;
 
+ALTER TABLE "RoleDefinition" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "RoleDefinition" FORCE ROW LEVEL SECURITY;
+
 ALTER TABLE "Plan" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Plan" FORCE ROW LEVEL SECURITY;
 
@@ -1704,6 +1761,46 @@ WITH CHECK (
 DROP POLICY IF EXISTS permission_delete ON "Permission";
 CREATE POLICY permission_delete
 ON "Permission"
+FOR DELETE
+USING (
+  app.is_system_actor()
+  OR app.is_platform_admin()
+);
+
+/* =========================================================
+   ROLE DEFINITION
+========================================================= */
+DROP POLICY IF EXISTS roledefinition_select ON "RoleDefinition";
+CREATE POLICY roledefinition_select
+ON "RoleDefinition"
+FOR SELECT
+USING (true);
+
+DROP POLICY IF EXISTS roledefinition_insert ON "RoleDefinition";
+CREATE POLICY roledefinition_insert
+ON "RoleDefinition"
+FOR INSERT
+WITH CHECK (
+  app.is_system_actor()
+  OR app.is_platform_admin()
+);
+
+DROP POLICY IF EXISTS roledefinition_update ON "RoleDefinition";
+CREATE POLICY roledefinition_update
+ON "RoleDefinition"
+FOR UPDATE
+USING (
+  app.is_system_actor()
+  OR app.is_platform_admin()
+)
+WITH CHECK (
+  app.is_system_actor()
+  OR app.is_platform_admin()
+);
+
+DROP POLICY IF EXISTS roledefinition_delete ON "RoleDefinition";
+CREATE POLICY roledefinition_delete
+ON "RoleDefinition"
 FOR DELETE
 USING (
   app.is_system_actor()

@@ -259,7 +259,7 @@ export async function createMedia(data: CreateInput<'Media'>) {
       url,
       ...(cdnUrl ? { cdnUrl } : {}),
       status: data.status ?? 'UPLOADING',
-    });
+    } as CreateInput<'Media'>);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create media', undefined, e);
   }
@@ -421,7 +421,7 @@ export async function getMediaDownloadUrl(
   return createPresignedDownloadUrl({
     key: media.storageKey,
     expiresInSeconds: params?.expiresInSeconds,
-    downloadFileName: params?.downloadFileName ?? media.fileName,
+    downloadFileName: params?.downloadFileName,
     responseContentType: media.mimeType,
   });
 }
@@ -714,11 +714,11 @@ export async function syncMediaStatusFromJobs(
     return getMediaById(mediaId);
   }
 
-  if (jobs.some((job) => job.status === 'FAILED')) {
+  if (jobs.some((job: (typeof jobs)[number]) => job.status === 'FAILED')) {
     return markMediaFailed(mediaId);
   }
 
-  if (jobs.some((job) => job.status === 'PENDING')) {
+  if (jobs.some((job: (typeof jobs)[number]) => job.status === 'PENDING')) {
     return markMediaProcessing(mediaId);
   }
 

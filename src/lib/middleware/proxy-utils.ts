@@ -13,6 +13,26 @@ export function getRootDomainHost() {
   return normalizeHostname(process.env.ROOT_DOMAIN || '');
 }
 
+function isLocalRootHostAlias(host: string, rootHost: string) {
+  if (process.env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  if (!rootHost.endsWith('.localhost')) {
+    return false;
+  }
+
+  return host === 'localhost' || host === '127.0.0.1';
+}
+
+export function isRootWorkspaceHost(host: string, rootHost: string) {
+  if (!rootHost) {
+    return false;
+  }
+
+  return host === rootHost || isLocalRootHostAlias(host, rootHost);
+}
+
 export function getSubdomains(host: string) {
   const parts = host.split('.');
 
@@ -35,7 +55,7 @@ export function resolveFreeWorkspacePath(req: NextRequest) {
   const rootHost = getRootDomainHost();
   const host = normalizeHostname(getHostname(req));
 
-  if (!rootHost || host !== rootHost) {
+  if (!isRootWorkspaceHost(host, rootHost)) {
     return null;
   }
 

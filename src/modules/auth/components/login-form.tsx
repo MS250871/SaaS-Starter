@@ -179,9 +179,7 @@ export function LoginForm({
                 <Field>
                   <FieldDescription className="text-center">
                     New here?{' '}
-                    <Link href={`/signup?intent=${intent}`}>
-                      Create account
-                    </Link>
+                    <Link href={`/signup?intent=${intent}`}>Create account</Link>
                   </FieldDescription>
                 </Field>
               </FieldGroup>

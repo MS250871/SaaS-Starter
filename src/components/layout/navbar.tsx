@@ -9,7 +9,13 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { MobileMenu } from './mobile-menu';
 import { AuthButtons } from './auth-buttons';
 
-export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
+export function Navbar({
+  isLoggedIn = false,
+  dashboardHref = "/app",
+}: {
+  isLoggedIn?: boolean
+  dashboardHref?: string
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -28,7 +34,7 @@ export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
           <ThemeToggle />
 
           <div className="hidden lg:flex items-center gap-3">
-            <AuthButtons isLoggedIn={isLoggedIn} />
+            <AuthButtons isLoggedIn={isLoggedIn} dashboardHref={dashboardHref} />
           </div>
 
           {/* Mobile menu button */}
@@ -41,7 +47,12 @@ export function Navbar({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
         </div>
       </div>
 
-      <MobileMenu open={open} setOpen={setOpen} isLoggedIn={isLoggedIn} />
+          <MobileMenu
+            open={open}
+            setOpen={setOpen}
+            isLoggedIn={isLoggedIn}
+            dashboardHref={dashboardHref}
+          />
     </div>
   );
 }

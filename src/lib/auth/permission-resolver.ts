@@ -1,50 +1,48 @@
 import { prisma } from '@/lib/prisma';
-import { WorkspaceRole, PlatformRole } from '@/generated/prisma/client';
 
 type ResolveParams = {
   identityId?: string;
   workspaceId?: string;
-  workspaceRole?: WorkspaceRole;
-  platformRole?: PlatformRole;
+  workspaceRoleDefinitionId?: string;
+  platformRoleDefinitionIds?: string[];
 };
 
 export async function resolvePermissions({
   identityId,
   workspaceId,
-  workspaceRole,
-  platformRole,
+  workspaceRoleDefinitionId,
+  platformRoleDefinitionIds,
 }: ResolveParams): Promise<string[]> {
-  /* ---------------------------------------------------------------------- */
-  /*                          1. BASE ROLE PERMISSIONS                       */
-  /* ---------------------------------------------------------------------- */
+  const roleDefinitionIds = [
+    workspaceRoleDefinitionId,
+    ...(platformRoleDefinitionIds ?? []),
+  ].filter((value): value is string => Boolean(value));
 
-  const rolePermissions = await prisma.rolePermission.findMany({
-    where: {
-      OR: [
-        workspaceRole ? { workspaceRole } : undefined,
-        platformRole ? { platformRole } : undefined,
-      ].filter(Boolean) as any,
-    },
-    include: {
-      permission: {
-        select: { key: true },
-      },
-    },
-  });
+  const rolePermissions =
+    roleDefinitionIds.length > 0
+      ? await prisma.rolePermission.findMany({
+          where: {
+            roleDefinitionId: {
+              in: roleDefinitionIds,
+            },
+          },
+          include: {
+            permission: {
+              select: { key: true },
+            },
+          },
+        })
+      : [];
 
-  let permissions = new Set<string>(
-    rolePermissions.map((rp) => rp.permission.key),
+  const permissions = new Set<string>(
+    rolePermissions.map((rolePermission) => rolePermission.permission.key),
   );
 
-  /* ---------------------------------------------------------------------- */
-  /*                    2. WORKSPACE ROLE OVERRIDES                          */
-  /* ---------------------------------------------------------------------- */
-
-  if (workspaceId && workspaceRole) {
+  if (workspaceId && workspaceRoleDefinitionId) {
     const workspaceOverrides = await prisma.workspaceRolePermission.findMany({
       where: {
         workspaceId,
-        workspaceRole,
+        roleDefinitionId: workspaceRoleDefinitionId,
       },
       include: {
         permission: {
@@ -64,10 +62,6 @@ export async function resolvePermissions({
     }
   }
 
-  /* ---------------------------------------------------------------------- */
-  /*                          3. USER PERMISSIONS                            */
-  /* ---------------------------------------------------------------------- */
-
   if (identityId) {
     const userPermissions = await prisma.userPermission.findMany({
       where: {
@@ -84,14 +78,12 @@ export async function resolvePermissions({
 
     const now = new Date();
 
-    for (const up of userPermissions) {
-      const key = up.permission.key;
+    for (const userPermission of userPermissions) {
+      const key = userPermission.permission.key;
 
-      // skip expired
-      if (up.expiresAt && up.expiresAt < now) continue;
+      if (userPermission.expiresAt && userPermission.expiresAt < now) continue;
 
-      // revoked
-      if (up.revokedAt) {
+      if (userPermission.revokedAt) {
         permissions.delete(key);
       } else {
         permissions.add(key);

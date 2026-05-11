@@ -1,5 +1,14 @@
 import { z } from 'zod';
+import { normalizePhone } from '@/lib/auth/auth-utils';
 import { reservedWorkspaceSlugs } from '@/modules/workspace/constants';
+import {
+  isWorkspaceApiKeyScope,
+  workspaceApiKeyScopes,
+} from '@/modules/workspace/api-key-scopes';
+import {
+  workspaceFontOptions,
+  workspaceRadiusOptions,
+} from '@/modules/workspace/theme';
 
 function normalizeWorkspaceName(value: string) {
   return value.trim().replace(/\s+/g, ' ');
@@ -61,3 +70,389 @@ export const createWorkspaceSchema = createWorkspaceActionSchema.transform(
 );
 
 export type CreateWorkspaceDomain = z.output<typeof createWorkspaceSchema>;
+
+function normalizeWorkspacePersonName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export const createWorkspaceCustomerFormSchema = z.object({
+  firstName: z
+    .string()
+    .trim()
+    .min(2, 'First name is too short')
+    .max(80, 'First name is too long'),
+  lastName: z
+    .string()
+    .trim()
+    .min(2, 'Last name is too short')
+    .max(80, 'Last name is too long'),
+  email: z.email('Enter a valid email address'),
+  phone: z
+    .string()
+    .trim()
+    .min(6, 'Phone number too short')
+    .max(20, 'Phone number too long'),
+  externalId: z
+    .string()
+    .trim()
+    .max(120, 'External ID is too long')
+    .optional()
+    .or(z.literal('')),
+});
+
+export type CreateWorkspaceCustomerFormInput = z.input<
+  typeof createWorkspaceCustomerFormSchema
+>;
+
+export const createWorkspaceCustomerActionSchema =
+  createWorkspaceCustomerFormSchema;
+
+export type CreateWorkspaceCustomerActionInput = z.input<
+  typeof createWorkspaceCustomerActionSchema
+>;
+
+export const createWorkspaceCustomerSchema =
+  createWorkspaceCustomerActionSchema.transform((data) => {
+    const normalizedPhone = normalizePhone(data.phone);
+
+    if (!normalizedPhone.valid || !normalizedPhone.e164) {
+      throw new z.ZodError([
+        {
+          code: 'custom',
+          path: ['phone'],
+          message: 'Enter a valid phone number',
+        },
+      ]);
+    }
+
+    return {
+      firstName: normalizeWorkspacePersonName(data.firstName),
+      lastName: normalizeWorkspacePersonName(data.lastName),
+      email: data.email.trim().toLowerCase(),
+      phone: String(normalizedPhone.e164),
+      externalId: data.externalId?.trim() || null,
+    };
+  });
+
+export type CreateWorkspaceCustomerDomain = z.output<
+  typeof createWorkspaceCustomerSchema
+>;
+
+const hexColorSchema = z.string().regex(/^#([0-9a-fA-F]{6})$/, {
+  message: 'Enter a valid 6-digit hex color',
+});
+
+export const workspaceThemeFormSchema = z.object({
+  primaryColor: hexColorSchema,
+  accentColor: hexColorSchema,
+  headingFont: z.enum(workspaceFontOptions),
+  bodyFont: z.enum(workspaceFontOptions),
+  radius: z.enum(workspaceRadiusOptions),
+});
+
+export type WorkspaceThemeFormInput = z.input<typeof workspaceThemeFormSchema>;
+
+export const updateWorkspaceThemeActionSchema = workspaceThemeFormSchema;
+
+export type UpdateWorkspaceThemeActionInput = z.input<
+  typeof updateWorkspaceThemeActionSchema
+>;
+
+export const updateWorkspaceThemeSchema =
+  updateWorkspaceThemeActionSchema.transform((data) => ({
+    brand: {
+      primary: data.primaryColor,
+      accent: data.accentColor,
+    },
+    typography: {
+      headingFont: data.headingFont,
+      bodyFont: data.bodyFont,
+    },
+    shape: {
+      radius: data.radius,
+    },
+  }));
+
+export type UpdateWorkspaceThemeDomain = z.output<
+  typeof updateWorkspaceThemeSchema
+>;
+
+export const createWorkspaceInviteFormSchema = z.object({
+  email: z.email('Enter a valid email address'),
+  roleKey: z
+    .string()
+    .trim()
+    .min(1, 'Select a workspace role'),
+});
+
+export type CreateWorkspaceInviteFormInput = z.input<
+  typeof createWorkspaceInviteFormSchema
+>;
+
+export const createWorkspaceInviteActionSchema =
+  createWorkspaceInviteFormSchema;
+
+export type CreateWorkspaceInviteActionInput = z.input<
+  typeof createWorkspaceInviteActionSchema
+>;
+
+export const createWorkspaceInviteSchema =
+  createWorkspaceInviteActionSchema.transform((data) => ({
+    email: data.email.trim().toLowerCase(),
+    roleKey: data.roleKey.trim(),
+  }));
+
+export type CreateWorkspaceInviteDomain = z.output<
+  typeof createWorkspaceInviteSchema
+>;
+
+export const workspaceCustomDomainFormSchema = z.object({
+  domain: z.string().min(1, 'Custom domain is required'),
+  routingMode: z.enum(['CNAME', 'APEX_A']).default('CNAME'),
+});
+
+export type WorkspaceCustomDomainFormInput = z.input<
+  typeof workspaceCustomDomainFormSchema
+>;
+
+export const createWorkspaceCustomDomainActionSchema =
+  workspaceCustomDomainFormSchema;
+
+export type CreateWorkspaceCustomDomainActionInput = z.input<
+  typeof createWorkspaceCustomDomainActionSchema
+>;
+
+export const createWorkspaceCustomDomainSchema =
+  createWorkspaceCustomDomainActionSchema.transform((data) => ({
+    domain: data.domain.trim().toLowerCase(),
+    routingMode: data.routingMode,
+  }));
+
+export type CreateWorkspaceCustomDomainDomain = z.output<
+  typeof createWorkspaceCustomDomainSchema
+>;
+
+export const refreshWorkspaceCustomDomainVerificationActionSchema = z.object({
+  workspaceDomainId: z.string().uuid('Invalid workspace domain id'),
+});
+
+export type RefreshWorkspaceCustomDomainVerificationActionInput = z.input<
+  typeof refreshWorkspaceCustomDomainVerificationActionSchema
+>;
+
+export const workspaceRedirectAliasFormSchema = z.object({
+  domain: z.string().min(1, 'Redirect alias is required'),
+  routingMode: z.enum(['CNAME', 'APEX_A']).default('APEX_A'),
+});
+
+export type WorkspaceRedirectAliasFormInput = z.input<
+  typeof workspaceRedirectAliasFormSchema
+>;
+
+export const createWorkspaceRedirectAliasActionSchema =
+  workspaceRedirectAliasFormSchema;
+
+export type CreateWorkspaceRedirectAliasActionInput = z.input<
+  typeof createWorkspaceRedirectAliasActionSchema
+>;
+
+export const createWorkspaceRedirectAliasSchema =
+  createWorkspaceRedirectAliasActionSchema.transform((data) => ({
+    domain: data.domain.trim().toLowerCase(),
+    routingMode: data.routingMode,
+  }));
+
+export type CreateWorkspaceRedirectAliasDomain = z.output<
+  typeof createWorkspaceRedirectAliasSchema
+>;
+
+export const workspaceRolePermissionOverrideActionSchema = z.object({
+  roleDefinitionId: z.string().uuid('Invalid role definition id'),
+  permissionId: z.string().uuid('Invalid permission id'),
+  mode: z.enum(['inherit', 'allow', 'deny']),
+});
+
+export type WorkspaceRolePermissionOverrideActionInput = z.input<
+  typeof workspaceRolePermissionOverrideActionSchema
+>;
+
+export const workspaceUserPermissionOverrideActionSchema = z.object({
+  identityId: z.string().uuid('Invalid identity id'),
+  permissionId: z.string().uuid('Invalid permission id'),
+  effect: z.enum(['ALLOW', 'DENY']),
+});
+
+export type WorkspaceUserPermissionOverrideActionInput = z.input<
+  typeof workspaceUserPermissionOverrideActionSchema
+>;
+
+export const revokeWorkspaceUserPermissionOverrideActionSchema = z.object({
+  userPermissionId: z.string().uuid('Invalid user permission id'),
+});
+
+export type RevokeWorkspaceUserPermissionOverrideActionInput = z.input<
+  typeof revokeWorkspaceUserPermissionOverrideActionSchema
+>;
+
+export const createWorkspaceSupportTicketActionSchema = z.object({
+  target: z.enum(['workspace', 'platform']),
+  title: z.string().trim().min(3, 'Title is too short').max(160, 'Title is too long'),
+  body: z.string().trim().min(10, 'Add a little more detail').max(5000, 'Message is too long'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+});
+
+export type CreateWorkspaceSupportTicketActionInput = z.input<
+  typeof createWorkspaceSupportTicketActionSchema
+>;
+
+export const updateWorkspaceSupportTicketStatusActionSchema = z.object({
+  ticketId: z.string().uuid('Invalid ticket id'),
+  status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
+});
+
+export type UpdateWorkspaceSupportTicketStatusActionInput = z.input<
+  typeof updateWorkspaceSupportTicketStatusActionSchema
+>;
+
+export const updateWorkspaceSupportTicketAssignmentActionSchema = z.object({
+  ticketId: z.string().uuid('Invalid ticket id'),
+  assignedToId: z.union([
+    z.string().uuid('Invalid assignee id'),
+    z.literal('unassigned'),
+  ]),
+});
+
+export type UpdateWorkspaceSupportTicketAssignmentActionInput = z.input<
+  typeof updateWorkspaceSupportTicketAssignmentActionSchema
+>;
+
+export const addWorkspaceSupportTicketReplyActionSchema = z.object({
+  ticketId: z.string().uuid('Invalid ticket id'),
+  message: z
+    .string()
+    .trim()
+    .min(2, 'Reply is too short')
+    .max(5000, 'Reply is too long'),
+});
+
+export type AddWorkspaceSupportTicketReplyActionInput = z.input<
+  typeof addWorkspaceSupportTicketReplyActionSchema
+>;
+
+export const addWorkspaceSupportTicketInternalNoteActionSchema = z.object({
+  ticketId: z.string().uuid('Invalid ticket id'),
+  message: z
+    .string()
+    .trim()
+    .min(2, 'Internal note is too short')
+    .max(5000, 'Internal note is too long'),
+});
+
+export type AddWorkspaceSupportTicketInternalNoteActionInput = z.input<
+  typeof addWorkspaceSupportTicketInternalNoteActionSchema
+>;
+
+const workspaceApiKeyScopeSchema = z
+  .string()
+  .trim()
+  .refine((value) => isWorkspaceApiKeyScope(value), {
+    message: 'Select a valid API scope',
+  });
+
+export const createWorkspaceApiKeyActionSchema = z.object({
+  name: z.string().trim().min(2, 'Name is too short').max(64, 'Name is too long'),
+  description: z
+    .string()
+    .trim()
+    .max(240, 'Description is too long')
+    .optional()
+    .or(z.literal('')),
+  expiresAt: z.string().trim().optional().or(z.literal('')),
+  scopes: z
+    .array(workspaceApiKeyScopeSchema)
+    .min(1, 'Select at least one API scope'),
+});
+
+export type CreateWorkspaceApiKeyActionInput = z.input<
+  typeof createWorkspaceApiKeyActionSchema
+>;
+
+export const revokeWorkspaceApiKeyActionSchema = z.object({
+  apiKeyId: z.string().uuid('Invalid API key id'),
+});
+
+export type RevokeWorkspaceApiKeyActionInput = z.input<
+  typeof revokeWorkspaceApiKeyActionSchema
+>;
+
+export const rotateWorkspaceApiKeyActionSchema = z.object({
+  apiKeyId: z.string().uuid('Invalid API key id'),
+});
+
+export type RotateWorkspaceApiKeyActionInput = z.input<
+  typeof rotateWorkspaceApiKeyActionSchema
+>;
+
+export const workspaceApiKeyScopeOptions = workspaceApiKeyScopes;
+
+export const previewWorkspaceCustomerCsvImportActionSchema = z.object({
+  csvText: z
+    .string()
+    .trim()
+    .min(1, 'Upload a CSV file to preview')
+    .max(1_000_000, 'CSV file is too large'),
+  fileName: z.string().trim().optional().or(z.literal('')),
+});
+
+export type PreviewWorkspaceCustomerCsvImportActionInput = z.input<
+  typeof previewWorkspaceCustomerCsvImportActionSchema
+>;
+
+export const importWorkspaceCustomerCsvActionSchema =
+  previewWorkspaceCustomerCsvImportActionSchema;
+
+export type ImportWorkspaceCustomerCsvActionInput = z.input<
+  typeof importWorkspaceCustomerCsvActionSchema
+>;
+
+export const sendWorkspaceNotificationActionSchema = z
+  .object({
+    audience: z.enum(['workspace', 'customer']),
+    deliveryChannel: z.enum(['IN_APP', 'EMAIL']),
+    recipientMode: z.enum(['all', 'single']),
+    recipientId: z.string().trim().optional().or(z.literal('')),
+    title: z
+      .string()
+      .trim()
+      .min(3, 'Title is too short')
+      .max(160, 'Title is too long'),
+    body: z
+      .string()
+      .trim()
+      .min(10, 'Add a little more detail')
+      .max(5000, 'Message is too long'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.recipientMode === 'single' && !data.recipientId?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['recipientId'],
+        message: 'Select a recipient',
+      });
+    }
+  });
+
+export type SendWorkspaceNotificationActionInput = z.input<
+  typeof sendWorkspaceNotificationActionSchema
+>;
+
+export const markWorkspaceNotificationReadActionSchema = z.object({
+  notificationId: z.string().uuid('Invalid notification id'),
+});
+
+export type MarkWorkspaceNotificationReadActionInput = z.input<
+  typeof markWorkspaceNotificationReadActionSchema
+>;

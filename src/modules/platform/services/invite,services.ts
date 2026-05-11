@@ -1,199 +1,180 @@
-import crypto from 'crypto';
+import crypto from "crypto"
 import {
   platformInviteCrud,
   platformInviteQueries,
-} from '@/modules/platform/db';
+} from "@/modules/platform/db"
+import {
+  getPlatformDefaultRoleDefinition,
+  resolveRoleAssignment,
+} from "@/modules/roles/role.services"
+import { throwError } from "@/lib/errors/app-error"
+import { ERR } from "@/lib/errors/codes"
 
-import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { PlatformRole } from '@/generated/prisma/client';
-import { throwError } from '@/lib/errors/app-error';
-import { ERR } from '@/lib/errors/codes';
+type PlatformInviteRoleInput = {
+  roleDefinitionId?: string | null
+  roleKey?: string | null
+  roleSystemKey?: string | null
+}
 
-/**
- * Generate invite token
- */
 export function generateInviteToken() {
-  return crypto.randomBytes(32).toString('hex');
+  return crypto.randomBytes(32).toString("hex")
 }
 
-/**
- * Get invite by ID
- */
 export async function getPlatformInviteById(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
-  const invite = await platformInviteQueries.byId(id);
-  if (!invite) throwError(ERR.NOT_FOUND, 'Invite not found');
+  const invite = await platformInviteQueries.byId(id)
+  if (!invite) throwError(ERR.NOT_FOUND, "Invite not found")
 
-  return invite;
+  return invite
 }
 
-/**
- * Find invite by token
- */
 export async function findPlatformInviteByToken(token: string) {
-  if (!token) throwError(ERR.INVALID_INPUT, 'Token is required');
+  if (!token) throwError(ERR.INVALID_INPUT, "Token is required")
 
   return platformInviteQueries.findFirst({
     where: { token },
-  });
+  })
 }
 
-/**
- * Create invite (generic)
- */
-export async function createPlatformInvite(
-  data: CreateInput<'PlatformInvite'>,
-) {
+export async function createPlatformInvite(data: Record<string, unknown>) {
   if (!data?.email) {
-    throwError(ERR.INVALID_INPUT, 'Invalid invite data');
+    throwError(ERR.INVALID_INPUT, "Invalid invite data")
   }
 
   try {
     return await platformInviteCrud.create({
       ...data,
-      email: data.email.toLowerCase(),
-      token: data.token ?? generateInviteToken(),
-    });
+      email: String(data.email).toLowerCase(),
+      token:
+        typeof data.token === "string" ? data.token : generateInviteToken(),
+    } as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to create platform invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to create platform invite", undefined, e)
   }
 }
 
-/**
- * Create platform invite (typed helper)
- */
 export async function createPlatformInviteEntry(params: {
-  email: string;
-  invitedById?: string | null;
-  role?: PlatformRole;
-  expiresAt?: Date | null;
-}) {
+  email: string
+  invitedById?: string | null
+  expiresAt?: Date | null
+} & PlatformInviteRoleInput) {
   if (!params.email) {
-    throwError(ERR.INVALID_INPUT, 'Invalid invite params');
+    throwError(ERR.INVALID_INPUT, "Invalid invite params")
   }
+
+  const defaultRole =
+    !params.roleDefinitionId && !params.roleKey && !params.roleSystemKey
+      ? await getPlatformDefaultRoleDefinition()
+      : null
+
+  const role = await resolveRoleAssignment({
+    scope: "PLATFORM",
+    roleDefinitionId: params.roleDefinitionId ?? defaultRole?.id,
+    roleKey: params.roleKey ?? defaultRole?.key,
+    roleSystemKey: params.roleSystemKey ?? defaultRole?.systemKey ?? undefined,
+    fallbackToDefault: true,
+  })
 
   try {
     return await platformInviteCrud.create({
       email: params.email.toLowerCase(),
       invitedById: params.invitedById ?? undefined,
-      role: params.role ?? PlatformRole.PLATFORM_STAFF,
+      roleDefinitionId: role.roleDefinitionId,
+      roleKey: role.roleKey,
+      roleSystemKey: role.roleSystemKey ?? undefined,
       token: generateInviteToken(),
       expiresAt: params.expiresAt ?? undefined,
-    });
+    } as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to create platform invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to create platform invite", undefined, e)
   }
 }
 
-/**
- * Update invite
- */
 export async function updatePlatformInvite(
   id: string,
-  data: UpdateInput<'PlatformInvite'>,
+  data: Record<string, unknown>,
 ) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
   try {
-    return await platformInviteCrud.update(id, data);
+    return await platformInviteCrud.update(id, data as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to update invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to update invite", undefined, e)
   }
 }
 
-/**
- * Accept invite
- */
 export async function acceptPlatformInvite(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
   try {
     return await platformInviteCrud.update(id, {
-      status: 'ACCEPTED',
-    });
+      status: "ACCEPTED",
+    } as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to accept invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to accept invite", undefined, e)
   }
 }
 
-/**
- * Revoke invite
- */
 export async function revokePlatformInvite(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
   try {
     return await platformInviteCrud.update(id, {
-      status: 'REVOKED',
-    });
+      status: "REVOKED",
+    } as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to revoke invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to revoke invite", undefined, e)
   }
 }
 
-/**
- * Expire invite
- */
 export async function expirePlatformInvite(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
   try {
     return await platformInviteCrud.update(id, {
-      status: 'EXPIRED',
-    });
+      status: "EXPIRED",
+    } as never)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to expire invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to expire invite", undefined, e)
   }
 }
 
-/**
- * Delete invite
- */
 export async function deletePlatformInvite(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Invite ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
   try {
-    return await platformInviteCrud.delete(id);
+    return await platformInviteCrud.delete(id)
   } catch (e) {
-    throwError(ERR.DB_ERROR, 'Failed to delete invite', undefined, e);
+    throwError(ERR.DB_ERROR, "Failed to delete invite", undefined, e)
   }
 }
 
-/**
- * List platform invites
- */
 export async function listPlatformInvites() {
   return platformInviteQueries.many({
-    orderBy: { createdAt: 'desc' },
-  });
+    orderBy: { createdAt: "desc" },
+  })
 }
 
-/**
- * Check expired
- */
 export function isPlatformInviteExpired(invite: { expiresAt?: Date | null }) {
-  if (!invite.expiresAt) return false;
-  return new Date() > invite.expiresAt;
+  if (!invite.expiresAt) return false
+  return new Date() > invite.expiresAt
 }
 
-/**
- * Validate token
- */
 export async function validatePlatformInviteToken(token: string) {
-  if (!token) throwError(ERR.INVALID_INPUT, 'Token is required');
+  if (!token) throwError(ERR.INVALID_INPUT, "Token is required")
 
-  const invite = await findPlatformInviteByToken(token);
+  const invite = await findPlatformInviteByToken(token)
 
   if (!invite) {
-    throwError(ERR.NOT_FOUND, 'Invalid invite token');
+    throwError(ERR.NOT_FOUND, "Invalid invite token")
   }
-  if (invite.status !== 'PENDING') {
-    throwError(ERR.INVALID_INPUT, 'Invite already used or revoked');
+  if (invite.status !== "PENDING") {
+    throwError(ERR.INVALID_INPUT, "Invite already used or revoked")
   }
   if (isPlatformInviteExpired(invite)) {
-    throwError(ERR.INVALID_INPUT, 'Invite has expired');
+    throwError(ERR.INVALID_INPUT, "Invite has expired")
   }
 
-  return invite;
+  return invite
 }

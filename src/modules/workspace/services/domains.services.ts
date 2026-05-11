@@ -4,7 +4,7 @@ import {
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { WorkspaceDomain } from '@/generated/prisma/client';
+import { WorkspaceDomain, WorkspaceDomainStatus } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -41,6 +41,7 @@ export async function resolveWorkspaceByDomain(domain: string) {
     where: {
       domain: domain.toLowerCase(),
       isVerified: true,
+      status: WorkspaceDomainStatus.VERIFIED,
     },
     include: { workspace: true },
   });
@@ -99,6 +100,10 @@ export async function verifyWorkspaceDomain(id: string) {
   try {
     return await workspaceDomainCrud.update(id, {
       isVerified: true,
+      status: WorkspaceDomainStatus.VERIFIED,
+      verifiedAt: new Date(),
+      lastCheckedAt: new Date(),
+      lastVerificationError: null,
     });
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to verify domain', undefined, e);

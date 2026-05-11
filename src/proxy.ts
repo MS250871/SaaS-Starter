@@ -25,6 +25,7 @@ export async function proxy(req: NextRequest) {
 
   /* ---------------- SESSION ---------------- */
   const session = await resolveSession(req);
+  const hasStaleSessionCookie = req.cookies.has('user_session') && !session;
 
   /* ---------------- REQUEST CONTEXT (IMPORTANT: AFTER workspace) ---------------- */
   await injectRequestHeaders(req, res, workspace, normalizedPathname);
@@ -35,7 +36,17 @@ export async function proxy(req: NextRequest) {
   /* ---------------- ROUTE GUARDS ---------------- */
   const guardResponse = handleRouteGuards(req, session, normalizedPathname);
 
-  if (guardResponse) return guardResponse;
+  if (guardResponse) {
+    if (hasStaleSessionCookie) {
+      guardResponse.cookies.delete('user_session');
+    }
+
+    return guardResponse;
+  }
+
+  if (hasStaleSessionCookie) {
+    res.cookies.delete('user_session');
+  }
 
   return res;
 }

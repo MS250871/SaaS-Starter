@@ -2,17 +2,18 @@ import { runWithContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
 import type { ActorContext } from '@/lib/context/actor-context';
 import { buildActorContext } from '@/lib/context/build-actor';
-import type { PlatformRole, WorkspaceRole } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 
-function readPlatformRole(raw: string | null): PlatformRole | undefined {
-  return raw ? (raw as PlatformRole) : undefined;
-}
+function readJsonArray(raw: string | null) {
+  if (!raw) return [] as string[];
 
-function readWorkspaceRole(raw: string | null): WorkspaceRole | undefined {
-  return raw ? (raw as WorkspaceRole) : undefined;
+  try {
+    return JSON.parse(raw) as string[];
+  } catch {
+    return [] as string[];
+  }
 }
 
 export async function withRequestContext(
@@ -38,15 +39,30 @@ export async function withRequestContext(
       permissions = [];
     }
   }
+  const platformRoleKeys = readJsonArray(req.headers.get('x-platform-role-keys'));
+  const legacyPlatformRoles = readJsonArray(req.headers.get('x-platform-roles'));
 
   const actor: ActorContext = buildActorContext(
-    req.headers.get('x-identity-id') ?? undefined,
-    req.headers.get('x-customer-id') ?? undefined,
-    readPlatformRole(req.headers.get('x-platform-role')),
-    req.headers.get('x-workspace-id') ?? undefined,
-    readWorkspaceRole(req.headers.get('x-workspace-role')),
-    req.headers.get('x-membership-id') ?? undefined,
-    permissions,
+    {
+      identityId: req.headers.get('x-identity-id') ?? undefined,
+      customerId: req.headers.get('x-customer-id') ?? undefined,
+      platformRole: req.headers.get('x-platform-role') ?? undefined,
+      platformRoleKeys:
+        platformRoleKeys.length > 0 ? platformRoleKeys : legacyPlatformRoles,
+      platformRoleSystemKeys: readJsonArray(
+        req.headers.get('x-platform-role-system-keys'),
+      ),
+      workspaceId: req.headers.get('x-workspace-id') ?? undefined,
+      workspaceRole: req.headers.get('x-workspace-role') ?? undefined,
+      workspaceRoleKey:
+        req.headers.get('x-workspace-role-key') ??
+        req.headers.get('x-workspace-role') ??
+        undefined,
+      workspaceRoleSystemKey:
+        req.headers.get('x-workspace-role-system-key') ?? undefined,
+      membershipId: req.headers.get('x-membership-id') ?? undefined,
+      permissions,
+    },
   );
 
   return runWithContext(requestContext, () => runWithActor(actor, handler));

@@ -1,5 +1,6 @@
 import type { SignupDomain } from '@/modules/auth/schema';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { runWithActor } from '@/lib/context/actor-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import {
@@ -54,7 +55,14 @@ function buildSignupResult(params: {
 export async function signupWorkflow(input: SignupDomain) {
   return withUnitOfWork(async () => {
     if (input.inviteToken) {
-      const invite = await validateInviteToken(input.inviteToken);
+      const invite = await runWithActor(
+        {
+          actorType: 'system',
+          permissions: [],
+          isPlatformAdmin: true,
+        },
+        () => validateInviteToken(input.inviteToken!),
+      );
 
       if (invite.email && invite.email !== input.email) {
         throwError(ERR.INVALID_INPUT, 'Email does not match invite');

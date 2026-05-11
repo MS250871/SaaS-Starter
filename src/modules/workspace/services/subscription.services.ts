@@ -4,6 +4,10 @@ import {
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import {
+  PaymentProvider,
+  SubscriptionStatus,
+} from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -20,7 +24,7 @@ export async function getSubscriptionById(id: string) {
 }
 
 export async function findSubscriptionByProvider(
-  provider: string,
+  provider: PaymentProvider,
   providerSubscriptionId: string,
 ) {
   if (!provider || !providerSubscriptionId) {
@@ -42,7 +46,7 @@ export async function getWorkspaceSubscription(workspaceId: string) {
 }
 
 export async function createWorkspaceSubscription(
-  data: CreateInput<'WorkspaceSubscription'>,
+  data: CreateInput<'Subscription'>,
 ) {
   if (!data?.workspaceId) {
     throwError(ERR.INVALID_INPUT, 'workspaceId required');
@@ -57,7 +61,7 @@ export async function createWorkspaceSubscription(
 
 export async function updateWorkspaceSubscription(
   id: string,
-  data: UpdateInput<'WorkspaceSubscription'>,
+  data: UpdateInput<'Subscription'>,
 ) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Subscription ID required');
 
@@ -72,8 +76,8 @@ export async function cancelWorkspaceSubscription(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Subscription ID required');
 
   return updateWorkspaceSubscription(id, {
-    status: 'cancelled',
-    expiresAt: new Date(),
+    status: SubscriptionStatus.CANCELLED,
+    currentPeriodEnd: new Date(),
   });
 }
 
@@ -90,8 +94,8 @@ export async function workspaceHasActiveSubscription(workspaceId: string) {
   const subscription = await getWorkspaceSubscription(workspaceId);
 
   if (!subscription) return false;
-  if (subscription.status !== 'active') return false;
-  if (subscription.expiresAt && new Date() > subscription.expiresAt)
+  if (subscription.status !== SubscriptionStatus.ACTIVE) return false;
+  if (subscription.currentPeriodEnd && new Date() > subscription.currentPeriodEnd)
     return false;
 
   return true;

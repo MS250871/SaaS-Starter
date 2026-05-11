@@ -1,233 +1,284 @@
 import {
   platformMembershipCrud,
   platformMembershipQueries,
-} from '@/modules/platform/db';
+} from "@/modules/platform/db"
+import {
+  getPlatformDefaultRoleDefinition,
+  resolveRoleAssignment,
+  type RoleAssignmentSnapshot,
+} from "@/modules/roles/role.services"
+import {
+  isPlatformRoleSystemKey,
+  type PlatformRoleSystemKey,
+} from "@/modules/roles/role.types"
+import { throwError } from "@/lib/errors/app-error"
+import { ERR } from "@/lib/errors/codes"
 
-import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { PlatformRole } from '@/generated/prisma/client';
-import { throwError } from '@/lib/errors/app-error';
-import { ERR } from '@/lib/errors/codes';
-
-/**
- * Get platform membership by ID
- */
-export async function getPlatformMembershipById(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Membership ID is required');
-
-  const membership = await platformMembershipQueries.byId(id);
-  if (!membership) throwError(ERR.NOT_FOUND, 'Membership not found');
-
-  return membership;
+type PlatformMembershipRoleInput = {
+  roleDefinitionId?: string | null
+  roleKey?: string | null
+  roleSystemKey?: PlatformRoleSystemKey | null
 }
 
-/**
- * Find platform membership (identity + role)
- */
+type CreatePlatformMembershipParams = {
+  identityId: string
+  isActive?: boolean
+} & PlatformMembershipRoleInput
+
+function applyRoleSnapshot(
+  data: Omit<CreatePlatformMembershipParams, "roleDefinitionId" | "roleKey" | "roleSystemKey">,
+  role: RoleAssignmentSnapshot,
+) {
+  return {
+    ...data,
+    roleDefinitionId: role.roleDefinitionId,
+    roleKey: role.roleKey,
+    roleSystemKey: role.roleSystemKey ?? undefined,
+  }
+}
+
+export async function getPlatformMembershipById(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, "Membership ID is required")
+
+  const membership = await platformMembershipQueries.byId(id)
+  if (!membership) throwError(ERR.NOT_FOUND, "Membership not found")
+
+  return membership
+}
+
 export async function findPlatformMembership(
   identityId: string,
-  role: PlatformRole,
+  roleDefinitionId: string,
 ) {
-  if (!identityId || !role) {
-    throwError(ERR.INVALID_INPUT, 'identityId and role required');
+  if (!identityId || !roleDefinitionId) {
+    throwError(ERR.INVALID_INPUT, "identityId and roleDefinitionId required")
   }
 
   return platformMembershipQueries.findFirst({
-    where: { identityId, role },
-  });
+    where: { identityId, roleDefinitionId },
+  })
 }
 
-/**
- * Find all memberships for identity
- */
+export async function findPlatformMembershipBySystemKey(
+  identityId: string,
+  roleSystemKey: PlatformRoleSystemKey,
+) {
+  if (!identityId || !roleSystemKey) {
+    throwError(ERR.INVALID_INPUT, "identityId and roleSystemKey required")
+  }
+
+  return platformMembershipQueries.findFirst({
+    where: { identityId, roleSystemKey },
+  })
+}
+
 export async function listIdentityPlatformMemberships(identityId: string) {
-  if (!identityId) throwError(ERR.INVALID_INPUT, 'identityId required');
+  if (!identityId) throwError(ERR.INVALID_INPUT, "identityId required")
 
   return platformMembershipQueries.many({
     where: { identityId },
-    orderBy: { createdAt: 'desc' },
-  });
+    orderBy: { createdAt: "desc" },
+  })
 }
-
-/**
- * Get all platform roles for identity
- */
 
 export async function getPlatformRoles(identityId: string) {
-  const memberships = await listIdentityPlatformMemberships(identityId);
+  const memberships = await listIdentityPlatformMemberships(identityId)
 
   const roles = memberships
-    .filter((m: (typeof memberships)[number]) => m.isActive)
-    .map((m: (typeof memberships)[number]) => m.role);
+    .filter((membership: (typeof memberships)[number]) => membership.isActive)
+    .map((membership: (typeof memberships)[number]) => membership.roleKey)
 
-  return Array.from(new Set(roles));
+  return Array.from(new Set(roles))
 }
 
-/**
- * Create platform membership
- */
 export async function createPlatformMembership(
-  data: CreateInput<'PlatformMembership'>,
+  data: CreatePlatformMembershipParams,
 ) {
-  if (!data?.identityId || !data?.role) {
-    throwError(ERR.INVALID_INPUT, 'Invalid membership data');
+  if (!data?.identityId) {
+    throwError(ERR.INVALID_INPUT, "Invalid membership data")
   }
 
-  const existing = await findPlatformMembership(data.identityId, data.role);
+  const role = await resolveRoleAssignment({
+    scope: "PLATFORM",
+    roleDefinitionId: data.roleDefinitionId,
+    roleKey: data.roleKey,
+    roleSystemKey: data.roleSystemKey ?? undefined,
+    fallbackToDefault: true,
+  })
+
+  const existing = await findPlatformMembership(data.identityId, role.roleDefinitionId)
 
   if (existing) {
-    throwError(ERR.ALREADY_EXISTS, 'Platform membership already exists');
+    throwError(ERR.ALREADY_EXISTS, "Platform membership already exists")
   }
 
   try {
-    return await platformMembershipCrud.create(data);
+    return await platformMembershipCrud.create(
+      applyRoleSnapshot(
+        {
+          identityId: data.identityId,
+          isActive: data.isActive ?? true,
+        },
+        role,
+      ) as never,
+    )
   } catch (e) {
     throwError(
       ERR.DB_ERROR,
-      'Failed to create platform membership',
+      "Failed to create platform membership",
       undefined,
       e,
-    );
+    )
   }
 }
 
-/**
- * Create platform membership (typed helper)
- */
 export async function createPlatformMembershipEntry(params: {
-  identityId: string;
-  role?: PlatformRole;
+  identityId: string
+  roleDefinitionId?: string | null
+  roleKey?: string | null
+  roleSystemKey?: string | null
 }) {
+  const defaultRole =
+    !params.roleDefinitionId && !params.roleKey && !params.roleSystemKey
+      ? await getPlatformDefaultRoleDefinition()
+      : null
+
   return createPlatformMembership({
     identityId: params.identityId,
-    role: params.role ?? PlatformRole.PLATFORM_STAFF,
-  });
+    roleDefinitionId: params.roleDefinitionId ?? defaultRole?.id,
+    roleKey: params.roleKey ?? defaultRole?.key,
+    roleSystemKey: params.roleSystemKey ?? defaultRole?.systemKey ?? undefined,
+  })
 }
 
-/**
- * Update membership
- */
 export async function updatePlatformMembership(
   id: string,
-  data: UpdateInput<'PlatformMembership'>,
+  data: Record<string, unknown>,
 ) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Membership ID is required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Membership ID is required")
 
   try {
-    return await platformMembershipCrud.update(id, data);
+    return await platformMembershipCrud.update(id, data as never)
   } catch (e) {
     throwError(
       ERR.DB_ERROR,
-      'Failed to update platform membership',
+      "Failed to update platform membership",
       undefined,
       e,
-    );
+    )
   }
 }
 
-/**
- * Change role (delete old + create new OR update if allowed)
- */
 export async function updatePlatformMembershipRole(
   id: string,
-  role: PlatformRole,
+  roleInput: PlatformMembershipRoleInput,
 ) {
-  if (!id || !role) {
-    throwError(ERR.INVALID_INPUT, 'id and role required');
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, "id is required")
   }
 
-  return updatePlatformMembership(id, { role });
+  const role = await resolveRoleAssignment({
+    scope: "PLATFORM",
+    roleDefinitionId: roleInput.roleDefinitionId,
+    roleKey: roleInput.roleKey,
+    roleSystemKey: roleInput.roleSystemKey ?? undefined,
+    fallbackToDefault: false,
+  })
+
+  return updatePlatformMembership(id, {
+    roleDefinitionId: role.roleDefinitionId,
+    roleKey: role.roleKey,
+    roleSystemKey: role.roleSystemKey ?? undefined,
+  })
 }
 
-/**
- * Activate membership
- */
 export async function activatePlatformMembership(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Membership ID required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Membership ID required")
 
-  return updatePlatformMembership(id, { isActive: true });
+  return updatePlatformMembership(id, { isActive: true })
 }
 
-/**
- * Deactivate membership
- */
 export async function deactivatePlatformMembership(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Membership ID required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Membership ID required")
 
-  return updatePlatformMembership(id, { isActive: false });
+  return updatePlatformMembership(id, { isActive: false })
 }
 
-/**
- * Delete membership
- */
 export async function deletePlatformMembership(id: string) {
-  if (!id) throwError(ERR.INVALID_INPUT, 'Membership ID required');
+  if (!id) throwError(ERR.INVALID_INPUT, "Membership ID required")
 
   try {
-    return await platformMembershipCrud.delete(id);
+    return await platformMembershipCrud.delete(id)
   } catch (e) {
     throwError(
       ERR.DB_ERROR,
-      'Failed to delete platform membership',
+      "Failed to delete platform membership",
       undefined,
       e,
-    );
+    )
   }
 }
 
-/**
- * List all platform memberships
- */
 export async function listPlatformMemberships() {
   return platformMembershipQueries.many({
-    orderBy: { createdAt: 'desc' },
-  });
+    orderBy: { createdAt: "desc" },
+  })
 }
 
-/**
- * Check if identity has a platform role
- */
-export async function hasPlatformRole(identityId: string, role: PlatformRole) {
-  if (!identityId || !role) {
-    throwError(ERR.INVALID_INPUT, 'identityId and role required');
+export async function hasPlatformRole(
+  identityId: string,
+  roleSystemKey: PlatformRoleSystemKey,
+) {
+  if (!identityId || !roleSystemKey) {
+    throwError(ERR.INVALID_INPUT, "identityId and roleSystemKey required")
   }
 
   return platformMembershipQueries.exists({
     identityId,
-    role,
+    roleSystemKey,
     isActive: true,
-  });
+  })
 }
 
-/**
- * Check if identity has ANY platform access
- */
 export async function isPlatformUser(identityId: string) {
   if (!identityId) {
-    throwError(ERR.INVALID_INPUT, 'identityId required');
+    throwError(ERR.INVALID_INPUT, "identityId required")
   }
 
   return platformMembershipQueries.exists({
     identityId,
     isActive: true,
-  });
+  })
 }
 
 export async function getPlatformAccessContext(identityId: string): Promise<{
-  roles: PlatformRole[];
-  memberships: Awaited<ReturnType<typeof listIdentityPlatformMemberships>>;
-  hasAccess: boolean;
+  roleIds: string[]
+  roleKeys: string[]
+  roleSystemKeys: PlatformRoleSystemKey[]
+  memberships: Awaited<ReturnType<typeof listIdentityPlatformMemberships>>
+  hasAccess: boolean
 }> {
-  const memberships = await listIdentityPlatformMemberships(identityId);
+  const memberships = await listIdentityPlatformMemberships(identityId)
 
   const active = memberships.filter(
-    (m: (typeof memberships)[number]) => m.isActive,
-  );
+    (membership: (typeof memberships)[number]) => membership.isActive,
+  )
 
   return {
-    roles: Array.from(
-      new Set(active.map((m: (typeof active)[number]) => m.role)),
+    roleIds: Array.from(
+      new Set(active.map((membership: (typeof active)[number]) => membership.roleDefinitionId)),
+    ),
+    roleKeys: Array.from(
+      new Set(active.map((membership: (typeof active)[number]) => membership.roleKey)),
+    ),
+    roleSystemKeys: Array.from(
+      new Set(
+        active
+          .map((membership: (typeof active)[number]) => membership.roleSystemKey)
+          .filter(isPlatformRoleSystemKey),
+      ),
     ),
     memberships: active,
     hasAccess: active.length > 0,
-  };
+  }
 }

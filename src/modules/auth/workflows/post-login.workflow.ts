@@ -1,4 +1,5 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { runWithActor } from '@/lib/context/actor-context';
 import {
   AuthCookies,
   SessionPayload,
@@ -6,7 +7,7 @@ import {
 } from '@/lib/auth/auth.schema';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { OtpPurpose, AuthAccountType, type WorkspaceRole } from '@/generated/prisma/enums';
+import { OtpPurpose, AuthAccountType } from '@/generated/prisma/enums';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
 import {
   findAuthAccountByTypeValue,
@@ -16,7 +17,13 @@ import {
   getLatestOtpRequestForAccount,
   isOtpExpired,
 } from '@/modules/auth/services/otp.services';
-import { createSession } from '@/modules/auth/services/session.services';
+import {
+  createSession,
+  expireIdentitySessionsIfNeeded,
+  endSession,
+  findActiveSessionByContext,
+} from '@/modules/auth/services/session.services';
+import { USER_SESSION_LIFETIME_SECONDS } from '@/lib/auth/auth-config';
 import { queueOtpDelivery } from '@/modules/auth/services/otp-outbox.services';
 import {
   createMembership,
@@ -25,10 +32,14 @@ import {
 } from '@/modules/workspace/services/membership.services';
 import {
   acceptInvite,
+  findInviteByToken,
+  isInviteExpired,
   validateInviteToken,
 } from '@/modules/workspace/services/invite.services';
 import {
   acceptPlatformInvite,
+  findPlatformInviteByToken,
+  isPlatformInviteExpired,
   validatePlatformInviteToken,
 } from '@/modules/platform/services/invite,services';
 import {
@@ -37,12 +48,19 @@ import {
   getPlatformAccessContext,
 } from '@/modules/platform/services/membership.services';
 import { resolvePermissions } from '@/modules/permissions/permissions.services';
+import type {
+  PlatformRoleSystemKey,
+  WorkspaceRoleSystemKey,
+} from '@/modules/roles/role.types';
 import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
 import {
   createCustomer,
   findCustomerByIdentityId,
   findCustomerByWorkspaceIdentity,
 } from '@/modules/customer/services/customer.services';
+import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
+import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
+import { SessionEndReason } from '@/generated/prisma/client';
 
 type AuthStep =
   | 'verify_phone'
@@ -71,21 +89,21 @@ type PostLoginResult =
     };
 
 const PLATFORM_REDIRECT = '/platform';
-const WORKSPACE_REDIRECT = '/app';
-const CUSTOMER_REDIRECT = '/customer';
 const WORKSPACE_SELECT_REDIRECT = '/select-workspace';
 const WORKSPACE_CREATE_REDIRECT = '/create-workspace';
 const PAYMENT_REDIRECT = '/payment';
 const VERIFY_PHONE_REDIRECT = '/verify-phone';
 
-type WorkspaceMembershipSnapshot = {
+export type WorkspaceMembershipSnapshot = {
   id: string;
   workspaceId: string;
-  role: WorkspaceRole;
+  roleDefinitionId: string;
+  roleKey: string;
+  roleSystemKey?: string | null;
   planId?: string | null;
 };
 
-async function buildFinalSessionWorkflow({
+export async function buildFinalSessionWorkflow({
   identitySession,
   customerId,
   workspaceId,
@@ -96,92 +114,143 @@ async function buildFinalSessionWorkflow({
   workspaceId?: string;
   workspaceMembership?: WorkspaceMembershipSnapshot | null;
 }): Promise<SessionPayload> {
-  const identityId = identitySession.identityId;
+  return withUnitOfWork(async () => {
+    const identityId = identitySession.identityId;
+    await expireIdentitySessionsIfNeeded(identityId);
 
-  let workspaceMembership = inputWorkspaceMembership ?? null;
+    let workspaceMembership = inputWorkspaceMembership ?? null;
 
-  if (!workspaceMembership && workspaceId) {
-    const foundMembership = await findMembership(workspaceId, identityId);
+    if (!workspaceMembership && workspaceId) {
+      const foundMembership = await findMembership(workspaceId, identityId);
 
-    if (foundMembership) {
-      workspaceMembership = {
-        id: foundMembership.id,
-        workspaceId: foundMembership.workspaceId,
-        role: foundMembership.role,
-      };
+      if (foundMembership) {
+        workspaceMembership = {
+          id: foundMembership.id,
+          workspaceId: foundMembership.workspaceId,
+          roleDefinitionId: foundMembership.roleDefinitionId,
+          roleKey: foundMembership.roleKey,
+          roleSystemKey: foundMembership.roleSystemKey ?? null,
+        };
+      }
     }
-  }
 
-  const workspaceRole = workspaceMembership?.role;
-  const membershipId = workspaceMembership?.id;
+    const workspaceRoleDefinitionId = workspaceMembership?.roleDefinitionId;
+    const membershipId = workspaceMembership?.id;
 
-  const { roles: platformRoles } = await getPlatformAccessContext(identityId);
+    const { roleIds: platformRoleIds, roleKeys: platformRoleKeys, roleSystemKeys: platformRoleSystemKeys } =
+      await getPlatformAccessContext(identityId);
 
-  const permissions = await resolvePermissions({
-    identityId,
-    workspaceId,
-    workspaceRole,
-    platformRoles,
-  });
-
-  let features: string[] = [];
-  let limits: Record<string, number> = {};
-
-  if (workspaceId) {
-    const entitlements = await resolveEntitlements({
+    const permissions = await resolvePermissions({
+      identityId,
       workspaceId,
-      planId: workspaceMembership?.planId,
+      workspaceRoleDefinitionId,
+      platformRoleDefinitionIds: platformRoleIds,
     });
 
-    features = entitlements.features;
-    limits = entitlements.limits;
-  }
+    let features: string[] = [];
+    let limits: Record<string, number> = {};
 
-  const session = await createSession({
-    identityId,
-    workspaceId,
-    membershipId,
-    workspaceRole,
-    ip: identitySession.ip,
-    browser: identitySession.browser,
-    os: identitySession.os,
-    device: identitySession.device,
-    deviceId: identitySession.deviceId,
-    deviceFingerprint: identitySession.deviceFingerprint,
-    userAgent: identitySession.userAgent,
-    isActive: true,
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24),
+    if (workspaceId) {
+      const entitlements = await resolveEntitlements({
+        workspaceId,
+        planId: workspaceMembership?.planId,
+      });
+
+      features = entitlements.features;
+      limits = entitlements.limits;
+    }
+
+    const existingSession = await findActiveSessionByContext({
+      identityId,
+      workspaceId,
+      membershipId,
+      deviceFingerprint: identitySession.deviceFingerprint,
+    });
+
+    const session =
+      existingSession ??
+      (await createSession({
+        identityId,
+        workspaceId,
+        membershipId,
+        workspaceRoleDefinitionId,
+        workspaceRoleKey: workspaceMembership?.roleKey,
+        workspaceRoleSystemKey: workspaceMembership?.roleSystemKey ?? undefined,
+        ip: identitySession.ip,
+        browser: identitySession.browser,
+        os: identitySession.os,
+        device: identitySession.device,
+        deviceId: identitySession.deviceId,
+        deviceFingerprint: identitySession.deviceFingerprint,
+        userAgent: identitySession.userAgent,
+        isActive: true,
+        expiresAt: new Date(
+          Date.now() + USER_SESSION_LIFETIME_SECONDS * 1000,
+        ),
+      }));
+
+    if (identitySession.sessionId !== session.id) {
+      await endSession(identitySession.sessionId, SessionEndReason.REPLACED);
+    }
+
+    return {
+      sessionId: session.id,
+      identityId,
+      customerId,
+      workspaceId,
+      membershipId,
+      workspaceRoleId: workspaceRoleDefinitionId,
+      workspaceRoleKey: workspaceMembership?.roleKey,
+      workspaceRoleSystemKey:
+        (workspaceMembership?.roleSystemKey as WorkspaceRoleSystemKey | undefined) ??
+        undefined,
+      platformRoleIds,
+      platformRoleKeys,
+      platformRoleSystemKeys: platformRoleSystemKeys as PlatformRoleSystemKey[],
+      platformRoles: platformRoleKeys,
+      workspaceRole: workspaceMembership?.roleKey,
+      ip: session.ip ?? undefined,
+      browser: session.browser ?? undefined,
+      os: session.os ?? undefined,
+      device: session.device ?? undefined,
+      deviceId: session.deviceId ?? undefined,
+      deviceFingerprint: session.deviceFingerprint ?? undefined,
+      userAgent: session.userAgent ?? undefined,
+      isActive: session.isActive,
+      permissions,
+      features,
+      limits,
+      createdAt: session.createdAt.getTime(),
+      expiresAt: session.expiresAt.getTime(),
+    };
   });
+}
 
-  return {
-    sessionId: session.id,
-    identityId,
-    customerId,
-    workspaceId,
-    membershipId,
-    platformRoles,
-    workspaceRole,
-    ip: session.ip ?? undefined,
-    browser: session.browser ?? undefined,
-    os: session.os ?? undefined,
-    device: session.device ?? undefined,
-    deviceId: session.deviceId ?? undefined,
-    deviceFingerprint: session.deviceFingerprint ?? undefined,
-    userAgent: session.userAgent ?? undefined,
-    isActive: session.isActive,
-    permissions,
-    features,
-    limits,
-    createdAt: session.createdAt.getTime(),
-    expiresAt: session.expiresAt.getTime(),
-  };
+export async function resolveWorkspaceSurfaceRedirect(params: {
+  workspaceId: string;
+  fallbackPath: '/app' | '/customer';
+}) {
+  return withUnitOfWork(async () => {
+    const workspace = await getWorkspaceById(params.workspaceId);
+    const settings = await getWorkspaceSettings(params.workspaceId);
+    const strategy = (settings?.settings as { domain?: { strategy?: string } } | undefined)
+      ?.domain?.strategy;
+
+    if (strategy === 'free_path') {
+      return `/${workspace.slug}${params.fallbackPath}`;
+    }
+
+    return params.fallbackPath;
+  });
 }
 
 function toWorkspaceMembershipSnapshot(
   membership: {
     id: string;
     workspaceId: string;
-    role: WorkspaceRole;
+    roleDefinitionId: string;
+    roleKey: string;
+    roleSystemKey?: string | null;
   } | null,
 ): WorkspaceMembershipSnapshot | null {
   if (!membership) {
@@ -191,7 +260,9 @@ function toWorkspaceMembershipSnapshot(
   return {
     id: membership.id,
     workspaceId: membership.workspaceId,
-    role: membership.role,
+    roleDefinitionId: membership.roleDefinitionId,
+    roleKey: membership.roleKey,
+    roleSystemKey: membership.roleSystemKey ?? null,
   };
 }
 
@@ -287,22 +358,89 @@ async function acceptInviteAccess(params: {
   const normalizedEmail = params.email?.toLowerCase();
 
   if (params.auth.entry === 'platform') {
-    const invite = await validatePlatformInviteToken(params.auth.inviteToken);
+    const platformInvite = await runWithActor(
+      {
+        actorType: 'system',
+        permissions: [],
+        isPlatformAdmin: true,
+      },
+      () => findPlatformInviteByToken(params.auth.inviteToken!),
+    );
 
-    if (normalizedEmail && invite.email.toLowerCase() !== normalizedEmail) {
-      throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
+    if (!platformInvite) {
+      throwError(ERR.NOT_FOUND, 'Invalid invite token');
     }
 
-    const existing = await findPlatformMembership(params.identityId, invite.role);
-
-    if (!existing) {
-      await createPlatformMembership({
-        identityId: params.identityId,
-        role: invite.role,
-      });
+    if (isPlatformInviteExpired(platformInvite)) {
+      throwError(ERR.INVALID_INPUT, 'Invite has expired');
     }
 
-    await acceptPlatformInvite(invite.id);
+    if (platformInvite.status === 'ACCEPTED') {
+      if (
+        normalizedEmail &&
+        platformInvite.email.toLowerCase() !== normalizedEmail
+      ) {
+        throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
+      }
+
+      const existing = await findPlatformMembership(
+        params.identityId,
+        platformInvite.roleDefinitionId,
+      );
+
+      if (existing) {
+        return {
+          workspaceMembership: null,
+          workspaceId: undefined,
+          createdPlatformAccess: true,
+        };
+      }
+    }
+
+    if (platformInvite.status !== 'PENDING') {
+      throwError(ERR.INVALID_INPUT, 'Invite already used or revoked');
+    }
+
+    const invite =
+      platformInvite.status === 'PENDING'
+        ? await runWithActor(
+            {
+              actorType: 'system',
+              permissions: [],
+              isPlatformAdmin: true,
+            },
+            () => validatePlatformInviteToken(params.auth.inviteToken!),
+          )
+        : platformInvite;
+
+    await runWithActor(
+      {
+        actorType: 'system',
+        permissions: [],
+        isPlatformAdmin: true,
+      },
+      async () => {
+        if (normalizedEmail && invite.email.toLowerCase() !== normalizedEmail) {
+          throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
+        }
+
+        const existingByRoleDefinition = await findPlatformMembership(
+          params.identityId,
+          invite.roleDefinitionId,
+        );
+
+        if (!existingByRoleDefinition) {
+          await createPlatformMembership({
+            identityId: params.identityId,
+            roleDefinitionId: invite.roleDefinitionId,
+            roleKey: invite.roleKey,
+            roleSystemKey: invite.roleSystemKey ?? undefined,
+          });
+        }
+
+        await acceptPlatformInvite(invite.id);
+      },
+    );
 
     return {
       workspaceMembership: null,
@@ -311,26 +449,92 @@ async function acceptInviteAccess(params: {
     };
   }
 
-  const invite = await validateInviteToken(params.auth.inviteToken);
-
-  if (normalizedEmail && invite.email.toLowerCase() !== normalizedEmail) {
-    throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
-  }
-
-  let workspaceMembership = await findMembership(
-    invite.workspaceId,
-    params.identityId,
+  const storedInvite = await runWithActor(
+    {
+      actorType: 'system',
+      permissions: [],
+      isPlatformAdmin: true,
+    },
+    () => findInviteByToken(params.auth.inviteToken!),
   );
 
-  if (!workspaceMembership) {
-    workspaceMembership = await createMembership({
-      identityId: params.identityId,
-      workspaceId: invite.workspaceId,
-      role: invite.role,
-    });
+  if (!storedInvite) {
+    throwError(ERR.NOT_FOUND, 'Invalid invite token');
   }
 
-  await acceptInvite(invite.id);
+  if (isInviteExpired(storedInvite)) {
+    throwError(ERR.INVALID_INPUT, 'Invite has expired');
+  }
+
+  if (storedInvite.status === 'ACCEPTED') {
+    if (normalizedEmail && storedInvite.email.toLowerCase() !== normalizedEmail) {
+      throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
+    }
+
+    const existingMembership = await findMembership(
+      storedInvite.workspaceId,
+      params.identityId,
+    );
+
+    if (existingMembership) {
+      return {
+        workspaceMembership: toWorkspaceMembershipSnapshot(existingMembership),
+        workspaceId: storedInvite.workspaceId,
+        createdPlatformAccess: false,
+      };
+    }
+  }
+
+  if (storedInvite.status !== 'PENDING') {
+    throwError(ERR.INVALID_INPUT, 'Invite already used or revoked');
+  }
+
+  const invite =
+    storedInvite.status === 'PENDING'
+      ? await runWithActor(
+          {
+            actorType: 'system',
+            permissions: [],
+            isPlatformAdmin: true,
+          },
+          () => validateInviteToken(params.auth.inviteToken!),
+        )
+      : storedInvite;
+
+  const workspaceMembership = await runWithActor(
+    {
+      actorType: 'system',
+      permissions: [],
+      isPlatformAdmin: true,
+    },
+    async () => {
+      if (normalizedEmail && invite.email.toLowerCase() !== normalizedEmail) {
+        throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
+      }
+
+      const existingMembership = await findMembership(
+        invite.workspaceId,
+        params.identityId,
+      );
+
+      if (existingMembership) {
+        await acceptInvite(invite.id);
+        return existingMembership;
+      }
+
+      const createdMembership = await createMembership({
+        identityId: params.identityId,
+        workspaceId: invite.workspaceId,
+        roleDefinitionId: invite.roleDefinitionId,
+        roleKey: invite.roleKey,
+        roleSystemKey: invite.roleSystemKey ?? undefined,
+      });
+
+      await acceptInvite(invite.id);
+
+      return createdMembership;
+    },
+  );
 
   return {
     workspaceMembership: toWorkspaceMembershipSnapshot(workspaceMembership),
@@ -374,7 +578,7 @@ export async function postLoginWorkflow(input: {
       email: identity.email,
     });
 
-    const { roles: platformRoles } = await getPlatformAccessContext(identityId);
+    const { roleKeys: platformRoles } = await getPlatformAccessContext(identityId);
     const memberships = (
       await listIdentityMemberships(identityId)
     ).filter(
@@ -421,7 +625,10 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: WORKSPACE_REDIRECT,
+          redirectTo: await resolveWorkspaceSurfaceRedirect({
+            workspaceId: requestedWorkspaceId,
+            fallbackPath: '/app',
+          }),
         };
       }
 
@@ -460,7 +667,10 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: CUSTOMER_REDIRECT,
+        redirectTo: await resolveWorkspaceSurfaceRedirect({
+          workspaceId: auth.workspaceId,
+          fallbackPath: '/customer',
+        }),
       };
     }
 
@@ -488,7 +698,10 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: WORKSPACE_REDIRECT,
+        redirectTo: await resolveWorkspaceSurfaceRedirect({
+          workspaceId: requestedWorkspaceId,
+          fallbackPath: '/app',
+        }),
       };
     }
 
@@ -502,7 +715,10 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: CUSTOMER_REDIRECT,
+          redirectTo: await resolveWorkspaceSurfaceRedirect({
+            workspaceId: requestedWorkspaceId,
+            fallbackPath: '/customer',
+          }),
         };
       }
 
@@ -515,7 +731,10 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: WORKSPACE_REDIRECT,
+          redirectTo: await resolveWorkspaceSurfaceRedirect({
+            workspaceId: requestedWorkspaceId,
+            fallbackPath: '/app',
+          }),
         };
       }
 
@@ -537,7 +756,10 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: WORKSPACE_REDIRECT,
+          redirectTo: await resolveWorkspaceSurfaceRedirect({
+            workspaceId: memberships[0].workspaceId,
+            fallbackPath: '/app',
+          }),
         };
       }
 
@@ -550,7 +772,10 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: CUSTOMER_REDIRECT,
+          redirectTo: await resolveWorkspaceSurfaceRedirect({
+            workspaceId: firstCustomer.workspaceId,
+            fallbackPath: '/customer',
+          }),
         };
       }
 
@@ -586,7 +811,10 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: WORKSPACE_REDIRECT,
+        redirectTo: await resolveWorkspaceSurfaceRedirect({
+          workspaceId: memberships[0].workspaceId,
+          fallbackPath: '/app',
+        }),
       };
     }
 
@@ -599,7 +827,10 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: CUSTOMER_REDIRECT,
+        redirectTo: await resolveWorkspaceSurfaceRedirect({
+          workspaceId: firstCustomer.workspaceId,
+          fallbackPath: '/customer',
+        }),
       };
     }
 

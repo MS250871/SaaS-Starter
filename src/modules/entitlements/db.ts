@@ -93,14 +93,14 @@ export const planLimitQueries = buildQueries({
 
 export const workspaceFeatureOverrideCrud = buildCud({
   model: 'WorkspaceFeatureOverride',
-  workspaceScoped: true,
+  workspaceScoped: false,
   activeField: undefined,
   softDelete: false,
 });
 
 export const workspaceFeatureOverrideQueries = buildQueries({
   model: 'WorkspaceFeatureOverride',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });
 
 /* -------------------------------------------------------------------------- */
@@ -109,12 +109,12 @@ export const workspaceFeatureOverrideQueries = buildQueries({
 
 export const workspaceLimitOverrideCrud = buildCud({
   model: 'WorkspaceLimitOverride',
-  workspaceScoped: true,
+  workspaceScoped: false,
   activeField: undefined,
   softDelete: false,
 });
 
 export const workspaceLimitOverrideQueries = buildQueries({
   model: 'WorkspaceLimitOverride',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });

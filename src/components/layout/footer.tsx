@@ -4,7 +4,13 @@ import { navItems } from '@/lib/nav/navigation.config';
 import { AuthButtons } from './auth-buttons';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 
-export function Footer({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
+export function Footer({
+  isLoggedIn = false,
+  dashboardHref = "/app",
+}: {
+  isLoggedIn?: boolean
+  dashboardHref?: string
+}) {
   return (
     <footer className="border-t bg-muted/20 mt-24">
       <div className="max-w-7xl mx-auto px-6 py-16">
@@ -66,7 +72,11 @@ export function Footer({ isLoggedIn = false }: { isLoggedIn?: boolean }) {
           <div className="flex items-center gap-3">
             <ThemeToggle />
 
-            <AuthButtons isLoggedIn={isLoggedIn} className="hidden md:flex" />
+            <AuthButtons
+              isLoggedIn={isLoggedIn}
+              className="hidden md:flex"
+              dashboardHref={dashboardHref}
+            />
           </div>
         </div>
       </div>

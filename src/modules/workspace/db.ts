@@ -32,17 +32,28 @@ export const workspaceDomainQueries = buildQueries({
   workspaceScoped: false,
 });
 
+export const workspaceDomainDnsRecordCrud = buildCud({
+  model: 'WorkspaceDomainDnsRecord',
+  workspaceScoped: false,
+  softDelete: false,
+});
+
+export const workspaceDomainDnsRecordQueries = buildQueries({
+  model: 'WorkspaceDomainDnsRecord',
+  workspaceScoped: false,
+});
+
 /**
  * Workspace Subscriptions
  */
 export const workspaceSubscriptionCrud = buildCud({
-  model: 'WorkspaceSubscription',
+  model: 'Subscription',
   workspaceScoped: false,
   softDelete: false,
 });
 
 export const workspaceSubscriptionQueries = buildQueries({
-  model: 'WorkspaceSubscription',
+  model: 'Subscription',
   workspaceScoped: false,
 });
 
@@ -51,13 +62,13 @@ export const workspaceSubscriptionQueries = buildQueries({
  */
 export const workspaceInviteCrud = buildCud({
   model: 'WorkspaceInvite',
-  workspaceScoped: true,
+  workspaceScoped: false,
   softDelete: false,
 });
 
 export const workspaceInviteQueries = buildQueries({
   model: 'WorkspaceInvite',
-  workspaceScoped: true,
+  workspaceScoped: false,
 });
 
 /**
