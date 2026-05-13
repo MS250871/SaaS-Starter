@@ -1,6 +1,5 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import { endSession } from '@/modules/auth/services/session.services';
-import { sessionQueries } from '@/modules/auth/db';
+import { endSession, findSessionById } from '@/modules/auth/services/session.services';
 
 export type LogoutWorkflowInput = {
   sessionId?: string;
@@ -18,7 +17,7 @@ export async function logoutWorkflow(
       return {};
     }
 
-    const session = await sessionQueries.byId(input.sessionId);
+    const session = await findSessionById(input.sessionId);
 
     if (!session) {
       return {};

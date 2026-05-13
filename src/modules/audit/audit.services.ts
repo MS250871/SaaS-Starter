@@ -10,8 +10,10 @@ import { ERR } from '@/lib/errors/codes';
  */
 export async function getAuditLogById(id: string) {
   try {
-    return await adminAuditLogQueries.byId(id);
-  } catch (e) {
+    return await adminAuditLogQueries.findUnique({
+      where: { id },
+    });
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to fetch audit log');
   }
 }
@@ -22,7 +24,7 @@ export async function getAuditLogById(id: string) {
 export async function createAuditLog(data: CreateInput<'AdminAuditLog'>) {
   try {
     return await adminAuditLogCrud.create(data);
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to create audit log');
   }
 }
@@ -75,7 +77,7 @@ export async function logAdminAction(params: {
       source: params.source ?? AuditSource.ADMIN_PANEL,
       severity: params.severity ?? AuditSeverity.INFO,
     });
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to log admin action');
   }
 }
@@ -89,7 +91,7 @@ export async function updateAuditLog(
 ) {
   try {
     return await adminAuditLogCrud.update(id, data);
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to update audit log');
   }
 }
@@ -100,7 +102,7 @@ export async function updateAuditLog(
 export async function deleteAuditLog(id: string) {
   try {
     return await adminAuditLogCrud.delete(id);
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to delete audit log');
   }
 }
@@ -118,7 +120,7 @@ export async function listWorkspaceAuditLogs(workspaceId: string) {
         createdAt: 'desc',
       },
     });
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to list workspace audit logs');
   }
 }
@@ -136,7 +138,7 @@ export async function listIdentityAuditLogs(identityId: string) {
         createdAt: 'desc',
       },
     });
-  } catch (e) {
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to list identity audit logs');
   }
 }
@@ -149,17 +151,25 @@ export async function listAuditLogsPaginated(opts?: {
   pageSize?: number;
 }) {
   try {
-    return await adminAuditLogQueries.paginated({
-      page: opts?.page ?? 1,
-      pageSize: opts?.pageSize ?? 20,
-      sort: [
-        {
-          column: 'createdAt',
-          dir: 'desc',
-        },
-      ],
-    });
-  } catch (e) {
+    const page = opts?.page ?? 1;
+    const pageSize = opts?.pageSize ?? 20;
+    const [totalItems, items] = await Promise.all([
+      adminAuditLogQueries.count(),
+      adminAuditLogQueries.many({
+        orderBy: [{ createdAt: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
+
+    return {
+      items,
+      page,
+      pageSize,
+      totalItems,
+      totalPages: Math.ceil(totalItems / pageSize),
+    };
+  } catch {
     throwError(ERR.DB_ERROR, 'Failed to list audit logs');
   }
 }

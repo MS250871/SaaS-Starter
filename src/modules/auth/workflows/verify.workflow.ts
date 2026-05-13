@@ -6,6 +6,7 @@ import type {
   VerificationSession,
 } from '@/lib/auth/auth.schema';
 import { OtpPurpose } from '@/generated/prisma/enums';
+import type { WorkspaceRoleSystemKey } from '@/modules/roles/role.types';
 import { verifyAuthAccount } from '@/modules/auth/services/authAccount.services';
 import { verifyOtp } from '@/modules/auth/services/otp.services';
 import { createSession } from '@/modules/auth/services/session.services';
@@ -74,7 +75,9 @@ export async function verifyWorkflow(
         membershipId: session.membershipId ?? undefined,
         workspaceRoleId: session.workspaceRoleDefinitionId ?? undefined,
         workspaceRoleKey: session.workspaceRoleKey ?? undefined,
-        workspaceRoleSystemKey: session.workspaceRoleSystemKey ?? undefined,
+        workspaceRoleSystemKey:
+          (session.workspaceRoleSystemKey as WorkspaceRoleSystemKey | null | undefined) ??
+          undefined,
         platformRoleIds: [],
         platformRoleKeys: [],
         platformRoleSystemKeys: [],

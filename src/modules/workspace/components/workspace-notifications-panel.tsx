@@ -35,9 +35,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
   markAllWorkspaceNotificationsReadAction,
-} from '@/modules/workspace/actions/mark-all-workspace-notifications-read.action';
-import { markWorkspaceNotificationReadAction } from '@/modules/workspace/actions/mark-workspace-notification-read.action';
-import { sendWorkspaceNotificationAction } from '@/modules/workspace/actions/send-workspace-notification.action';
+} from '@/modules/notifications/actions/mark-all-workspace-notifications-read.action';
+import { markWorkspaceNotificationReadAction } from '@/modules/notifications/actions/mark-workspace-notification-read.action';
+import { sendWorkspaceNotificationAction } from '@/modules/notifications/actions/send-workspace-notification.action';
 import {
   sendWorkspaceNotificationActionSchema,
   type SendWorkspaceNotificationActionInput,

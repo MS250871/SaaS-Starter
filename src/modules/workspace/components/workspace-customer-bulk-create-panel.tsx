@@ -35,12 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { importWorkspaceCustomerCsvAction } from '@/modules/workspace/actions/import-workspace-customer-csv.action';
-import { previewWorkspaceCustomerCsvImportAction } from '@/modules/workspace/actions/preview-workspace-customer-csv-import.action';
+import { importWorkspaceCustomerCsvAction } from '@/modules/customer/actions/import-workspace-customer-csv.action';
+import { previewWorkspaceCustomerCsvImportAction } from '@/modules/customer/actions/preview-workspace-customer-csv-import.action';
 import type {
   WorkspaceCustomerCsvPreparedImport,
   WorkspaceCustomerCsvPreparedRow,
-} from '@/modules/workspace/services/workspace-customer-csv-import.services';
+} from '@/modules/customer/services/workspace-customer-csv-import.services';
 
 function buildSampleCsv(workspaceSlug: string) {
   return [

@@ -14,6 +14,7 @@ import {
   PermissionSource,
   PermissionEffect,
 } from "@/generated/prisma/client"
+import type { Prisma } from "@/generated/prisma/client"
 
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"
@@ -46,10 +47,56 @@ type ResolvePermissionsParams = {
   platformRoleDefinitionIds?: string[] | null
 }
 
+export type WorkspaceRolePermissionOverride = Prisma.WorkspaceRolePermissionGetPayload<{
+  include: { permission: true }
+}>
+
+export type WorkspaceRolePermissionWithPermission = Prisma.WorkspaceRolePermissionGetPayload<{
+  include: { permission: true }
+}>
+
+export type IdentityPermissionWithPermission = Prisma.UserPermissionGetPayload<{
+  include: { permission: true }
+}>
+
+export type RolePermissionWithPermission = Prisma.RolePermissionGetPayload<{
+  include: { permission: true }
+}>
+
+export type WorkspaceUserPermissionOverrideDetailed = Prisma.UserPermissionGetPayload<{
+  include: {
+    permission: true
+    identity: {
+      select: {
+        id: true
+        firstName: true
+        lastName: true
+        email: true
+      }
+    }
+    grantedBy: {
+      select: {
+        firstName: true
+        lastName: true
+        email: true
+      }
+    }
+  }
+}>
+
+export type WorkspaceUserPermissionOverride = Prisma.UserPermissionGetPayload<{
+  include: {
+    permission: true
+    identity: true
+  }
+}>
+
 export async function getPermissionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Permission ID is required")
 
-  const permission = await permissionQueries.byId(id)
+  const permission = await permissionQueries.findUnique({
+    where: { id },
+  })
   if (!permission) throwError(ERR.NOT_FOUND, "Permission not found")
 
   return permission
@@ -123,7 +170,9 @@ export async function deletePermission(id: string) {
 export async function getRolePermissionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "RolePermission ID is required")
 
-  const rolePermission = await rolePermissionQueries.byId(id)
+  const rolePermission = await rolePermissionQueries.findUnique({
+    where: { id },
+  })
   if (!rolePermission) throwError(ERR.NOT_FOUND, "Role permission not found")
 
   return rolePermission
@@ -182,7 +231,9 @@ export async function clearRolePermissionsByRoleDefinition(
 export async function getWorkspaceRolePermissionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "ID is required")
 
-  const record = await workspaceRolePermissionQueries.byId(id)
+  const record = await workspaceRolePermissionQueries.findUnique({
+    where: { id },
+  })
   if (!record) throwError(ERR.NOT_FOUND, "Workspace role permission not found")
 
   return record
@@ -248,7 +299,7 @@ export async function deleteWorkspaceRolePermission(id: string) {
 export async function listWorkspaceRolePermissions(
   workspaceId: string,
   roleDefinitionId: string,
-) {
+): Promise<WorkspaceRolePermissionWithPermission[]> {
   if (!workspaceId || !roleDefinitionId) {
     throwError(
       ERR.INVALID_INPUT,
@@ -256,10 +307,79 @@ export async function listWorkspaceRolePermissions(
     )
   }
 
-  return workspaceRolePermissionQueries.many({
+  const overrides = await workspaceRolePermissionQueries.many({
     where: { workspaceId, roleDefinitionId },
     include: { permission: true },
   })
+
+  return overrides as unknown as WorkspaceRolePermissionWithPermission[]
+}
+
+export async function findWorkspaceRolePermissionOverride(params: {
+  workspaceId: string
+  roleDefinitionId: string
+  permissionId: string
+}) {
+  if (!params.workspaceId || !params.roleDefinitionId || !params.permissionId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      "workspaceId, roleDefinitionId, and permissionId are required",
+    )
+  }
+
+  return workspaceRolePermissionQueries.findFirst({
+    where: {
+      workspaceId: params.workspaceId,
+      roleDefinitionId: params.roleDefinitionId,
+      permissionId: params.permissionId,
+    },
+  })
+}
+
+export async function setWorkspaceRolePermissionOverride(params: {
+  workspaceId: string
+  roleDefinitionId: string
+  permissionId: string
+  isAllowed: boolean
+}) {
+  const existing = await findWorkspaceRolePermissionOverride(params)
+
+  if (existing) {
+    return updateWorkspaceRolePermission(existing.id, {
+      isAllowed: params.isAllowed,
+    })
+  }
+
+  return createWorkspaceRolePermission(params)
+}
+
+export async function listWorkspaceRolePermissionOverrides(
+  workspaceId: string,
+): Promise<WorkspaceRolePermissionOverride[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, "Workspace ID is required")
+  }
+
+  const overrides = await workspaceRolePermissionQueries.many({
+    where: { workspaceId },
+    include: { permission: true },
+  })
+
+  return overrides as WorkspaceRolePermissionOverride[]
+}
+
+export async function clearWorkspaceRolePermissionOverride(params: {
+  workspaceId: string
+  roleDefinitionId: string
+  permissionId: string
+}) {
+  const existing = await findWorkspaceRolePermissionOverride(params)
+
+  if (!existing) {
+    return null
+  }
+
+  return deleteWorkspaceRolePermission(existing.id)
 }
 
 export async function clearWorkspaceRolePermissionOverrides(
@@ -356,35 +476,167 @@ export async function revokePermission(id: string, revokedById?: string) {
 export async function getUserPermissionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "ID is required")
 
-  const permission = await userPermissionQueries.byId(id)
+  const permission = await userPermissionQueries.findUnique({
+    where: { id },
+  })
   if (!permission) throwError(ERR.NOT_FOUND, "User permission not found")
 
   return permission
 }
 
-export async function listIdentityPermissions(identityId: string) {
+export async function listIdentityPermissions(
+  identityId: string,
+): Promise<IdentityPermissionWithPermission[]> {
   if (!identityId) throwError(ERR.INVALID_INPUT, "identityId required")
 
-  return userPermissionQueries.many({
+  const permissions = await userPermissionQueries.many({
     where: { identityId, isActive: true },
     orderBy: { createdAt: "desc" },
     include: { permission: true },
   })
+
+  return permissions as unknown as IdentityPermissionWithPermission[]
 }
 
 export async function listWorkspaceIdentityPermissions(
   workspaceId: string,
   identityId: string,
-) {
+): Promise<IdentityPermissionWithPermission[]> {
   if (!workspaceId || !identityId) {
     throwError(ERR.INVALID_INPUT, "workspaceId and identityId required")
   }
 
-  return userPermissionQueries.many({
+  const permissions = await userPermissionQueries.many({
     where: { identityId, workspaceId, isActive: true },
     orderBy: { createdAt: "desc" },
     include: { permission: true },
   })
+
+  return permissions as unknown as IdentityPermissionWithPermission[]
+}
+
+export async function getWorkspaceUserPermissionOverride(
+  workspaceId: string,
+  userPermissionId: string,
+): Promise<WorkspaceUserPermissionOverride> {
+  if (!workspaceId || !userPermissionId) {
+    throwError(ERR.INVALID_INPUT, "workspaceId and userPermissionId are required")
+  }
+
+  const override = await userPermissionQueries.findFirst({
+    where: {
+      id: userPermissionId,
+      workspaceId,
+    },
+    include: {
+      permission: true,
+      identity: true,
+    },
+  })
+
+  if (!override) {
+    throwError(ERR.NOT_FOUND, "Workspace permission override not found")
+  }
+
+  return override as unknown as WorkspaceUserPermissionOverride
+}
+
+export async function findLatestManualWorkspaceUserPermissionOverride(params: {
+  workspaceId: string
+  identityId: string
+  permissionId: string
+}) {
+  if (!params.workspaceId || !params.identityId || !params.permissionId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      "workspaceId, identityId, and permissionId are required",
+    )
+  }
+
+  return userPermissionQueries.findFirst({
+    where: {
+      workspaceId: params.workspaceId,
+      identityId: params.identityId,
+      permissionId: params.permissionId,
+      isActive: true,
+      source: PermissionSource.MANUAL,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  })
+}
+
+export async function upsertWorkspaceUserPermissionOverride(params: {
+  workspaceId: string
+  identityId: string
+  permissionId: string
+  effect: "ALLOW" | "DENY"
+  grantedById?: string
+}) {
+  const existing = await findLatestManualWorkspaceUserPermissionOverride({
+    workspaceId: params.workspaceId,
+    identityId: params.identityId,
+    permissionId: params.permissionId,
+  })
+
+  if (existing) {
+    return userPermissionCrud.update(existing.id, {
+      effect: params.effect,
+      grantedById: params.grantedById ?? null,
+      revokedById: null,
+      revokedAt: null,
+      isActive: true,
+      isTemporary: false,
+      expiresAt: null,
+    })
+  }
+
+  return userPermissionCrud.create({
+    workspaceId: params.workspaceId,
+    identityId: params.identityId,
+    permissionId: params.permissionId,
+    grantedById: params.grantedById,
+    source: PermissionSource.MANUAL,
+    isActive: true,
+    effect: params.effect,
+  })
+}
+
+export async function listWorkspaceUserPermissionOverridesDetailed(
+  workspaceId: string,
+): Promise<WorkspaceUserPermissionOverrideDetailed[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, "Workspace ID is required")
+  }
+
+  const overrides = await userPermissionQueries.many({
+    where: {
+      workspaceId,
+      isActive: true,
+    },
+    orderBy: [{ createdAt: "desc" }],
+    include: {
+      permission: true,
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      grantedBy: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  })
+
+  return overrides as WorkspaceUserPermissionOverrideDetailed[]
 }
 
 export async function getBaseRolePermissionKeys(params: {
@@ -401,14 +653,14 @@ export async function getBaseRolePermissionKeys(params: {
     return keys
   }
 
-  const rolePermissions = await rolePermissionQueries.many({
+  const rolePermissions = (await rolePermissionQueries.many({
     where: {
       roleDefinitionId: {
         in: roleDefinitionIds,
       },
     },
     include: { permission: true },
-  })
+  })) as unknown as RolePermissionWithPermission[]
 
   for (const permission of rolePermissions) {
     if (permission.permission?.key) {

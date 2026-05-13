@@ -1,4 +1,26 @@
-import { prisma } from '@/lib/prisma';
+import {
+  listFeatureCatalog,
+  listLimitCatalog,
+  listPublicPricingPlans,
+} from '@/modules/entitlements/entitlement.services';
+
+type PublicPricingPlan = Awaited<ReturnType<typeof listPublicPricingPlans>>[number];
+type PricingFeatureCatalogItem = Awaited<ReturnType<typeof listFeatureCatalog>>[number];
+type PricingLimitCatalogItem = Awaited<ReturnType<typeof listLimitCatalog>>[number];
+
+export type PricingPagePlan = {
+  key: string;
+  name: string;
+  description: string;
+  price: string;
+  priceHint?: string;
+  features: string[];
+  button: string;
+  link: string;
+  highlight: boolean;
+  featureSet: Set<string>;
+  limitMap: Map<string, { value: number; unit: string | null }>;
+};
 
 const featuredFeatureKeys = [
   'domain_path_based',
@@ -68,88 +90,41 @@ function planButtonConfig(planKey: string) {
 }
 
 export async function getPricingPageData() {
-  const plans = await prisma.plan.findMany({
-    where: {
-      isActive: true,
-      isPublic: true,
-    },
-    orderBy: {
-      sortOrder: 'asc',
-    },
-    include: {
-      features: {
-        where: { isEnabled: true },
-        include: {
-          feature: true,
-        },
-      },
-      limits: {
-        include: {
-          limitDefinition: true,
-        },
-      },
-      products: {
-        where: {
-          isActive: true,
-        },
-        include: {
-          prices: {
-            where: {
-              isActive: true,
-            },
-            orderBy: {
-              createdAt: 'asc',
-            },
-          },
-        },
-      },
-    },
-  });
+  const [plans, featureCatalog, limitCatalog] = await Promise.all([
+    listPublicPricingPlans(),
+    listFeatureCatalog(),
+    listLimitCatalog(),
+  ]);
 
-  const featureCatalog = await prisma.feature.findMany({
-    where: { isActive: true },
-    orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }],
-    select: {
-      key: true,
-      name: true,
-      category: true,
-    },
-  });
-
-  const limitCatalog = await prisma.limitDefinition.findMany({
-    where: { isActive: true },
-    orderBy: { sortOrder: 'asc' },
-    select: {
-      key: true,
-      name: true,
-      unit: true,
-    },
-  });
-
-  const pricingPlans = plans.map((plan) => {
-    const prices = plan.products.flatMap((product) => product.prices);
+  const pricingPlans: PricingPagePlan[] = plans.map((plan: PublicPricingPlan) => {
+    const prices = plan.products.flatMap((product: PublicPricingPlan['products'][number]) => product.prices);
     const monthlyPrice =
-      prices.find((price) => price.interval === 'MONTHLY') ?? prices[0] ?? null;
+      prices.find((price: (typeof prices)[number]) => price.interval === 'MONTHLY') ??
+      prices[0] ??
+      null;
     const yearlyPrice =
-      prices.find((price) => price.interval === 'YEARLY') ?? null;
+      prices.find((price: (typeof prices)[number]) => price.interval === 'YEARLY') ??
+      null;
 
     const featuredFeatures = plan.features
-      .filter(
-        (planFeature) =>
-          planFeature.feature &&
-          featuredFeatureKeys.includes(
-            planFeature.feature.key as (typeof featuredFeatureKeys)[number],
-          ),
+      .filter((planFeature: PublicPricingPlan['features'][number]) =>
+        planFeature.feature &&
+        featuredFeatureKeys.includes(
+          planFeature.feature.key as (typeof featuredFeatureKeys)[number],
+        ),
       )
-      .map((planFeature) => planFeature.feature!.name);
+      .map(
+        (planFeature: PublicPricingPlan['features'][number]) =>
+          planFeature.feature!.name,
+      );
 
     const featuredLimits = plan.limits
-      .filter((planLimit) =>
+      .filter((planLimit: PublicPricingPlan['limits'][number]) =>
         featuredLimitKeys.includes(
           planLimit.limitDefinition.key as (typeof featuredLimitKeys)[number],
         ),
       )
-      .map((planLimit) =>
+      .map((planLimit: PublicPricingPlan['limits'][number]) =>
         `${planLimit.limitDefinition.name}: ${formatLimitValue(
           planLimit.valueInt,
           planLimit.limitDefinition.unit,
@@ -180,9 +155,14 @@ export async function getPricingPageData() {
       button: buttonConfig.button,
       link: `/signup?${signupParams.toString()}`,
       highlight: buttonConfig.highlight,
-      featureSet: new Set(plan.features.map((planFeature) => planFeature.feature.key)),
+      featureSet: new Set(
+        plan.features.map(
+          (planFeature: PublicPricingPlan['features'][number]) =>
+            planFeature.feature.key,
+        ),
+      ),
       limitMap: new Map(
-        plan.limits.map((planLimit) => [
+        plan.limits.map((planLimit: PublicPricingPlan['limits'][number]) => [
           planLimit.limitDefinition.key,
           {
             value: planLimit.valueInt,
@@ -195,7 +175,7 @@ export async function getPricingPageData() {
 
   return {
     plans: pricingPlans,
-    featureCatalog,
-    limitCatalog,
+    featureCatalog: featureCatalog as PricingFeatureCatalogItem[],
+    limitCatalog: limitCatalog as PricingLimitCatalogItem[],
   };
 }

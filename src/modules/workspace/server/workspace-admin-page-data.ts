@@ -1,10 +1,21 @@
 import { headers } from "next/headers"
 import { WorkspaceDomainType } from "@/generated/prisma/client"
 
-import { prisma } from "@/lib/prisma"
-import { withServerRequestContext } from "@/lib/request/with-server-request-context"
+import { withActionTxContext } from "@/lib/request/withActionContext"
 import { readActorContext } from "@/lib/request/read-actor-context"
-import { resolveEntitlements } from "@/modules/entitlements/entitlement.services"
+import {
+  countWorkspaceIdentityNotifications,
+  listWorkspaceIdentityNotifications,
+} from "@/modules/notifications/notification.services"
+import {
+  listFeatureCatalog,
+  listLimitCatalog,
+  listPlanFeatures,
+  listPlanLimits,
+  listWorkspaceFeatureOverrides,
+  listWorkspaceLimitOverrides,
+  resolveEntitlements,
+} from "@/modules/entitlements/entitlement.services"
 import {
   getRootDomainHost,
   isRootWorkspaceHost,
@@ -13,6 +24,48 @@ import {
 import { normalizeWorkspaceTheme } from "@/modules/workspace/theme"
 import { getManagedWorkspaceDomainProviderLabel } from "@/modules/workspace/services/domain-provider.services"
 import { workspaceApiKeyScopes } from "@/modules/workspace/api-key-scopes"
+import {
+  countWorkspaceCustomers,
+  getWorkspaceCustomerDetailsSnapshot,
+  listWorkspaceCustomersDirectory,
+  listWorkspaceCustomersPage,
+} from "@/modules/customer/services/customer.services"
+import {
+  countPendingWorkspaceInvites,
+  listPendingWorkspaceInvitesWithRoles,
+} from "@/modules/workspace/services/invite.services"
+import {
+  countActiveWorkspaceApiKeys,
+  listWorkspaceApiKeysDetailed,
+} from "@/modules/workspace/services/apikey.services"
+import {
+  countActiveWorkspaceMemberships,
+  listActiveWorkspaceMembersWithRoles,
+} from "@/modules/workspace/services/membership.services"
+import {
+  listPermissions,
+  listWorkspaceRolePermissionOverrides,
+  listWorkspaceUserPermissionOverridesDetailed,
+} from "@/modules/permissions/permissions.services"
+import {
+  getWorkspaceSupportSummary,
+  getWorkspaceSupportThreadSnapshot,
+  hydrateWorkspaceSupportTicketListItems,
+  listWorkspaceSupportQueueTickets,
+} from "@/modules/support/support.services"
+import { getWorkspaceSettings } from "@/modules/workspace/services/setting.services"
+import {
+  getWorkspaceAdminSurfaceWorkspace,
+} from "@/modules/workspace/services/workspace.services"
+import {
+  countWorkspaceDomains,
+  listWorkspaceDomainsDetailed,
+} from "@/modules/workspace/services/domains.services"
+import {
+  listAssignableRoleDefinitions,
+  listRoleDefinitionsWithPermissions,
+} from "@/modules/roles/role.services"
+import { getWorkspaceActiveSubscriptionPlanSummary } from "@/modules/workspace/services/subscription.services"
 
 type WorkspaceRedirectAliasConfig = {
   domain: string
@@ -20,6 +73,78 @@ type WorkspaceRedirectAliasConfig = {
   redirectStatusCode: 301 | 302 | 307 | 308
   verified: boolean
 }
+
+type AccessPermissionGroup = {
+  entity: string
+  permissions: Array<{
+    id: string
+    key: string
+    name: string | null
+    description: string | null
+  }>
+}
+
+type FeatureCategory = {
+  category: string
+  features: Array<{
+    id: string
+    key: string
+    name: string
+    description: string | null
+    enabled: boolean
+    baseEnabled: boolean
+    isOverridden: boolean
+  }>
+}
+
+type LimitCategory = {
+  category: string
+  limits: Array<{
+    id: string
+    key: string
+    name: string
+    description: string | null
+    unit: string | null
+    value: number
+    baseValue: number
+    isOverridden: boolean
+  }>
+}
+
+type WorkspaceInboxNotification = Awaited<
+  ReturnType<typeof listWorkspaceIdentityNotifications>
+>[number]
+type WorkspaceInboxDelivery = WorkspaceInboxNotification["deliveries"][number]
+type WorkspaceMemberWithRole = Awaited<
+  ReturnType<typeof listActiveWorkspaceMembersWithRoles>
+>[number]
+type WorkspaceCustomerDirectoryEntry = Awaited<
+  ReturnType<typeof listWorkspaceCustomersDirectory>
+>[number]
+type WorkspacePendingInvite = Awaited<
+  ReturnType<typeof listPendingWorkspaceInvitesWithRoles>
+>[number]
+type WorkspaceCustomerPageEntry = Awaited<
+  ReturnType<typeof listWorkspaceCustomersPage>
+>["customers"][number]
+type WorkspaceDetailedApiKey = Awaited<
+  ReturnType<typeof listWorkspaceApiKeysDetailed>
+>[number]
+type WorkspaceSupportThreadSnapshot = NonNullable<
+  Awaited<ReturnType<typeof getWorkspaceSupportThreadSnapshot>>
+>
+type WorkspaceSupportMessage = WorkspaceSupportThreadSnapshot["messages"][number]
+type WorkspaceSupportMessageIdentity =
+  WorkspaceSupportThreadSnapshot["messageIdentities"][number]
+type WorkspaceSupportMessageCustomer =
+  WorkspaceSupportThreadSnapshot["messageCustomers"][number]
+type WorkspaceSupportPlatformMembership =
+  WorkspaceSupportThreadSnapshot["platformMemberships"][number]
+type WorkspaceSupportAttachment =
+  WorkspaceSupportThreadSnapshot["messageAttachments"][number]
+type WorkspaceSerializedSupportTicket = Awaited<
+  ReturnType<typeof hydrateWorkspaceSupportTicketListItems>
+>[number]
 
 function normalizeRedirectStatusCode(value: unknown): 301 | 302 | 307 | 308 {
   if (value === 301 || value === 302 || value === 307 || value === 308) {
@@ -99,48 +224,24 @@ export async function getWorkspaceNotificationInboxData(params: {
   identityId: string
   limit?: number
 }) {
-  const notifications = await prisma.notification.findMany({
-    where: {
+  const [notifications, unreadCount] = await Promise.all([
+    listWorkspaceIdentityNotifications({
       workspaceId: params.workspaceId,
-      recipientIdentityId: params.identityId,
-      type: {
-        not: 'workspace.notification.sent_summary',
-      },
-    },
-    orderBy: [{ createdAt: 'desc' }],
-    take: params.limit ?? 20,
-    include: {
-      deliveries: {
-        orderBy: [{ createdAt: 'desc' }],
-        select: {
-          id: true,
-          channel: true,
-          status: true,
-          recipient: true,
-          subject: true,
-          errorMessage: true,
-          sentAt: true,
-          deliveredAt: true,
-          failedAt: true,
-        },
-      },
-    },
-  })
-
-  const unreadCount = await prisma.notification.count({
-    where: {
+      identityId: params.identityId,
+      limit: params.limit ?? 20,
+      excludeTypes: ['workspace.notification.sent_summary'],
+    }),
+    countWorkspaceIdentityNotifications({
       workspaceId: params.workspaceId,
-      recipientIdentityId: params.identityId,
-      isRead: false,
-      type: {
-        not: 'workspace.notification.sent_summary',
-      },
-    },
-  })
+      identityId: params.identityId,
+      unreadOnly: true,
+      excludeTypes: ['workspace.notification.sent_summary'],
+    }),
+  ])
 
   return {
     unreadCount,
-    items: notifications.map((notification) => ({
+    items: notifications.map((notification: WorkspaceInboxNotification) => ({
       id: notification.id,
       type: notification.type,
       title: notification.title ?? 'Notification',
@@ -148,7 +249,7 @@ export async function getWorkspaceNotificationInboxData(params: {
       isRead: notification.isRead,
       createdAt: notification.createdAt.toISOString(),
       href: getNotificationHref(notification.payload),
-      deliveries: notification.deliveries.map((delivery) => ({
+      deliveries: notification.deliveries.map((delivery: WorkspaceInboxDelivery) => ({
         id: delivery.id,
         channel: delivery.channel,
         status: delivery.status,
@@ -180,22 +281,8 @@ export async function getWorkspaceAdminSurfaceContext() {
   }
 
   const [workspace, settings] = await Promise.all([
-    prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        defaultDomain: true,
-      },
-    }),
-    prisma.workspaceSettings.findUnique({
-      where: { workspaceId },
-      select: {
-        themes: true,
-        settings: true,
-      },
-    }),
+    getWorkspaceAdminSurfaceWorkspace(workspaceId),
+    getWorkspaceSettings(workspaceId),
   ])
 
   if (!workspace) {
@@ -231,7 +318,7 @@ export async function getWorkspaceAdminSurfaceContext() {
 }
 
 export async function getWorkspaceOverviewPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId || !context.workspace) {
@@ -249,40 +336,18 @@ export async function getWorkspaceOverviewPageData() {
       apiKeyCount,
       unreadNotificationCount,
     ] = await Promise.all([
-      prisma.membership.count({
-        where: {
-          workspaceId: context.workspaceId,
-          isActive: true,
-        },
-      }),
-      prisma.workspaceInvite.count({
-        where: {
-          workspaceId: context.workspaceId,
-          status: "PENDING",
-        },
-      }),
-      prisma.customer.count({
-        where: {
-          workspaceId: context.workspaceId,
-        },
-      }),
-      prisma.workspaceDomain.count({
-        where: {
-          workspaceId: context.workspaceId,
-        },
-      }),
-      prisma.apiKey.count({
-        where: {
-          workspaceId: context.workspaceId,
-          isActive: true,
-        },
-      }),
-      prisma.notification.count({
-        where: {
-          workspaceId: context.workspaceId,
-          isRead: false,
-        },
-      }),
+      countActiveWorkspaceMemberships(context.workspaceId),
+      countPendingWorkspaceInvites(context.workspaceId),
+      countWorkspaceCustomers(context.workspaceId),
+      countWorkspaceDomains(context.workspaceId),
+      countActiveWorkspaceApiKeys(context.workspaceId),
+      context.actor.identityId
+        ? countWorkspaceIdentityNotifications({
+            workspaceId: context.workspaceId,
+            identityId: context.actor.identityId,
+            unreadOnly: true,
+          })
+        : Promise.resolve(0),
     ])
 
     return {
@@ -303,7 +368,7 @@ export async function getWorkspaceOverviewPageData() {
 }
 
 export async function getWorkspaceNotificationsPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId || !context.actor.identityId) {
@@ -326,45 +391,12 @@ export async function getWorkspaceNotificationsPageData() {
           identityId: context.actor.identityId,
           limit: 50,
         }),
-        prisma.notification.count({
-          where: {
-            workspaceId: context.workspaceId,
-            recipientIdentityId: context.actor.identityId,
-          },
+        countWorkspaceIdentityNotifications({
+          workspaceId: context.workspaceId,
+          identityId: context.actor.identityId,
         }),
-        prisma.membership.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-            isActive: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-          select: {
-            identityId: true,
-            identity: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        }),
-        prisma.customer.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-          select: {
-            id: true,
-            identity: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        }),
+        listActiveWorkspaceMembersWithRoles(context.workspaceId),
+        listWorkspaceCustomersDirectory(context.workspaceId),
       ])
 
     return {
@@ -375,8 +407,8 @@ export async function getWorkspaceNotificationsPageData() {
         unreadCount: inboxData.unreadCount,
       },
       workspaceRecipients: workspaceRecipients
-        .filter((member) => member.identityId !== context.actor.identityId)
-        .map((member) => ({
+        .filter((member: WorkspaceMemberWithRole) => member.identityId !== context.actor.identityId)
+        .map((member: WorkspaceMemberWithRole) => ({
           id: member.identityId,
           name:
             `${member.identity.firstName ?? ''} ${member.identity.lastName ?? ''}`.trim() ||
@@ -384,7 +416,7 @@ export async function getWorkspaceNotificationsPageData() {
             'Workspace member',
           email: member.identity.email ?? null,
         })),
-      customerRecipients: customerRecipients.map((customer) => ({
+      customerRecipients: customerRecipients.map((customer: WorkspaceCustomerDirectoryEntry) => ({
         id: customer.id,
         name:
           `${customer.identity.firstName ?? ''} ${customer.identity.lastName ?? ''}`.trim() ||
@@ -397,7 +429,7 @@ export async function getWorkspaceNotificationsPageData() {
 }
 
 export async function getWorkspaceTeamPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId) {
@@ -410,82 +442,14 @@ export async function getWorkspaceTeamPageData() {
     }
 
     const [members, invites, assignableRoles] = await Promise.all([
-      prisma.membership.findMany({
-        where: {
-          workspaceId: context.workspaceId,
-          isActive: true,
-        },
-        orderBy: [{ createdAt: "asc" }],
-        select: {
-          id: true,
-          identityId: true,
-          roleKey: true,
-          roleSystemKey: true,
-          createdAt: true,
-          roleDefinition: {
-            select: {
-              id: true,
-              name: true,
-              hierarchyRank: true,
-            },
-          },
-          identity: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      }),
-      prisma.workspaceInvite.findMany({
-        where: {
-          workspaceId: context.workspaceId,
-          status: "PENDING",
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        take: 20,
-        select: {
-          id: true,
-          email: true,
-          roleKey: true,
-          roleSystemKey: true,
-          roleDefinition: {
-            select: {
-              id: true,
-              name: true,
-              hierarchyRank: true,
-            },
-          },
-          status: true,
-          token: true,
-          expiresAt: true,
-          createdAt: true,
-        },
-      }),
-      prisma.roleDefinition.findMany({
-        where: {
-          scope: "WORKSPACE",
-          isActive: true,
-          isAssignable: true,
-        },
-        orderBy: [{ hierarchyRank: "desc" }, { name: "asc" }],
-        select: {
-          id: true,
-          key: true,
-          name: true,
-          description: true,
-          hierarchyRank: true,
-          systemKey: true,
-        },
-      }),
+      listActiveWorkspaceMembersWithRoles(context.workspaceId),
+      listPendingWorkspaceInvitesWithRoles(context.workspaceId, 20),
+      listAssignableRoleDefinitions("WORKSPACE"),
     ])
 
     return {
       ...context,
-      members: members.map((member) => ({
+      members: members.map((member: WorkspaceMemberWithRole) => ({
         id: member.id,
         identityId: member.identityId,
         role: member.roleDefinition.name,
@@ -500,7 +464,7 @@ export async function getWorkspaceTeamPageData() {
           "Unnamed member",
         email: member.identity.email ?? null,
       })),
-      invites: invites.map((invite) => ({
+      invites: invites.map((invite: WorkspacePendingInvite) => ({
         id: invite.id,
         email: invite.email,
         role: invite.roleKey,
@@ -513,20 +477,22 @@ export async function getWorkspaceTeamPageData() {
         expiresAt: invite.expiresAt?.toISOString() ?? null,
         createdAt: invite.createdAt.toISOString(),
       })),
-      assignableRoles: assignableRoles.map((role) => ({
-        id: role.id,
-        key: role.key,
-        name: role.name,
-        description: role.description ?? null,
-        roleSystemKey: role.systemKey ?? null,
-        roleRank: role.hierarchyRank ?? null,
-      })),
+      assignableRoles: assignableRoles.map(
+        (role: (typeof assignableRoles)[number]) => ({
+          id: role.id,
+          key: role.key,
+          name: role.name,
+          description: role.description ?? null,
+          roleSystemKey: role.systemKey ?? null,
+          roleRank: role.hierarchyRank ?? null,
+        }),
+      ),
     }
   })
 }
 
 export async function getWorkspaceThemePageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     return {
@@ -537,7 +503,7 @@ export async function getWorkspaceThemePageData() {
 }
 
 export async function getWorkspaceAccessPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId) {
@@ -558,83 +524,11 @@ export async function getWorkspaceAccessPageData() {
 
     const [roleDefinitions, permissions, roleOverrides, userOverrides, members] =
       await Promise.all([
-        prisma.roleDefinition.findMany({
-          where: {
-            scope: 'WORKSPACE',
-            isActive: true,
-          },
-          orderBy: [{ hierarchyRank: 'desc' }, { name: 'asc' }],
-          include: {
-            rolePermissions: {
-              include: {
-                permission: true,
-              },
-            },
-          },
-        }),
-        prisma.permission.findMany({
-          where: {
-            isActive: true,
-          },
-          orderBy: [{ entity: 'asc' }, { key: 'asc' }],
-        }),
-        prisma.workspaceRolePermission.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-          },
-          include: {
-            permission: true,
-          },
-        }),
-        prisma.userPermission.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-            isActive: true,
-          },
-          orderBy: [{ createdAt: 'desc' }],
-          include: {
-            permission: true,
-            identity: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            grantedBy: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        }),
-        prisma.membership.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-            isActive: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-          include: {
-            identity: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-            roleDefinition: {
-              select: {
-                id: true,
-                name: true,
-                key: true,
-              },
-            },
-          },
-        }),
+        listRoleDefinitionsWithPermissions('WORKSPACE'),
+        listPermissions(),
+        listWorkspaceRolePermissionOverrides(context.workspaceId),
+        listWorkspaceUserPermissionOverridesDetailed(context.workspaceId),
+        listActiveWorkspaceMembersWithRoles(context.workspaceId),
       ])
 
     const overridesByRoleId = new Map<
@@ -651,21 +545,9 @@ export async function getWorkspaceAccessPageData() {
       overridesByRoleId.set(override.roleDefinitionId, roleOverridesForRole)
     }
 
-    const permissionsByEntity = Object.values(
-      permissions.reduce<
-        Record<
-          string,
-          {
-            entity: string
-            permissions: Array<{
-              id: string
-              key: string
-              name: string | null
-              description: string | null
-            }>
-          }
-        >
-      >((acc, permission) => {
+    const permissionsByEntityMap: Record<string, AccessPermissionGroup> = {}
+    const permissionsByEntity: AccessPermissionGroup[] = Object.values(
+      permissions.reduce((acc: Record<string, AccessPermissionGroup>, permission: (typeof permissions)[number]) => {
         acc[permission.entity] ??= {
           entity: permission.entity,
           permissions: [],
@@ -679,12 +561,12 @@ export async function getWorkspaceAccessPageData() {
         })
 
         return acc
-      }, {}),
+      }, permissionsByEntityMap),
     )
 
     return {
       ...context,
-      roles: roleDefinitions.map((role) => ({
+      roles: roleDefinitions.map((role: (typeof roleDefinitions)[number]) => ({
         id: role.id,
         key: role.key,
         name: role.name,
@@ -695,12 +577,12 @@ export async function getWorkspaceAccessPageData() {
         isDefault: role.isDefault,
         isSystem: role.isSystem,
         basePermissionIds: role.rolePermissions.map(
-          (rolePermission) => rolePermission.permissionId,
+          (rolePermission: (typeof role.rolePermissions)[number]) => rolePermission.permissionId,
         ),
         overrideModes: overridesByRoleId.get(role.id) ?? {},
       })),
       permissionsByEntity,
-      userOverrides: userOverrides.map((override) => ({
+      userOverrides: userOverrides.map((override: (typeof userOverrides)[number]) => ({
         id: override.id,
         identityId: override.identityId,
         permissionId: override.permissionId,
@@ -720,7 +602,7 @@ export async function getWorkspaceAccessPageData() {
           override.grantedBy?.email ||
           null,
       })),
-      members: members.map((member) => ({
+      members: members.map((member: (typeof members)[number]) => ({
         membershipId: member.id,
         identityId: member.identityId,
         name:
@@ -746,7 +628,7 @@ export async function getWorkspaceCustomersPageData(params?: {
   query?: string | null
   source?: string | null
 }) {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     const page = normalizePageNumber(params?.page)
@@ -771,90 +653,17 @@ export async function getWorkspaceCustomersPageData(params?: {
       }
     }
 
-    const where = {
+    const { totalItems, customers } = await listWorkspaceCustomersPage({
       workspaceId: context.workspaceId,
-      ...(source === 'external'
-        ? {
-            externalId: {
-              not: null,
-            },
-          }
-        : source === 'native'
-          ? {
-              externalId: null,
-            }
-          : {}),
-      ...(query
-        ? {
-            OR: [
-              {
-                externalId: {
-                  contains: query,
-                  mode: 'insensitive' as const,
-                },
-              },
-              {
-                identity: {
-                  is: {
-                    firstName: {
-                      contains: query,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                },
-              },
-              {
-                identity: {
-                  is: {
-                    lastName: {
-                      contains: query,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                },
-              },
-              {
-                identity: {
-                  is: {
-                    email: {
-                      contains: query,
-                      mode: 'insensitive' as const,
-                    },
-                  },
-                },
-              },
-            ],
-          }
-        : {}),
-    }
-
-    const [totalItems, customers] = await Promise.all([
-      prisma.customer.count({
-        where,
-      }),
-      prisma.customer.findMany({
-        where,
-        orderBy: [{ createdAt: 'desc' }],
-        skip: (page - 1) * CUSTOMER_PAGE_SIZE,
-        take: CUSTOMER_PAGE_SIZE,
-        select: {
-          id: true,
-          externalId: true,
-          createdAt: true,
-          identity: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      }),
-    ])
+      page,
+      pageSize: CUSTOMER_PAGE_SIZE,
+      query,
+      source,
+    })
 
     return {
       ...context,
-      customers: customers.map((customer) => ({
+      customers: customers.map((customer: WorkspaceCustomerPageEntry) => ({
         id: customer.id,
         name:
           `${customer.identity.firstName ?? ''} ${customer.identity.lastName ?? ''}`.trim() ||
@@ -877,7 +686,7 @@ export async function getWorkspaceCustomersPageData(params?: {
 }
 
 export async function getWorkspaceCustomerDetailsPageData(customerId: string) {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId) {
@@ -887,32 +696,10 @@ export async function getWorkspaceCustomerDetailsPageData(customerId: string) {
       }
     }
 
-    const customer = await prisma.customer.findFirst({
-      where: {
-        id: customerId,
-        workspaceId: context.workspaceId,
-      },
-      select: {
-        id: true,
-        externalId: true,
-        createdAt: true,
-        identity: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-            phone: true,
-          },
-        },
-        _count: {
-          select: {
-            supportTickets: true,
-            notifications: true,
-            media: true,
-          },
-        },
-      },
-    })
+    const customer = await getWorkspaceCustomerDetailsSnapshot(
+      context.workspaceId,
+      customerId,
+    )
 
     if (!customer) {
       return {
@@ -942,7 +729,7 @@ export async function getWorkspaceCustomerDetailsPageData(customerId: string) {
 }
 
 export async function getWorkspaceFeaturesPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId || !context.workspace) {
@@ -960,68 +747,11 @@ export async function getWorkspaceFeaturesPageData() {
 
     const [activeSubscription, features, limits, featureOverrides, limitOverrides] =
       await Promise.all([
-        prisma.subscription.findFirst({
-          where: {
-            workspaceId: context.workspaceId,
-            status: {
-              in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          select: {
-            status: true,
-            currentPeriodEnd: true,
-            price: {
-              select: {
-                product: {
-                  select: {
-                    plan: {
-                      select: {
-                        id: true,
-                        key: true,
-                        name: true,
-                        description: true,
-                        sortOrder: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        }),
-        prisma.feature.findMany({
-          where: {
-            isActive: true,
-          },
-          orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
-        }),
-        prisma.limitDefinition.findMany({
-          where: {
-            isActive: true,
-          },
-          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-        }),
-        prisma.workspaceFeatureOverride.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-          },
-          select: {
-            featureId: true,
-            isEnabled: true,
-          },
-        }),
-        prisma.workspaceLimitOverride.findMany({
-          where: {
-            workspaceId: context.workspaceId,
-          },
-          select: {
-            limitDefinitionId: true,
-            valueInt: true,
-          },
-        }),
+        getWorkspaceActiveSubscriptionPlanSummary(context.workspaceId),
+        listFeatureCatalog(),
+        listLimitCatalog(),
+        listWorkspaceFeatureOverrides(context.workspaceId),
+        listWorkspaceLimitOverrides(context.workspaceId),
       ])
 
     const activePlan = activeSubscription?.price?.product?.plan ?? null
@@ -1031,60 +761,29 @@ export async function getWorkspaceFeaturesPageData() {
     })
 
     const basePlanFeatures = activePlan?.id
-      ? await prisma.planFeature.findMany({
-          where: {
-            planId: activePlan.id,
-          },
-          select: {
-            featureId: true,
-            isEnabled: true,
-          },
-        })
+      ? await listPlanFeatures(activePlan.id)
       : []
 
     const basePlanLimits = activePlan?.id
-      ? await prisma.planLimit.findMany({
-          where: {
-            planId: activePlan.id,
-          },
-          select: {
-            limitDefinitionId: true,
-            valueInt: true,
-          },
-        })
+      ? await listPlanLimits(activePlan.id)
       : []
 
-    const baseFeatureMap = new Map(
-      basePlanFeatures.map((entry) => [entry.featureId, entry.isEnabled]),
+    const baseFeatureMap = new Map<string, boolean>(
+      basePlanFeatures.map((entry: (typeof basePlanFeatures)[number]) => [entry.featureId, entry.isEnabled]),
     )
-    const featureOverrideMap = new Map(
-      featureOverrides.map((entry) => [entry.featureId, entry.isEnabled]),
+    const featureOverrideMap = new Map<string, boolean>(
+      featureOverrides.map((entry: (typeof featureOverrides)[number]) => [entry.featureId, entry.isEnabled]),
     )
-    const baseLimitMap = new Map(
-      basePlanLimits.map((entry) => [entry.limitDefinitionId, entry.valueInt]),
+    const baseLimitMap = new Map<string, number>(
+      basePlanLimits.map((entry: (typeof basePlanLimits)[number]) => [entry.limitDefinitionId, entry.valueInt]),
     )
-    const limitOverrideMap = new Map(
-      limitOverrides.map((entry) => [entry.limitDefinitionId, entry.valueInt]),
+    const limitOverrideMap = new Map<string, number>(
+      limitOverrides.map((entry: (typeof limitOverrides)[number]) => [entry.limitDefinitionId, entry.valueInt]),
     )
 
-    const featureGroups = Object.values(
-      features.reduce<
-        Record<
-          string,
-          {
-            category: string
-            features: Array<{
-              id: string
-              key: string
-              name: string
-              description: string | null
-              enabled: boolean
-              baseEnabled: boolean
-              isOverridden: boolean
-            }>
-          }
-        >
-      >((acc, feature) => {
+    const featureGroupMap: Record<string, FeatureCategory> = {}
+    const featureGroups: FeatureCategory[] = Object.values(
+      features.reduce((acc: Record<string, FeatureCategory>, feature: (typeof features)[number]) => {
         const category = feature.category ?? 'general'
         acc[category] ??= {
           category,
@@ -1102,28 +801,12 @@ export async function getWorkspaceFeaturesPageData() {
         })
 
         return acc
-      }, {}),
+      }, featureGroupMap),
     )
 
-    const limitGroups = Object.values(
-      limits.reduce<
-        Record<
-          string,
-          {
-            category: string
-            limits: Array<{
-              id: string
-              key: string
-              name: string
-              description: string | null
-              unit: string | null
-              value: number
-              baseValue: number
-              isOverridden: boolean
-            }>
-          }
-        >
-      >((acc, limit) => {
+    const limitGroupMap: Record<string, LimitCategory> = {}
+    const limitGroups: LimitCategory[] = Object.values(
+      limits.reduce((acc: Record<string, LimitCategory>, limit: (typeof limits)[number]) => {
         const category = limit.key.startsWith('max_')
           ? limit.key.includes('api') ||
             limit.key.includes('webhook') ||
@@ -1166,7 +849,7 @@ export async function getWorkspaceFeaturesPageData() {
         })
 
         return acc
-      }, {}),
+      }, limitGroupMap),
     )
 
     return {
@@ -1194,7 +877,7 @@ export async function getWorkspaceFeaturesPageData() {
 }
 
 export async function getWorkspaceApiKeysPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId) {
@@ -1211,37 +894,13 @@ export async function getWorkspaceApiKeysPageData() {
       }
     }
 
-    const apiKeys = await prisma.apiKey.findMany({
-      where: {
-        workspaceId: context.workspaceId,
-      },
-      orderBy: [{ createdAt: 'desc' }],
-      select: {
-        id: true,
-        name: true,
-        keyPrefix: true,
-        description: true,
-        scopes: true,
-        isActive: true,
-        expiresAt: true,
-        lastUsedAt: true,
-        revokedAt: true,
-        createdAt: true,
-        createdBy: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
-    })
+    const apiKeys = await listWorkspaceApiKeysDetailed(context.workspaceId)
 
     const now = new Date()
 
     return {
       ...context,
-      apiKeys: apiKeys.map((apiKey) => ({
+      apiKeys: apiKeys.map((apiKey: WorkspaceDetailedApiKey) => ({
         id: apiKey.id,
         name: apiKey.name,
         keyPrefix: apiKey.keyPrefix ?? null,
@@ -1262,34 +921,16 @@ export async function getWorkspaceApiKeysPageData() {
       apiKeySummary: {
         totalKeys: apiKeys.length,
         activeKeys: apiKeys.filter(
-          (apiKey) =>
+          (apiKey: WorkspaceDetailedApiKey) =>
             apiKey.isActive && (!apiKey.expiresAt || apiKey.expiresAt >= now)
         ).length,
-        revokedKeys: apiKeys.filter((apiKey) => !apiKey.isActive).length,
+        revokedKeys: apiKeys.filter((apiKey: WorkspaceDetailedApiKey) => !apiKey.isActive).length,
         expiredKeys: apiKeys.filter(
-          (apiKey) => Boolean(apiKey.expiresAt && apiKey.expiresAt < now)
+          (apiKey: WorkspaceDetailedApiKey) => Boolean(apiKey.expiresAt && apiKey.expiresAt < now)
         ).length,
       },
     }
   })
-}
-
-type SupportTicketListItem = {
-  id: string
-  contextType: string
-  title: string
-  body: string
-  status: string
-  priority: string | null
-  createdAt: string
-  updatedAt: string
-  messageCount: number
-  createdById: string | null
-  createdByCustomerId: string | null
-  createdByName: string | null
-  createdByCustomerName: string | null
-  assignedToId: string | null
-  assignedToName: string | null
 }
 
 type SupportThreadItem = {
@@ -1369,13 +1010,6 @@ function resolveSupportSenderScope(params: {
   return 'system' as const
 }
 
-type SupportSummary = {
-  openWorkspaceTickets: number
-  openPlatformEscalations: number
-  totalWorkspaceTickets: number
-  totalPlatformEscalations: number
-}
-
 const CUSTOMER_PAGE_SIZE = 10
 const SUPPORT_PAGE_SIZE = 10
 
@@ -1387,200 +1021,12 @@ function normalizePageNumber(value?: number | null) {
   return Math.floor(value)
 }
 
-async function getWorkspaceSupportSummary(
-  workspaceId: string
-): Promise<SupportSummary> {
-  const openStatuses = ['open', 'in_progress']
-
-  const [
-    totalWorkspaceTickets,
-    totalPlatformEscalations,
-    openWorkspaceTickets,
-    openPlatformEscalations,
-  ] = await Promise.all([
-    prisma.supportTicket.count({
-      where: {
-        workspaceId,
-        contextType: {
-          not: 'PLATFORM',
-        },
-      },
-    }),
-    prisma.supportTicket.count({
-      where: {
-        workspaceId,
-        contextType: 'PLATFORM',
-      },
-    }),
-    prisma.supportTicket.count({
-      where: {
-        workspaceId,
-        contextType: {
-          not: 'PLATFORM',
-        },
-        status: {
-          in: openStatuses,
-        },
-      },
-    }),
-    prisma.supportTicket.count({
-      where: {
-        workspaceId,
-        contextType: 'PLATFORM',
-        status: {
-          in: openStatuses,
-        },
-      },
-    }),
-  ])
-
-  return {
-    openWorkspaceTickets,
-    openPlatformEscalations,
-    totalWorkspaceTickets,
-    totalPlatformEscalations,
-  }
-}
-
-async function hydrateSupportTicketListItems(
-  tickets: Array<{
-    id: string
-    contextType: string
-    title: string
-    body: string
-    status: string
-    priority: string | null
-    createdAt: Date
-    updatedAt: Date
-    createdById: string | null
-    createdByCustomerId: string | null
-    assignedToId: string | null
-  }>
-) {
-  const createdByIds = Array.from(
-    new Set(
-      tickets
-        .map((ticket) => ticket.createdById)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  )
-  const createdByCustomerIds = Array.from(
-    new Set(
-      tickets
-        .map((ticket) => ticket.createdByCustomerId)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  )
-  const assignedToIds = Array.from(
-    new Set(
-      tickets
-        .map((ticket) => ticket.assignedToId)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  )
-
-  const [identities, customers, messageCounts] = await Promise.all([
-    createdByIds.length + assignedToIds.length > 0
-      ? prisma.identity.findMany({
-          where: {
-            id: {
-              in: Array.from(new Set([...createdByIds, ...assignedToIds])),
-            },
-          },
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        })
-      : Promise.resolve([]),
-    createdByCustomerIds.length > 0
-      ? prisma.customer.findMany({
-          where: {
-            id: {
-              in: createdByCustomerIds,
-            },
-          },
-          select: {
-            id: true,
-            identity: {
-              select: {
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            },
-          },
-        })
-      : Promise.resolve([]),
-    tickets.length > 0
-      ? prisma.supportTicketMessage.groupBy({
-          by: ['ticketId'],
-          where: {
-            ticketId: {
-              in: tickets.map((ticket) => ticket.id),
-            },
-          },
-          _count: {
-            _all: true,
-          },
-        })
-      : Promise.resolve([]),
-  ])
-
-  const identityMap = new Map(
-    identities.map((identity) => [identity.id, identity]),
-  )
-  const customerMap = new Map(
-    customers.map((customer) => [customer.id, customer]),
-  )
-  const messageCountMap = new Map(
-    messageCounts.map((count) => [count.ticketId, count._count._all]),
-  )
-
-  return tickets.map((ticket): SupportTicketListItem => {
-    const createdBy = ticket.createdById
-      ? identityMap.get(ticket.createdById)
-      : null
-    const createdByCustomer = ticket.createdByCustomerId
-      ? customerMap.get(ticket.createdByCustomerId)
-      : null
-    const assignedTo = ticket.assignedToId
-      ? identityMap.get(ticket.assignedToId)
-      : null
-
-    return {
-      id: ticket.id,
-      contextType: ticket.contextType,
-      title: ticket.title,
-      body: ticket.body,
-      status: ticket.status,
-      priority: ticket.priority ?? null,
-      createdAt: ticket.createdAt.toISOString(),
-      updatedAt: ticket.updatedAt.toISOString(),
-      messageCount: messageCountMap.get(ticket.id) ?? 0,
-      createdById: ticket.createdById ?? null,
-      createdByCustomerId: ticket.createdByCustomerId ?? null,
-      createdByName: createdBy
-        ? resolveSupportSenderName({ identity: createdBy })
-        : null,
-      createdByCustomerName: createdByCustomer
-        ? resolveSupportSenderName({ customer: createdByCustomer })
-        : null,
-      assignedToId: ticket.assignedToId ?? null,
-      assignedToName: assignedTo
-        ? resolveSupportSenderName({ identity: assignedTo })
-        : null,
-    }
-  })
-}
 
 export async function getWorkspaceSupportQueuePageData(params: {
   queue: 'workspace' | 'platform'
   page?: number | null
 }) {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
     const page = normalizePageNumber(params.page)
 
@@ -1604,51 +1050,23 @@ export async function getWorkspaceSupportQueuePageData(params: {
       }
     }
 
-    const queueWhere =
-      params.queue === 'platform'
-        ? {
-            workspaceId: context.workspaceId,
-            contextType: 'PLATFORM' as const,
-          }
-        : {
-            workspaceId: context.workspaceId,
-            contextType: {
-              not: 'PLATFORM' as const,
-            },
-          }
-
-    const [supportSummary, totalItems, tickets] = await Promise.all([
+    const [supportSummary, queuePage] = await Promise.all([
       getWorkspaceSupportSummary(context.workspaceId),
-      prisma.supportTicket.count({
-        where: {
-          ...queueWhere,
-        },
-      }),
-      prisma.supportTicket.findMany({
-        where: {
-          ...queueWhere,
-        },
-        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
-        skip: (page - 1) * SUPPORT_PAGE_SIZE,
-        take: SUPPORT_PAGE_SIZE,
-        select: {
-          id: true,
-          contextType: true,
-          title: true,
-          body: true,
-          status: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
-          createdById: true,
-          createdByCustomerId: true,
-          assignedToId: true,
-        },
+      listWorkspaceSupportQueueTickets({
+        workspaceId: context.workspaceId,
+        queue: params.queue,
+        page,
+        pageSize: SUPPORT_PAGE_SIZE,
       }),
     ])
 
-    const serializedTickets = await hydrateSupportTicketListItems(tickets)
-    const totalPages = Math.max(1, Math.ceil(totalItems / SUPPORT_PAGE_SIZE))
+    const serializedTickets = await hydrateWorkspaceSupportTicketListItems(
+      queuePage.tickets,
+    )
+    const totalPages = Math.max(
+      1,
+      Math.ceil(queuePage.totalItems / SUPPORT_PAGE_SIZE),
+    )
 
     return {
       ...context,
@@ -1656,7 +1074,7 @@ export async function getWorkspaceSupportQueuePageData(params: {
       tickets: serializedTickets,
       page,
       pageSize: SUPPORT_PAGE_SIZE,
-      totalItems,
+      totalItems: queuePage.totalItems,
       totalPages,
       hasPreviousPage: page > 1,
       hasNextPage: page < totalPages,
@@ -1668,7 +1086,7 @@ export async function getWorkspaceSupportQueuePageData(params: {
 }
 
 export async function getWorkspaceSupportCreatePageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     return {
@@ -1678,7 +1096,7 @@ export async function getWorkspaceSupportCreatePageData() {
 }
 
 export async function getWorkspaceSupportThreadPageData(ticketId: string) {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId) {
@@ -1691,51 +1109,17 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
       }
     }
 
-    const [ticket, workspaceMembers] = await Promise.all([
-      prisma.supportTicket.findFirst({
-        where: {
-          id: ticketId,
-          workspaceId: context.workspaceId,
-        },
-        select: {
-          id: true,
-          contextType: true,
-          title: true,
-          body: true,
-          status: true,
-          priority: true,
-          createdAt: true,
-          updatedAt: true,
-          createdById: true,
-          createdByCustomerId: true,
-          assignedToId: true,
-        },
-      }),
-      prisma.membership.findMany({
-        where: {
-          workspaceId: context.workspaceId,
-          isActive: true,
-        },
-        orderBy: [{ createdAt: 'asc' }],
-        select: {
-          identityId: true,
-          identity: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-        },
-      }),
+    const [threadSnapshot, workspaceMembers] = await Promise.all([
+      getWorkspaceSupportThreadSnapshot(context.workspaceId, ticketId),
+      listActiveWorkspaceMembersWithRoles(context.workspaceId),
     ])
 
-    if (!ticket) {
+    if (!threadSnapshot) {
       return {
         ...context,
         selectedQueue: 'workspace' as const,
         selectedTicket: null,
-        assigneeOptions: workspaceMembers.map((member) => ({
+        assigneeOptions: workspaceMembers.map((member: WorkspaceMemberWithRole) => ({
           identityId: member.identityId,
           name:
             `${member.identity.firstName ?? ''} ${member.identity.lastName ?? ''}`.trim() ||
@@ -1747,126 +1131,24 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
       }
     }
 
-    const [serializedTicket] = await hydrateSupportTicketListItems([ticket])
-    const messages = await prisma.supportTicketMessage.findMany({
-      where: {
-        ticketId: ticket.id,
-      },
-      orderBy: [{ createdAt: 'asc' }],
-      select: {
-        id: true,
-        senderType: true,
-        senderIdentityId: true,
-        senderCustomerId: true,
-        message: true,
-        isInternalNote: true,
-        createdAt: true,
-      },
-    })
+    const [serializedTicket]: WorkspaceSerializedSupportTicket[] =
+      await hydrateWorkspaceSupportTicketListItems([threadSnapshot.ticket])
 
-    const messageIdentityIds = Array.from(
-      new Set(
-        messages
-          .map((message) => message.senderIdentityId)
-          .filter((value): value is string => Boolean(value)),
+    const messageIdentityMap = new Map<string, WorkspaceSupportMessageIdentity>(
+      threadSnapshot.messageIdentities.map((identity: WorkspaceSupportMessageIdentity) => [identity.id, identity]),
+    )
+    const messageCustomerMap = new Map<string, WorkspaceSupportMessageCustomer>(
+      threadSnapshot.messageCustomers.map((customer: WorkspaceSupportMessageCustomer) => [customer.id, customer]),
+    )
+    const workspaceIdentityIds = new Set<string>(
+      workspaceMembers.map((member: WorkspaceMemberWithRole) => member.identityId),
+    )
+    const platformIdentityIds = new Set<string>(
+      threadSnapshot.platformMemberships.map(
+        (membership: WorkspaceSupportPlatformMembership) => membership.identityId,
       ),
     )
-    const messageCustomerIds = Array.from(
-      new Set(
-        messages
-          .map((message) => message.senderCustomerId)
-          .filter((value): value is string => Boolean(value)),
-      ),
-    )
-
-    const [messageIdentities, messageCustomers, platformMemberships, ticketAttachments, messageAttachments] =
-      await Promise.all([
-        messageIdentityIds.length > 0
-          ? prisma.identity.findMany({
-              where: {
-                id: {
-                  in: messageIdentityIds,
-                },
-              },
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                email: true,
-              },
-            })
-          : Promise.resolve([]),
-        messageCustomerIds.length > 0
-          ? prisma.customer.findMany({
-              where: {
-                id: {
-                  in: messageCustomerIds,
-                },
-              },
-              select: {
-                id: true,
-                identity: {
-                  select: {
-                    firstName: true,
-                    lastName: true,
-                    email: true,
-                  },
-                },
-              },
-            })
-          : Promise.resolve([]),
-        messageIdentityIds.length > 0
-          ? prisma.platformMembership.findMany({
-              where: {
-                identityId: {
-                  in: messageIdentityIds,
-                },
-                isActive: true,
-              },
-              select: {
-                identityId: true,
-              },
-            })
-          : Promise.resolve([]),
-        prisma.fileAttachment.findMany({
-          where: {
-            entityType: 'SUPPORT_TICKET',
-            entityId: ticket.id,
-          },
-          include: {
-            media: true,
-          },
-          orderBy: [{ createdAt: 'asc' }],
-        }),
-        messages.length > 0
-          ? prisma.fileAttachment.findMany({
-              where: {
-                entityType: 'SUPPORT_TICKET_MESSAGE',
-                entityId: {
-                  in: messages.map((message) => message.id),
-                },
-              },
-              include: {
-                media: true,
-              },
-              orderBy: [{ createdAt: 'asc' }],
-            })
-          : Promise.resolve([]),
-      ])
-
-    const messageIdentityMap = new Map(
-      messageIdentities.map((identity) => [identity.id, identity]),
-    )
-    const messageCustomerMap = new Map(
-      messageCustomers.map((customer) => [customer.id, customer]),
-    )
-    const workspaceIdentityIds = new Set(
-      workspaceMembers.map((member) => member.identityId),
-    )
-    const platformIdentityIds = new Set(
-      platformMemberships.map((membership) => membership.identityId),
-    )
-    const ticketAttachmentItems = ticketAttachments.map((attachment) => ({
+    const ticketAttachmentItems = threadSnapshot.ticketAttachments.map((attachment: WorkspaceSupportAttachment) => ({
       id: attachment.id,
       mediaId: attachment.mediaId,
       fileName: attachment.media.fileName,
@@ -1877,7 +1159,7 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
     }))
     const messageAttachmentMap = new Map<string, SupportAttachmentItem[]>()
 
-    for (const attachment of messageAttachments) {
+    for (const attachment of threadSnapshot.messageAttachments as WorkspaceSupportAttachment[]) {
       const nextAttachment = {
         id: attachment.id,
         mediaId: attachment.mediaId,
@@ -1905,7 +1187,7 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
         : 'workspace'
 
     const selectedQueue =
-      ticket.contextType === 'PLATFORM' ? 'platform' : 'workspace'
+      threadSnapshot.ticket.contextType === 'PLATFORM' ? 'platform' : 'workspace'
 
     return {
       ...context,
@@ -1925,7 +1207,7 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
             createdAt: serializedTicket.createdAt,
             attachments: ticketAttachmentItems,
           } satisfies SupportThreadItem,
-          ...messages.map((message) => {
+          ...threadSnapshot.messages.map((message: WorkspaceSupportMessage) => {
             const identity = message.senderIdentityId
               ? messageIdentityMap.get(message.senderIdentityId)
               : null
@@ -1954,7 +1236,7 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
           }),
         ],
       },
-      assigneeOptions: workspaceMembers.map((member) => ({
+      assigneeOptions: workspaceMembers.map((member: WorkspaceMemberWithRole) => ({
         identityId: member.identityId,
         name:
           `${member.identity.firstName ?? ''} ${member.identity.lastName ?? ''}`.trim() ||
@@ -1963,7 +1245,7 @@ export async function getWorkspaceSupportThreadPageData(ticketId: string) {
         email: member.identity.email ?? null,
       })),
       backHref:
-        ticket.contextType === 'PLATFORM'
+        threadSnapshot.ticket.contextType === 'PLATFORM'
           ? `${context.basePath}/support/escalations`
           : `${context.basePath}/support`,
     }
@@ -2014,7 +1296,7 @@ function resolveWorkspaceDomainMode(params: {
 }
 
 export async function getWorkspaceDomainsPageData() {
-  return withServerRequestContext(async () => {
+  return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext()
 
     if (!context.workspaceId || !context.workspace) {
@@ -2060,71 +1342,8 @@ export async function getWorkspaceDomainsPageData() {
       )?.domain ?? null
 
     const [domains, activeSubscription] = await Promise.all([
-      prisma.workspaceDomain.findMany({
-        where: {
-          workspaceId: context.workspaceId,
-        },
-        orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
-        select: {
-          id: true,
-          domain: true,
-          type: true,
-          routingMode: true,
-          status: true,
-          target: true,
-          isPrimary: true,
-          isVerified: true,
-          createdAt: true,
-          verifiedAt: true,
-          lastCheckedAt: true,
-          lastVerificationError: true,
-          dnsRecords: {
-            orderBy: [{ purpose: "asc" }, { type: "asc" }, { createdAt: "asc" }],
-            select: {
-              id: true,
-              type: true,
-              purpose: true,
-              host: true,
-              expectedValue: true,
-              isRequired: true,
-              isMatched: true,
-              matchedValue: true,
-              lastCheckedAt: true,
-              lastError: true,
-            },
-          },
-        },
-      }),
-      prisma.subscription.findFirst({
-        where: {
-          workspaceId: context.workspaceId,
-          status: {
-            in: ["ACTIVE", "TRIALING", "PAST_DUE"],
-          },
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
-        select: {
-          status: true,
-          currentPeriodEnd: true,
-          price: {
-            select: {
-              product: {
-                select: {
-                  plan: {
-                    select: {
-                      id: true,
-                      key: true,
-                      name: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      }),
+      listWorkspaceDomainsDetailed(context.workspaceId),
+      getWorkspaceActiveSubscriptionPlanSummary(context.workspaceId),
     ])
 
     const activePlan = activeSubscription?.price?.product?.plan ?? null
@@ -2134,7 +1353,8 @@ export async function getWorkspaceDomainsPageData() {
     })
     const customDomainSlots = entitlements.limits.max_custom_domains ?? 0
     const customDomainCount = domains.filter(
-      (domain) => domain.type === WorkspaceDomainType.CUSTOM && domain.isPrimary
+      (domain: (typeof domains)[number]) =>
+        domain.type === WorkspaceDomainType.CUSTOM && domain.isPrimary
     ).length
     const redirectAliases = normalizeRedirectAliases(
       domainSettings?.redirectAliases
@@ -2163,7 +1383,7 @@ export async function getWorkspaceDomainsPageData() {
               activeSubscription?.currentPeriodEnd?.toISOString() ?? null,
           }
         : null,
-      domains: domains.map((domain) => {
+      domains: domains.map((domain: (typeof domains)[number]) => {
         const redirectAlias = redirectAliasMap.get(domain.domain)
         const behavior: "REDIRECT_ALIAS" | "PRIMARY_ROUTE" | "SECONDARY_ROUTE" = redirectAlias
           ? "REDIRECT_ALIAS"
@@ -2187,7 +1407,7 @@ export async function getWorkspaceDomainsPageData() {
           verifiedAt: domain.verifiedAt?.toISOString() ?? null,
           lastCheckedAt: domain.lastCheckedAt?.toISOString() ?? null,
           lastVerificationError: domain.lastVerificationError ?? null,
-          dnsRecords: domain.dnsRecords.map((record) => ({
+          dnsRecords: domain.dnsRecords.map((record: (typeof domain.dnsRecords)[number]) => ({
             id: record.id,
             type: record.type,
             purpose: record.purpose,

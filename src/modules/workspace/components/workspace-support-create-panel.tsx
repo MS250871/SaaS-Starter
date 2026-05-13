@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/select';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { Textarea } from '@/components/ui/textarea';
-import { createWorkspaceSupportTicketAction } from '@/modules/workspace/actions/create-workspace-support-ticket.action';
+import { createWorkspaceSupportTicketAction } from '@/modules/support/actions/create-workspace-support-ticket.action';
 import {
   createWorkspaceSupportTicketActionSchema,
   type CreateWorkspaceSupportTicketActionInput,

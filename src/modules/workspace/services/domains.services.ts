@@ -1,12 +1,51 @@
 import {
   workspaceDomainCrud,
   workspaceDomainQueries,
+  workspaceSubscriptionQueries,
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { WorkspaceDomain, WorkspaceDomainStatus } from '@/generated/prisma/client';
+import {
+  type Prisma,
+  type SubscriptionStatus,
+  WorkspaceDomain,
+  WorkspaceDomainStatus,
+  WorkspaceDomainType,
+} from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
+
+export type WorkspaceDomainDetailed = Prisma.WorkspaceDomainGetPayload<{
+  select: {
+    id: true;
+    domain: true;
+    type: true;
+    routingMode: true;
+    status: true;
+    target: true;
+    isPrimary: true;
+    isVerified: true;
+    createdAt: true;
+    verifiedAt: true;
+    lastCheckedAt: true;
+    lastVerificationError: true;
+    dnsRecords: {
+      select: {
+        id: true;
+        type: true;
+        purpose: true;
+        host: true;
+        expectedValue: true;
+        isRequired: true;
+        isMatched: true;
+        matchedValue: true;
+        lastCheckedAt: true;
+        lastError: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Get domain by ID
@@ -14,7 +53,9 @@ import { ERR } from '@/lib/errors/codes';
 export async function getDomainById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Domain ID is required');
 
-  const domain = await workspaceDomainQueries.byId(id);
+  const domain = await workspaceDomainQueries.findUnique({
+    where: { id },
+  });
   if (!domain) throwError(ERR.NOT_FOUND, 'Domain not found');
 
   return domain;
@@ -58,6 +99,18 @@ export async function listWorkspaceDomains(workspaceId: string) {
   return workspaceDomainQueries.many({
     where: { workspaceId },
     orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function countWorkspaceDomains(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  return workspaceDomainQueries.count({
+    where: {
+      workspaceId,
+    },
   });
 }
 
@@ -108,6 +161,188 @@ export async function verifyWorkspaceDomain(id: string) {
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to verify domain', undefined, e);
   }
+}
+
+export async function getWorkspaceDomainEntitlements(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  const [activeSubscription, customDomainSetupCount] = await Promise.all([
+    workspaceSubscriptionQueries.findFirst({
+      where: {
+        workspaceId,
+        status: {
+          in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] satisfies SubscriptionStatus[],
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        price: {
+          select: {
+            product: {
+              select: {
+                plan: {
+                  select: {
+                    id: true,
+                    key: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+    workspaceDomainQueries.count({
+      where: {
+        workspaceId,
+        type: WorkspaceDomainType.CUSTOM,
+        isPrimary: true,
+      },
+    }),
+  ]);
+
+  const activePlan =
+    (activeSubscription as {
+      price?: {
+        product?: {
+          plan?: {
+            id: string;
+            key: string;
+            name: string;
+          } | null;
+        } | null;
+      } | null;
+    } | null)?.price?.product?.plan ?? null;
+  const entitlements = await resolveEntitlements({
+    workspaceId,
+    planId: activePlan?.id,
+  });
+
+  return {
+    activePlan,
+    customDomainSetupCount,
+    entitlements,
+  };
+}
+
+export async function findPrimaryWorkspaceCustomDomain(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  return workspaceDomainQueries.findFirst({
+    where: {
+      workspaceId,
+      type: WorkspaceDomainType.CUSTOM,
+      isPrimary: true,
+    },
+    orderBy: {
+      createdAt: 'asc',
+    },
+    select: {
+      id: true,
+      domain: true,
+      type: true,
+      workspaceId: true,
+    },
+  });
+}
+
+export async function findWorkspaceRedirectAlias(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  return workspaceDomainQueries.findFirst({
+    where: {
+      workspaceId,
+      type: WorkspaceDomainType.CUSTOM,
+      isPrimary: false,
+    },
+    select: {
+      id: true,
+      domain: true,
+      type: true,
+      workspaceId: true,
+    },
+  });
+}
+
+export async function getWorkspaceDomainById(workspaceId: string, id: string) {
+  if (!workspaceId || !id) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and id are required');
+  }
+
+  const domain = await workspaceDomainQueries.findFirst({
+    where: {
+      id,
+      workspaceId,
+    },
+    select: {
+      id: true,
+      domain: true,
+      type: true,
+      workspaceId: true,
+      isPrimary: true,
+    },
+  });
+
+  if (!domain) {
+    throwError(ERR.NOT_FOUND, 'Workspace domain not found');
+  }
+
+  return domain;
+}
+
+export async function listWorkspaceDomainsDetailed(
+  workspaceId: string,
+): Promise<WorkspaceDomainDetailed[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  const domains = await workspaceDomainQueries.many({
+    where: {
+      workspaceId,
+    },
+    orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+    select: {
+      id: true,
+      domain: true,
+      type: true,
+      routingMode: true,
+      status: true,
+      target: true,
+      isPrimary: true,
+      isVerified: true,
+      createdAt: true,
+      verifiedAt: true,
+      lastCheckedAt: true,
+      lastVerificationError: true,
+      dnsRecords: {
+        orderBy: [{ purpose: 'asc' }, { type: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          type: true,
+          purpose: true,
+          host: true,
+          expectedValue: true,
+          isRequired: true,
+          isMatched: true,
+          matchedValue: true,
+          lastCheckedAt: true,
+          lastError: true,
+        },
+      },
+    },
+  });
+
+  return domains as unknown as WorkspaceDomainDetailed[];
 }
 
 /**
@@ -175,7 +410,11 @@ export async function deleteWorkspaceDomain(id: string) {
 export async function domainExists(domain: string) {
   if (!domain) throwError(ERR.INVALID_INPUT, 'Domain is required');
 
-  return workspaceDomainQueries.exists({
-    domain: domain.toLowerCase(),
-  });
+  return (
+    (await workspaceDomainQueries.count({
+      where: {
+        domain: domain.toLowerCase(),
+      },
+    })) > 0
+  );
 }

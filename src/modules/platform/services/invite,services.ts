@@ -7,13 +7,14 @@ import {
   getPlatformDefaultRoleDefinition,
   resolveRoleAssignment,
 } from "@/modules/roles/role.services"
+import type { PlatformRoleSystemKey } from "@/modules/roles/role.types"
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"
 
 type PlatformInviteRoleInput = {
   roleDefinitionId?: string | null
   roleKey?: string | null
-  roleSystemKey?: string | null
+  roleSystemKey?: PlatformRoleSystemKey | null
 }
 
 export function generateInviteToken() {
@@ -72,7 +73,10 @@ export async function createPlatformInviteEntry(params: {
     scope: "PLATFORM",
     roleDefinitionId: params.roleDefinitionId ?? defaultRole?.id,
     roleKey: params.roleKey ?? defaultRole?.key,
-    roleSystemKey: params.roleSystemKey ?? defaultRole?.systemKey ?? undefined,
+    roleSystemKey:
+      params.roleSystemKey ??
+      ((defaultRole?.systemKey as PlatformRoleSystemKey | null | undefined) ??
+        undefined),
     fallbackToDefault: true,
   })
 

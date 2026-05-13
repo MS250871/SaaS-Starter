@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { SpinnerButton } from '@/components/ui/spinner-button';
-import { createWorkspaceCustomerAction } from '@/modules/workspace/actions/create-workspace-customer.action';
+import { createWorkspaceCustomerAction } from '@/modules/customer/actions/create-workspace-customer.action';
 import {
   createWorkspaceCustomerActionSchema,
   type CreateWorkspaceCustomerActionInput,

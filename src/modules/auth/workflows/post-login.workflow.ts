@@ -434,7 +434,9 @@ async function acceptInviteAccess(params: {
             identityId: params.identityId,
             roleDefinitionId: invite.roleDefinitionId,
             roleKey: invite.roleKey,
-            roleSystemKey: invite.roleSystemKey ?? undefined,
+            roleSystemKey:
+              (invite.roleSystemKey as PlatformRoleSystemKey | null | undefined) ??
+              undefined,
           });
         }
 
@@ -527,7 +529,9 @@ async function acceptInviteAccess(params: {
         workspaceId: invite.workspaceId,
         roleDefinitionId: invite.roleDefinitionId,
         roleKey: invite.roleKey,
-        roleSystemKey: invite.roleSystemKey ?? undefined,
+        roleSystemKey:
+          (invite.roleSystemKey as WorkspaceRoleSystemKey | null | undefined) ??
+          undefined,
       });
 
       await acceptInvite(invite.id);

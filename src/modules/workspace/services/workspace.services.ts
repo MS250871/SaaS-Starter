@@ -9,7 +9,9 @@ import { ERR } from '@/lib/errors/codes';
 export async function getWorkspaceById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
 
-  const ws = await workspaceQueries.byId(id);
+  const ws = await workspaceQueries.findUnique({
+    where: { id },
+  });
   if (!ws) throwError(ERR.NOT_FOUND, 'Workspace not found');
 
   return ws;
@@ -34,7 +36,10 @@ export async function createWorkspace(data: CreateInput<'Workspace'>) {
     throwError(ERR.INVALID_INPUT, 'Workspace slug required');
   }
 
-  const exists = await workspaceQueries.exists({ slug: data.slug });
+  const exists =
+    (await workspaceQueries.count({
+      where: { slug: data.slug },
+    })) > 0;
   if (exists) throwError(ERR.ALREADY_EXISTS, 'Workspace slug already exists');
 
   const payload = { ...data };
@@ -91,21 +96,63 @@ export async function listWorkspaces(opts?: {
   page?: number;
   pageSize?: number;
 }) {
-  return workspaceQueries.paginated({
-    page: opts?.page ?? 1,
-    pageSize: opts?.pageSize ?? 20,
-    sort: [{ column: 'createdAt', dir: 'desc' }],
-  });
+  const page = opts?.page ?? 1;
+  const pageSize = opts?.pageSize ?? 20;
+  const [totalItems, items] = await Promise.all([
+    workspaceQueries.count(),
+    workspaceQueries.many({
+      orderBy: [{ createdAt: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  return {
+    items,
+    page,
+    pageSize,
+    totalItems,
+    totalPages: Math.ceil(totalItems / pageSize),
+  };
 }
 
 export async function workspaceExistsBySlug(slug: string) {
   if (!slug) throwError(ERR.INVALID_INPUT, 'Slug required');
 
-  return workspaceQueries.exists({ slug });
+  return (
+    (await workspaceQueries.count({
+      where: { slug },
+    })) > 0
+  );
 }
 
 export async function workspaceExistsByDomain(domain: string) {
   if (!domain) throwError(ERR.INVALID_INPUT, 'Domain required');
 
-  return workspaceQueries.exists({ defaultDomain: domain });
+  return (
+    (await workspaceQueries.count({
+      where: { defaultDomain: domain },
+    })) > 0
+  );
+}
+
+export async function getWorkspaceAdminSurfaceWorkspace(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
+
+  const workspace = await workspaceQueries.findFirst({
+    where: {
+      id: workspaceId,
+      isActive: true,
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      defaultDomain: true,
+    },
+  });
+
+  if (!workspace) throwError(ERR.NOT_FOUND, 'Workspace not found');
+
+  return workspace;
 }

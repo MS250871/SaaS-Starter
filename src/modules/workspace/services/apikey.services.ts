@@ -1,9 +1,31 @@
 import crypto from 'crypto';
-import { prisma } from '@/lib/prisma';
 import { apiKeyCrud, apiKeyQueries } from '@/modules/workspace/db';
+import type { Prisma } from '@/generated/prisma/client';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type WorkspaceDetailedApiKey = Prisma.ApiKeyGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    keyPrefix: true;
+    description: true;
+    scopes: true;
+    isActive: true;
+    expiresAt: true;
+    lastUsedAt: true;
+    revokedAt: true;
+    createdAt: true;
+    createdBy: {
+      select: {
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Generate secure API key
@@ -28,7 +50,7 @@ export function hashApiKey(secret: string) {
 export async function getApiKeyById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'API key ID is required');
 
-  const key = await prisma.apiKey.findUnique({
+  const key = await apiKeyQueries.findUnique({
     where: { id },
   });
   if (!key) throwError(ERR.NOT_FOUND, 'API key not found');
@@ -42,7 +64,7 @@ export async function getApiKeyById(id: string) {
 export async function findApiKey(key: string) {
   if (!key) throwError(ERR.INVALID_INPUT, 'API key is required');
 
-  return prisma.apiKey.findFirst({
+  return apiKeyQueries.findFirst({
     where: {
       OR: [{ keyHash: hashApiKey(key) }, { key }],
       isActive: true,
@@ -207,7 +229,7 @@ export async function listWorkspaceApiKeys(workspaceId: string) {
 export async function validateApiKey(key: string) {
   if (!key) throwError(ERR.INVALID_INPUT, 'API key is required');
 
-  const apiKey = await prisma.apiKey.findFirst({
+  const apiKey = await apiKeyQueries.findFirst({
     where: {
       OR: [{ keyHash: hashApiKey(key) }, { key }],
       isActive: true,
@@ -227,13 +249,89 @@ export async function recordApiKeyUsage(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'API key ID is required');
 
   try {
-    return await prisma.apiKey.update({
+    return await apiKeyQueries.delegate.update({
       where: { id },
       data: {
-      lastUsedAt: new Date(),
+        lastUsedAt: new Date(),
       },
     });
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to update API key usage', undefined, e);
   }
+}
+
+export async function getWorkspaceApiKeyById(
+  workspaceId: string,
+  apiKeyId: string,
+) {
+  if (!workspaceId || !apiKeyId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and apiKeyId are required');
+  }
+
+  const apiKey = await apiKeyQueries.findFirst({
+    where: {
+      id: apiKeyId,
+      workspaceId,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      name: true,
+    },
+  });
+
+  if (!apiKey) {
+    throwError(ERR.NOT_FOUND, 'API key not found for this workspace');
+  }
+
+  return apiKey;
+}
+
+export async function countActiveWorkspaceApiKeys(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  return apiKeyQueries.count({
+    where: {
+      workspaceId,
+      isActive: true,
+    },
+  });
+}
+
+export async function listWorkspaceApiKeysDetailed(
+  workspaceId: string,
+): Promise<WorkspaceDetailedApiKey[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  const apiKeys = await apiKeyQueries.many({
+    where: {
+      workspaceId,
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    select: {
+      id: true,
+      name: true,
+      keyPrefix: true,
+      description: true,
+      scopes: true,
+      isActive: true,
+      expiresAt: true,
+      lastUsedAt: true,
+      revokedAt: true,
+      createdAt: true,
+      createdBy: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return apiKeys as unknown as WorkspaceDetailedApiKey[];
 }

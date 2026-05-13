@@ -1,15 +1,9 @@
 'use server';
 
-import {
-  WorkspaceDomainType,
-  type SubscriptionStatus,
-} from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createAction } from '@/lib/http/create-action';
-import { prisma } from '@/lib/prisma';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import {
   createWorkspaceRedirectAliasActionSchema,
@@ -17,46 +11,12 @@ import {
   type CreateWorkspaceRedirectAliasActionInput,
   type CreateWorkspaceRedirectAliasDomain,
 } from '@/modules/workspace/schema';
+import {
+  findPrimaryWorkspaceCustomDomain,
+  findWorkspaceRedirectAlias,
+  getWorkspaceDomainEntitlements,
+} from '@/modules/workspace/services/domains.services';
 import { createWorkspaceCustomDomainWorkflow } from '@/modules/workspace/workflows/create-workspace-custom-domain.workflow';
-
-async function getWorkspaceDomainEntitlements(workspaceId: string) {
-  const activeSubscription = await prisma.subscription.findFirst({
-    where: {
-      workspaceId,
-      status: {
-        in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] satisfies SubscriptionStatus[],
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    select: {
-      price: {
-        select: {
-          product: {
-            select: {
-              plan: {
-                select: {
-                  id: true,
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  const activePlan = activeSubscription?.price?.product?.plan ?? null;
-  const entitlements = await resolveEntitlements({
-    workspaceId,
-    planId: activePlan?.id,
-  });
-
-  return {
-    entitlements,
-  };
-}
 
 const createWorkspaceRedirectAliasActionImpl = createAction(
   async (formData: FormData) => {
@@ -87,19 +47,9 @@ const createWorkspaceRedirectAliasActionImpl = createAction(
       );
     }
 
-    const primaryRouteDomain = await prisma.workspaceDomain.findFirst({
-      where: {
-        workspaceId: session.workspaceId,
-        type: WorkspaceDomainType.CUSTOM,
-        isPrimary: true,
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-      select: {
-        domain: true,
-      },
-    });
+    const primaryRouteDomain = await findPrimaryWorkspaceCustomDomain(
+      session.workspaceId,
+    );
 
     if (!primaryRouteDomain) {
       throwError(
@@ -108,16 +58,9 @@ const createWorkspaceRedirectAliasActionImpl = createAction(
       );
     }
 
-    const existingRedirectAlias = await prisma.workspaceDomain.findFirst({
-      where: {
-        workspaceId: session.workspaceId,
-        type: WorkspaceDomainType.CUSTOM,
-        isPrimary: false,
-      },
-      select: {
-        domain: true,
-      },
-    });
+    const existingRedirectAlias = await findWorkspaceRedirectAlias(
+      session.workspaceId,
+    );
 
     if (existingRedirectAlias) {
       throwError(

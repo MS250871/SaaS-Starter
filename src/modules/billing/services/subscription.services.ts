@@ -8,7 +8,9 @@ export async function getSubscriptionById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Subscription ID is required');
   }
 
-  const subscription = await subscriptionQueries.byId(id);
+  const subscription = await subscriptionQueries.findUnique({
+    where: { id },
+  });
 
   if (!subscription) {
     throwError(ERR.NOT_FOUND, 'Subscription not found');

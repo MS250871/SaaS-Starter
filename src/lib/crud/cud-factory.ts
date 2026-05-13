@@ -1,21 +1,19 @@
-// /lib/crud/crud-factory.ts
-
-import { prisma as rootPrisma } from '@/lib/prisma';
 import { getRequestContext } from '@/lib/context/request-context';
+import type { Prisma } from '@/generated/prisma/client';
 import {
   getWorkspaceId,
   shouldBypassWorkspace,
 } from '@/lib/context/workspace-utils';
-
-import type {
-  ModelName,
-  DelegateName,
-  CreateInput,
-  UpdateInput,
-} from './prisma-types';
-
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+import type {
+  CreateInput,
+  DelegateName,
+  ModelDelegate,
+  ModelName,
+  UpdateInput,
+} from './prisma-types';
 
 type Guard = {
   model: ModelName;
@@ -46,9 +44,6 @@ function getPrisma() {
   return ctx.prisma;
 }
 
-/* ---------------------------------------------------------
-  Proper Prisma delegate name (camelCase)
---------------------------------------------------------- */
 function toDelegateName<M extends ModelName>(model: M): DelegateName<M> {
   return (model.charAt(0).toLowerCase() + model.slice(1)) as DelegateName<M>;
 }
@@ -70,14 +65,39 @@ export function buildCud<M extends ModelName>({
     if (!d) {
       throwError(
         ERR.INTERNAL_ERROR,
-        `Prisma delegate not found for model: ${model} → ${delegateName}`,
+        `Prisma delegate not found for model: ${model} -> ${delegateName}`,
       );
     }
 
-    return d as any;
+    return d as ModelDelegate<M>;
   }
 
-  function enforceWorkspace(where: any) {
+  function callCreate<A extends { data: Record<string, unknown> }>(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'create'>
+    // Prisma delegate methods become an incompatible union at this generic boundary.
+    // Keep the looseness contained here rather than leaking it into callers.
+    const fn = delegate().create as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function callUpdate<
+    A extends {
+      where: Record<string, unknown>;
+      data: Record<string, unknown>;
+    },
+  >(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'update'>
+    const fn = delegate().update as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function callDelete<A extends { where: Record<string, unknown> }>(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'delete'>
+    const fn = delegate().delete as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function enforceWorkspace(where: Record<string, unknown>) {
     if (!workspaceScoped || shouldBypassWorkspace()) return where;
 
     const workspaceId = getWorkspaceId();
@@ -93,13 +113,8 @@ export function buildCud<M extends ModelName>({
   }
 
   return {
-    /**
-     * CREATE
-     */
     async create(data: CreateInput<M>) {
-      const d = delegate();
-
-      const finalData: any = { ...data };
+      const finalData: Record<string, unknown> = { ...(data as object) };
 
       if (workspaceScoped && !shouldBypassWorkspace()) {
         const workspaceId = getWorkspaceId();
@@ -115,37 +130,30 @@ export function buildCud<M extends ModelName>({
       }
 
       try {
-        return await d.create({ data: finalData });
+        return await callCreate({ data: finalData });
       } catch (e) {
         throwError(ERR.DB_ERROR, `Failed to create ${model}`, undefined, e);
       }
     },
 
-    /**
-     * UPDATE
-     */
     async update(id: string, data: UpdateInput<M>) {
-      const d = delegate();
-
       try {
-        return await d.update({
+        return await callUpdate({
           where: enforceWorkspace({ id }),
-          data,
+          data: data as Record<string, unknown>,
         });
       } catch (e) {
         throwError(ERR.DB_ERROR, `Failed to update ${model}`, undefined, e);
       }
     },
 
-    /**
-     * DELETE
-     */
     async delete(id: string) {
       const prisma = getPrisma();
-      const d = delegate();
 
       for (const g of guards) {
-        const relationDelegate = prisma[toDelegateName(g.model)] as any;
+        const relationDelegate = prisma[toDelegateName(g.model)] as unknown as {
+          count: (args: { where: Record<string, unknown> }) => Promise<number>;
+        };
 
         const count = await relationDelegate.count({
           where: enforceWorkspace({ [g.foreignKey]: id }),
@@ -158,13 +166,13 @@ export function buildCud<M extends ModelName>({
 
       try {
         if (softDelete && activeField) {
-          return await d.update({
+          return await callUpdate({
             where: enforceWorkspace({ id }),
             data: { [activeField]: false },
           });
         }
 
-        return await d.delete({
+        return await callDelete({
           where: enforceWorkspace({ id }),
         });
       } catch (e) {
@@ -172,9 +180,6 @@ export function buildCud<M extends ModelName>({
       }
     },
 
-    /**
-     * Escape hatch
-     */
     get delegate() {
       return delegate();
     },

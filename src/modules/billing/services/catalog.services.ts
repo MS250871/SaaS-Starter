@@ -1,4 +1,8 @@
-import { productCrud, productQueries, priceQueries } from '@/modules/billing/db';
+import {
+  productCrud,
+  productQueries,
+  priceQueries,
+} from '@/modules/billing/db';
 import type { CreateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -8,7 +12,9 @@ export async function getProductById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Product ID is required');
   }
 
-  const product = await productQueries.byId(id);
+  const product = await productQueries.findUnique({
+    where: { id },
+  });
 
   if (!product) {
     throwError(ERR.NOT_FOUND, 'Product not found');
@@ -51,7 +57,9 @@ export async function getPriceById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Price ID is required');
   }
 
-  const price = await priceQueries.byId(id);
+  const price = await priceQueries.findUnique({
+    where: { id },
+  });
 
   if (!price) {
     throwError(ERR.NOT_FOUND, 'Price not found');

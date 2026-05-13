@@ -5,6 +5,7 @@ import { getIdentityById } from '@/modules/auth/services/identity.services';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
 import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/role.services';
+import type { WorkspaceRoleSystemKey } from '@/modules/roles/role.types';
 import { createMembership } from '@/modules/workspace/services/membership.services';
 import { createWorkspaceSettings } from '@/modules/workspace/services/setting.services';
 import {
@@ -54,7 +55,9 @@ export async function createWorkspaceWorkflow(input: {
       identityId: input.identityId,
       roleDefinitionId: ownerRole.id,
       roleKey: ownerRole.key,
-      roleSystemKey: ownerRole.systemKey ?? undefined,
+      roleSystemKey:
+        (ownerRole.systemKey as WorkspaceRoleSystemKey | null | undefined) ??
+        undefined,
     });
 
     let trialStartsAt: Date | null = null;

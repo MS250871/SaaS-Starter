@@ -22,7 +22,6 @@ function readJsonArray(raw: string | null) {
 export async function withActionContext<T>(handler: () => Promise<T>) {
   const hdrs = await headers();
 
-  /* ---------------- REQUEST CONTEXT ---------------- */
   const raw = hdrs.get('x-request-context');
 
   if (!raw) {
@@ -45,36 +44,30 @@ export async function withActionContext<T>(handler: () => Promise<T>) {
   const platformRoleKeys = readJsonArray(hdrs.get('x-platform-role-keys'));
   const legacyPlatformRoles = readJsonArray(hdrs.get('x-platform-roles'));
 
-  /* ---------------- ACTOR ---------------- */
-  const actor: ActorContext = buildActorContext(
-    {
-      identityId: hdrs.get('x-identity-id') ?? undefined,
-      customerId: hdrs.get('x-customer-id') ?? undefined,
-      platformRole: hdrs.get('x-platform-role') ?? undefined,
-      platformRoleKeys:
-        platformRoleKeys.length > 0 ? platformRoleKeys : legacyPlatformRoles,
-      platformRoleSystemKeys: readJsonArray(
-        hdrs.get('x-platform-role-system-keys'),
-      ),
-      workspaceId: hdrs.get('x-workspace-id') ?? undefined,
-      workspaceRole: hdrs.get('x-workspace-role') ?? undefined,
-      workspaceRoleKey:
-        hdrs.get('x-workspace-role-key') ??
-        hdrs.get('x-workspace-role') ??
-        undefined,
-      workspaceRoleSystemKey:
-        hdrs.get('x-workspace-role-system-key') ?? undefined,
-      membershipId: hdrs.get('x-membership-id') ?? undefined,
-      permissions,
-    },
-  );
+  const actor: ActorContext = buildActorContext({
+    identityId: hdrs.get('x-identity-id') ?? undefined,
+    customerId: hdrs.get('x-customer-id') ?? undefined,
+    platformRole: hdrs.get('x-platform-role') ?? undefined,
+    platformRoleKeys:
+      platformRoleKeys.length > 0 ? platformRoleKeys : legacyPlatformRoles,
+    platformRoleSystemKeys: readJsonArray(
+      hdrs.get('x-platform-role-system-keys'),
+    ),
+    workspaceId: hdrs.get('x-workspace-id') ?? undefined,
+    workspaceRole: hdrs.get('x-workspace-role') ?? undefined,
+    workspaceRoleKey:
+      hdrs.get('x-workspace-role-key') ??
+      hdrs.get('x-workspace-role') ??
+      undefined,
+    workspaceRoleSystemKey:
+      hdrs.get('x-workspace-role-system-key') ?? undefined,
+    membershipId: hdrs.get('x-membership-id') ?? undefined,
+    permissions,
+  });
 
   return runWithContext(requestContext, () => runWithActor(actor, handler));
 }
 
-/**
- * Use this only for DB-only actions.
- */
 export async function withActionTxContext<T>(handler: () => Promise<T>) {
   return withActionContext(() => withUnitOfWork(handler));
 }

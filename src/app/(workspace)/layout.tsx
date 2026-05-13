@@ -8,6 +8,7 @@ import {
 } from "@/components/admin/admin-shell"
 import { prisma } from "@/lib/prisma"
 import { readActorContext } from "@/lib/request/read-actor-context"
+import { withActionTxContext } from "@/lib/request/withActionContext"
 import { buildWorkspaceAdminPath } from "@/modules/workspace/admin-routes"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
 import { getWorkspaceNotificationInboxData } from "@/modules/workspace/server/workspace-admin-page-data"
@@ -308,20 +309,22 @@ export default async function WorkspaceLayout({
     slug: workspaceSlug,
   })
 
-  if (workspaceId && actor.identityId) {
-    const inboxData = await getWorkspaceNotificationInboxData({
-      workspaceId,
-      identityId: actor.identityId,
-      limit: 8,
-    })
+  const actorIdentityId = actor.identityId
+
+  if (workspaceId && actorIdentityId) {
+    const inboxData = await withActionTxContext(() =>
+      getWorkspaceNotificationInboxData({
+        workspaceId,
+        identityId: actorIdentityId,
+        limit: 8,
+      }),
+    )
 
     notificationMenu = {
       unreadCount: inboxData.unreadCount,
-      items: inboxData.items.map((item) => ({
+      items: inboxData.items.map((item: (typeof inboxData.items)[number]) => ({
         ...item,
-        href:
-          item.href ??
-          buildWorkspaceAdminPath(workspaceBasePath, "notifications"),
+        href: item.href ?? buildWorkspaceAdminPath(workspaceBasePath, "notifications"),
       })),
     }
   }

@@ -25,7 +25,9 @@ export async function getOtpRequestById(id: string) {
     throwError(ERR.INVALID_INPUT, 'OTP request ID is required');
   }
 
-  const otp = await otpQueries.byId(id);
+  const otp = await otpQueries.findUnique({
+    where: { id },
+  });
 
   if (!otp) {
     throwError(ERR.NOT_FOUND, 'OTP request not found');

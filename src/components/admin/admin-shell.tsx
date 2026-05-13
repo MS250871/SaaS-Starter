@@ -24,8 +24,8 @@ import {
 import { Logo } from "@/components/layout/logo"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { logoutAction } from "@/modules/auth/actions/logout.action"
-import { markAllWorkspaceNotificationsReadAction } from "@/modules/workspace/actions/mark-all-workspace-notifications-read.action"
-import { markWorkspaceNotificationReadAction } from "@/modules/workspace/actions/mark-workspace-notification-read.action"
+import { markAllWorkspaceNotificationsReadAction } from "@/modules/notifications/actions/mark-all-workspace-notifications-read.action"
+import { markWorkspaceNotificationReadAction } from "@/modules/notifications/actions/mark-workspace-notification-read.action"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import {

@@ -11,7 +11,9 @@ export async function getOAuthAccountById(id: string) {
     throwError(ERR.INVALID_INPUT, 'OAuth account ID is required');
   }
 
-  const account = await oauthAccountQueries.byId(id);
+  const account = await oauthAccountQueries.findUnique({
+    where: { id },
+  });
 
   if (!account) {
     throwError(ERR.NOT_FOUND, 'OAuth account not found');

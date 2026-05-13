@@ -17,8 +17,27 @@ import {
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type PlanFeatureWithFeature = Prisma.PlanFeatureGetPayload<{
+  include: { feature: true };
+}>;
+
+export type PlanLimitWithDefinition = Prisma.PlanLimitGetPayload<{
+  include: { limitDefinition: true };
+}>;
+
+export type WorkspaceFeatureOverrideWithFeature =
+  Prisma.WorkspaceFeatureOverrideGetPayload<{
+    include: { feature: true };
+  }>;
+
+export type WorkspaceLimitOverrideWithDefinition =
+  Prisma.WorkspaceLimitOverrideGetPayload<{
+    include: { limitDefinition: true };
+  }>;
 
 /* -------------------------------------------------------------------------- */
 /*                                   PLAN                                     */
@@ -27,7 +46,9 @@ import { ERR } from '@/lib/errors/codes';
 export async function getPlanById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
 
-  const plan = await planQueries.byId(id);
+  const plan = await planQueries.findUnique({
+    where: { id },
+  });
   if (!plan) throwError(ERR.NOT_FOUND, 'Plan not found');
 
   return plan;
@@ -41,6 +62,46 @@ export async function findPlanByKey(key: string) {
 
 export async function listPlans() {
   return planQueries.many({ orderBy: { sortOrder: 'asc' } });
+}
+
+export async function listPublicPricingPlans() {
+  return planQueries.delegate.findMany({
+    where: {
+      isActive: true,
+      isPublic: true,
+    },
+    orderBy: {
+      sortOrder: 'asc',
+    },
+    include: {
+      features: {
+        where: { isEnabled: true },
+        include: {
+          feature: true,
+        },
+      },
+      limits: {
+        include: {
+          limitDefinition: true,
+        },
+      },
+      products: {
+        where: {
+          isActive: true,
+        },
+        include: {
+          prices: {
+            where: {
+              isActive: true,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+        },
+      },
+    },
+  });
 }
 
 export async function createPlan(data: CreateInput<'Plan'>) {
@@ -91,6 +152,13 @@ export async function listFeatures() {
   return featureQueries.many({ orderBy: { sortOrder: 'asc' } });
 }
 
+export async function listFeatureCatalog() {
+  return featureQueries.many({
+    where: { isActive: true },
+    orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+  });
+}
+
 export async function createFeature(data: CreateInput<'Feature'>) {
   if (!data?.key) {
     throwError(ERR.INVALID_INPUT, 'Feature key is required');
@@ -127,6 +195,13 @@ export async function updateFeature(id: string, data: UpdateInput<'Feature'>) {
 
 export async function listLimits() {
   return limitDefinitionQueries.many({ orderBy: { sortOrder: 'asc' } });
+}
+
+export async function listLimitCatalog() {
+  return limitDefinitionQueries.many({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+  });
 }
 
 export async function createLimit(data: CreateInput<'LimitDefinition'>) {
@@ -180,13 +255,17 @@ export async function setPlanFeature(params: {
   }
 }
 
-export async function listPlanFeatures(planId: string) {
+export async function listPlanFeatures(
+  planId: string,
+): Promise<PlanFeatureWithFeature[]> {
   if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
 
-  return planFeatureQueries.many({
+  const features = await planFeatureQueries.many({
     where: { planId },
     include: { feature: true },
   });
+
+  return features as unknown as PlanFeatureWithFeature[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -224,13 +303,17 @@ export async function setPlanLimit(params: {
   }
 }
 
-export async function listPlanLimits(planId: string) {
+export async function listPlanLimits(
+  planId: string,
+): Promise<PlanLimitWithDefinition[]> {
   if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
 
-  return planLimitQueries.many({
+  const limits = await planLimitQueries.many({
     where: { planId },
     include: { limitDefinition: true },
   });
+
+  return limits as unknown as PlanLimitWithDefinition[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -269,13 +352,17 @@ export async function setWorkspaceFeatureOverride(params: {
   }
 }
 
-export async function listWorkspaceFeatureOverrides(workspaceId: string) {
+export async function listWorkspaceFeatureOverrides(
+  workspaceId: string,
+): Promise<WorkspaceFeatureOverrideWithFeature[]> {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
 
-  return workspaceFeatureOverrideQueries.many({
+  const overrides = await workspaceFeatureOverrideQueries.many({
     where: { workspaceId },
     include: { feature: true },
   });
+
+  return overrides as unknown as WorkspaceFeatureOverrideWithFeature[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -321,13 +408,17 @@ export async function setWorkspaceLimitOverride(params: {
   }
 }
 
-export async function listWorkspaceLimitOverrides(workspaceId: string) {
+export async function listWorkspaceLimitOverrides(
+  workspaceId: string,
+): Promise<WorkspaceLimitOverrideWithDefinition[]> {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
 
-  return workspaceLimitOverrideQueries.many({
+  const overrides = await workspaceLimitOverrideQueries.many({
     where: { workspaceId },
     include: { limitDefinition: true },
   });
+
+  return overrides as unknown as WorkspaceLimitOverrideWithDefinition[];
 }
 
 /* -------------------------------------------------------------------------- */

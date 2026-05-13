@@ -5,12 +5,12 @@ import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createAction } from '@/lib/http/create-action';
-import { prisma } from '@/lib/prisma';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import {
   refreshWorkspaceCustomDomainVerificationActionSchema,
   type RefreshWorkspaceCustomDomainVerificationActionInput,
 } from '@/modules/workspace/schema';
+import { getWorkspaceDomainById } from '@/modules/workspace/services/domains.services';
 import { refreshWorkspaceCustomDomainVerificationWorkflow } from '@/modules/workspace/workflows/refresh-workspace-custom-domain-verification.workflow';
 
 const refreshWorkspaceCustomDomainVerificationActionImpl = createAction(
@@ -27,19 +27,10 @@ const refreshWorkspaceCustomDomainVerificationActionImpl = createAction(
 
     assertPermission(session.permissions, 'workspaceDomain.verify');
 
-    const domain = await prisma.workspaceDomain.findUnique({
-      where: { id: parsed.workspaceDomainId },
-      select: {
-        id: true,
-        domain: true,
-        type: true,
-        workspaceId: true,
-      },
-    });
-
-    if (!domain || domain.workspaceId !== session.workspaceId) {
-      throwError(ERR.NOT_FOUND, 'Workspace domain not found');
-    }
+    const domain = await getWorkspaceDomainById(
+      session.workspaceId,
+      parsed.workspaceDomainId,
+    );
 
     if (domain.type !== WorkspaceDomainType.CUSTOM) {
       throwError(

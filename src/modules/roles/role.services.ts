@@ -1,4 +1,8 @@
-import { roleDefinitionCrud, roleDefinitionQueries } from "@/modules/roles/db"
+import {
+  roleDefinitionCrud,
+  roleDefinitionQueries,
+} from "@/modules/roles/db"
+import type { Prisma } from "@/generated/prisma/client"
 import type {
   PlatformRoleSystemKey,
   RoleScope,
@@ -14,12 +18,24 @@ export type RoleAssignmentSnapshot = {
   roleSystemKey?: RoleSystemKey | null
 }
 
+export type RoleDefinitionWithPermissions = Prisma.RoleDefinitionGetPayload<{
+  include: {
+    rolePermissions: {
+      include: {
+        permission: true
+      }
+    }
+  }
+}>
+
 export async function getRoleDefinitionById(id: string) {
   if (!id) {
     throwError(ERR.INVALID_INPUT, "Role definition id is required")
   }
 
-  const roleDefinition = await roleDefinitionQueries.byId(id)
+  const roleDefinition = await roleDefinitionQueries.findUnique({
+    where: { id },
+  })
 
   if (!roleDefinition) {
     throwError(ERR.NOT_FOUND, "Role definition not found")
@@ -95,6 +111,31 @@ export async function listAssignableRoleDefinitions(scope: RoleScope) {
     },
     orderBy: [{ hierarchyRank: "desc" }, { name: "asc" }],
   })
+}
+
+export async function listRoleDefinitionsWithPermissions(
+  scope: RoleScope,
+): Promise<RoleDefinitionWithPermissions[]> {
+  if (!scope) {
+    throwError(ERR.INVALID_INPUT, "Role scope is required")
+  }
+
+  const roles = await roleDefinitionQueries.many({
+    where: {
+      scope,
+      isActive: true,
+    },
+    orderBy: [{ hierarchyRank: "desc" }, { name: "asc" }],
+    include: {
+      rolePermissions: {
+        include: {
+          permission: true,
+        },
+      },
+    },
+  })
+
+  return roles as RoleDefinitionWithPermissions[]
 }
 
 export async function getDefaultRoleDefinition(scope: RoleScope) {

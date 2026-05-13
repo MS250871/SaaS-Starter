@@ -4,7 +4,7 @@ import { handleError } from '@/lib/errors/app-error';
 import { createPresignedDownloadUrl } from '@/lib/media/r2';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import { withRequestContext } from '@/lib/request/withRequestContext';
-import { getWorkspaceSupportAttachmentAccessWorkflow } from '@/modules/workspace/workflows/get-workspace-support-attachment-access.workflow';
+import { getWorkspaceSupportAttachmentAccessWorkflow } from '@/modules/support/workflows/get-workspace-support-attachment-access.workflow';
 
 export async function GET(
   request: Request,

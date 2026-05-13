@@ -69,7 +69,9 @@ function buildOutboxEventWhere(params?: ListOutboxEventsParams) {
 export async function getOutboxEventById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Outbox event ID is required');
 
-  const event = await outboxEventQueries.byId(id);
+  const event = await outboxEventQueries.findUnique({
+    where: { id },
+  });
   if (!event) throwError(ERR.NOT_FOUND, 'Outbox event not found');
 
   return event;
@@ -112,7 +114,9 @@ export async function listOutboxEvents(params?: ListOutboxEventsParams) {
  * Count outbox events with filters
  */
 export async function countOutboxEvents(params?: ListOutboxEventsParams) {
-  return outboxEventQueries.count(buildOutboxEventWhere(params));
+  return outboxEventQueries.count({
+    where: buildOutboxEventWhere(params),
+  });
 }
 
 /**

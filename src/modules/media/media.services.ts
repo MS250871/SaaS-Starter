@@ -1,9 +1,9 @@
 import {
   mediaCrud,
-  mediaQueries,
   fileAttachmentCrud,
-  fileAttachmentQueries,
   mediaJobCrud,
+  mediaQueries,
+  fileAttachmentQueries,
   mediaJobQueries,
 } from '@/modules/media/db';
 import type {
@@ -11,6 +11,7 @@ import type {
   UpdateInput,
   WhereInput,
 } from '@/lib/crud/prisma-types';
+import type { Prisma } from '@/generated/prisma/client';
 import type { MediaJobStatus, MediaStatus } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -64,6 +65,10 @@ type ListFileAttachmentsParams = MediaContext & {
   take?: number;
   skip?: number;
 };
+
+export type FileAttachmentWithMedia = Prisma.FileAttachmentGetPayload<{
+  include: { media: true };
+}>;
 
 type AttachMediaParams = MediaContext & {
   mediaId: string;
@@ -203,7 +208,9 @@ function ensureContextMatchesMedia(
 export async function getMediaById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Media ID is required');
 
-  const media = await mediaQueries.byId(id);
+  const media = await mediaQueries.findUnique({
+    where: { id },
+  });
   if (!media) throwError(ERR.NOT_FOUND, 'Media not found');
 
   return media;
@@ -227,7 +234,9 @@ export async function listMedia(params?: ListMediaParams) {
 }
 
 export async function countMedia(params?: ListMediaParams) {
-  return mediaQueries.count(buildMediaWhere(params));
+  return mediaQueries.count({
+    where: buildMediaWhere(params),
+  });
 }
 
 export async function createMedia(data: CreateInput<'Media'>) {
@@ -439,7 +448,8 @@ export async function deleteMediaObjectAndMarkDeleted(id: string) {
 export async function getFileAttachmentById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'File attachment ID is required');
 
-  const attachment = await fileAttachmentQueries.byId(id, {
+  const attachment = await fileAttachmentQueries.findUnique({
+    where: { id },
     include: { media: true },
   });
 
@@ -487,6 +497,62 @@ export async function listFileAttachmentsByEntity(
   }
 
   return listFileAttachments({ entityType, entityId });
+}
+
+export async function listFileAttachmentsByEntityIds(params: {
+  entityType: string;
+  entityIds: string[];
+  orderByCreatedAt?: 'asc' | 'desc';
+}): Promise<FileAttachmentWithMedia[]> {
+  if (!params.entityType) {
+    throwError(ERR.INVALID_INPUT, 'entityType is required');
+  }
+
+  const entityIds = Array.from(new Set(params.entityIds.filter(Boolean)));
+
+  if (entityIds.length === 0) {
+    return [];
+  }
+
+  const attachments = await fileAttachmentQueries.many({
+    where: {
+      entityType: params.entityType,
+      entityId: {
+        in: entityIds,
+      },
+    },
+    include: { media: true },
+    orderBy: { createdAt: params.orderByCreatedAt ?? 'desc' },
+  });
+
+  return attachments as FileAttachmentWithMedia[];
+}
+
+export async function findFileAttachmentByScopedMediaId(params: {
+  mediaId: string;
+  workspaceId?: string;
+  entityTypes?: string[];
+}): Promise<FileAttachmentWithMedia | null> {
+  if (!params.mediaId) {
+    throwError(ERR.INVALID_INPUT, 'mediaId is required');
+  }
+
+  const attachment = await fileAttachmentQueries.findFirst({
+    where: {
+      mediaId: params.mediaId,
+      ...(params.workspaceId ? { workspaceId: params.workspaceId } : {}),
+      ...(params.entityTypes?.length
+        ? {
+            entityType: {
+              in: params.entityTypes,
+            },
+          }
+        : {}),
+    },
+    include: { media: true },
+  });
+
+  return attachment as FileAttachmentWithMedia | null;
 }
 
 export async function listFileAttachmentsByMedia(mediaId: string) {
@@ -564,7 +630,8 @@ export async function deleteFileAttachment(id: string) {
 export async function getMediaJobById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Media job ID is required');
 
-  const job = await mediaJobQueries.byId(id, {
+  const job = await mediaJobQueries.findUnique({
+    where: { id },
     include: { media: true },
   });
 
@@ -603,7 +670,9 @@ export async function listMediaJobs(params?: ListMediaJobsParams) {
 }
 
 export async function countMediaJobs(params?: ListMediaJobsParams) {
-  return mediaJobQueries.count(buildMediaJobWhere(params));
+  return mediaJobQueries.count({
+    where: buildMediaJobWhere(params),
+  });
 }
 
 export async function listMediaJobsByMedia(mediaId: string) {

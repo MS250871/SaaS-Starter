@@ -8,8 +8,34 @@ import {
   PaymentProvider,
   SubscriptionStatus,
 } from '@/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type WorkspaceActiveSubscriptionPlanSummary =
+  Prisma.SubscriptionGetPayload<{
+    select: {
+      status: true;
+      currentPeriodEnd: true;
+      price: {
+        select: {
+          product: {
+            select: {
+              plan: {
+                select: {
+                  id: true;
+                  key: true;
+                  name: true;
+                  description: true;
+                  sortOrder: true;
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  }>;
 
 /**
  * Get subscription
@@ -17,7 +43,9 @@ import { ERR } from '@/lib/errors/codes';
 export async function getSubscriptionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Subscription ID required');
 
-  const sub = await workspaceSubscriptionQueries.byId(id);
+  const sub = await workspaceSubscriptionQueries.findUnique({
+    where: { id },
+  });
   if (!sub) throwError(ERR.NOT_FOUND, 'Subscription not found');
 
   return sub;
@@ -99,4 +127,45 @@ export async function workspaceHasActiveSubscription(workspaceId: string) {
     return false;
 
   return true;
+}
+
+export async function getWorkspaceActiveSubscriptionPlanSummary(
+  workspaceId: string,
+): Promise<WorkspaceActiveSubscriptionPlanSummary | null> {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
+
+  const subscription = await workspaceSubscriptionQueries.findFirst({
+    where: {
+      workspaceId,
+      status: {
+        in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    select: {
+      status: true,
+      currentPeriodEnd: true,
+      price: {
+        select: {
+          product: {
+            select: {
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                  description: true,
+                  sortOrder: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  return subscription as WorkspaceActiveSubscriptionPlanSummary | null;
 }

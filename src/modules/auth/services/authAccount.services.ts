@@ -13,7 +13,9 @@ export async function getAuthAccountById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Auth account ID is required');
   }
 
-  const account = await authAccountQueries.byId(id);
+  const account = await authAccountQueries.findUnique({
+    where: { id },
+  });
 
   if (!account) {
     throwError(ERR.NOT_FOUND, 'Auth account not found');
@@ -89,6 +91,51 @@ export async function listAuthAccountsForIdentity(identityId: string) {
   return authAccountQueries.many({
     where: {
       identityId,
+    },
+  });
+}
+
+export async function listAuthAccountsByEmailsOrPhones(params: {
+  emails?: string[];
+  phones?: string[];
+}) {
+  const emails = Array.from(
+    new Set((params.emails ?? []).filter(Boolean).map((value) => value.toLowerCase())),
+  );
+  const phones = Array.from(new Set((params.phones ?? []).filter(Boolean)));
+  const orFilters = [];
+
+  if (emails.length > 0) {
+    orFilters.push({
+      type: AuthAccountType.EMAIL,
+      value: {
+        in: emails,
+      },
+    });
+  }
+
+  if (phones.length > 0) {
+    orFilters.push({
+      type: AuthAccountType.PHONE,
+      value: {
+        in: phones,
+      },
+    });
+  }
+
+  if (orFilters.length === 0) {
+    return [];
+  }
+
+  return authAccountQueries.many({
+    where: {
+      OR: orFilters,
+    },
+    select: {
+      id: true,
+      identityId: true,
+      type: true,
+      value: true,
     },
   });
 }

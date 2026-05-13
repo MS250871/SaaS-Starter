@@ -3,20 +3,22 @@
 import { headers } from 'next/headers';
 import { createAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
+import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { prisma } from '@/lib/prisma';
 import { buildAbsoluteUrl } from '@/lib/url/absolute-url';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
+import { getRoleDefinitionById } from '@/modules/roles/role.services';
 import {
   createWorkspaceInviteActionSchema,
   createWorkspaceInviteSchema,
   type CreateWorkspaceInviteActionInput,
   type CreateWorkspaceInviteDomain,
 } from '@/modules/workspace/schema';
+import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
 import { createWorkspaceInviteWorkflow } from '@/modules/workspace/workflows/create-workspace-invite.workflow';
-import { createWorkspaceInviteNotificationWorkflow } from '@/modules/workspace/workflows/create-workspace-invite-notification.workflow';
+import { createWorkspaceInviteNotificationWorkflow } from '@/modules/notifications/workflows/create-workspace-invite-notification.workflow';
 
 function getInviterName(params: {
   firstName?: string | null;
@@ -54,25 +56,10 @@ const createWorkspaceInviteActionImpl = createAction(async (formData: FormData) 
       invitedById: session.identityId,
       invite,
     }),
-    prisma.workspace.findUnique({
-      where: { id: session.workspaceId },
-      select: {
-        name: true,
-      },
-    }),
-    prisma.identity.findUnique({
-      where: { id: session.identityId },
-      select: {
-        firstName: true,
-        lastName: true,
-        email: true,
-      },
-    }),
+    getWorkspaceById(session.workspaceId),
+    getIdentityDisplayProfile(session.identityId),
   ]);
-  const roleDefinition = await prisma.roleDefinition.findUnique({
-    where: { id: result.invite.roleDefinitionId },
-    select: { name: true },
-  });
+  const roleDefinition = await getRoleDefinitionById(result.invite.roleDefinitionId);
 
   const signupUrl = buildAbsoluteUrl(result.signupPath, {
     host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
@@ -109,20 +96,20 @@ const createWorkspaceInviteActionImpl = createAction(async (formData: FormData) 
         : 'Invite created and email sent successfully.'
       : result.reused
         ? 'A pending invite already existed. The invite is still valid, but the email could not be sent. Use the signup link below.'
-        : 'Invite created, but the email could not be sent. Use the signup link below.',
+      : 'Invite created, but the email could not be sent. Use the signup link below.',
     reused: result.reused,
     emailDelivered,
-      invite: {
-        id: result.invite.id,
-        email: result.invite.email,
-        role: result.invite.roleKey,
-        roleName: roleDefinition?.name ?? result.invite.roleKey,
-        roleDefinitionId: result.invite.roleDefinitionId,
-        roleSystemKey: result.invite.roleSystemKey ?? null,
-        roleRank: null,
-        status: result.invite.status,
-        token: result.invite.token,
-        expiresAt: result.invite.expiresAt?.toISOString() ?? null,
+    invite: {
+      id: result.invite.id,
+      email: result.invite.email,
+      role: result.invite.roleKey,
+      roleName: roleDefinition.name ?? result.invite.roleKey,
+      roleDefinitionId: result.invite.roleDefinitionId,
+      roleSystemKey: result.invite.roleSystemKey ?? null,
+      roleRank: null,
+      status: result.invite.status,
+      token: result.invite.token,
+      expiresAt: result.invite.expiresAt?.toISOString() ?? null,
       createdAt: result.invite.createdAt.toISOString(),
     },
     signupPath: result.signupPath,

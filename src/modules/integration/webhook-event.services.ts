@@ -62,7 +62,9 @@ function buildWebhookEventWhere(params?: ListWebhookEventsParams) {
 export async function getWebhookEventById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Webhook event ID is required');
 
-  const event = await webhookEventQueries.byId(id);
+  const event = await webhookEventQueries.findUnique({
+    where: { id },
+  });
   if (!event) throwError(ERR.NOT_FOUND, 'Webhook event not found');
 
   return event;
@@ -105,7 +107,9 @@ export async function listWebhookEvents(params?: ListWebhookEventsParams) {
  * Count webhook events with filters
  */
 export async function countWebhookEvents(params?: ListWebhookEventsParams) {
-  return webhookEventQueries.count(buildWebhookEventWhere(params));
+  return webhookEventQueries.count({
+    where: buildWebhookEventWhere(params),
+  });
 }
 
 /**

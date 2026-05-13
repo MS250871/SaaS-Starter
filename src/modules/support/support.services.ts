@@ -1,9 +1,13 @@
 import {
   supportTicketCrud,
-  supportTicketQueries,
   supportTicketMessageCrud,
+  supportTicketQueries,
   supportTicketMessageQueries,
 } from '@/modules/support/db';
+import { listIdentityDisplayProfilesByIds } from '@/modules/auth/services/identity.services';
+import { listCustomerIdentityProfilesByIds } from '@/modules/customer/services/customer.services';
+import { listFileAttachmentsByEntityIds } from '@/modules/media/media.services';
+import { listActivePlatformMembershipsByIdentityIds } from '@/modules/platform/services/membership.services';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { SenderType, SupportContextType } from '@/generated/prisma/client';
@@ -11,13 +15,65 @@ import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
+type SupportIdentityProfile = Awaited<
+  ReturnType<typeof listIdentityDisplayProfilesByIds>
+>[number];
+type SupportCustomerProfile = Awaited<
+  ReturnType<typeof listCustomerIdentityProfilesByIds>
+>[number];
+type SupportPlatformMembership = Awaited<
+  ReturnType<typeof listActivePlatformMembershipsByIdentityIds>
+>[number];
+type SupportAttachment = Awaited<
+  ReturnType<typeof listFileAttachmentsByEntityIds>
+>[number];
+type SupportMessageCountGroup = {
+  ticketId: string;
+  _count: {
+    _all: number;
+  };
+};
+type SupportThreadMessage = {
+  id: string;
+  senderType: SenderType;
+  senderIdentityId: string | null;
+  senderCustomerId: string | null;
+  message: string;
+  isInternalNote: boolean;
+  createdAt: Date;
+};
+
+export type WorkspaceSupportThreadSnapshot = {
+  ticket: {
+    id: string;
+    contextType: string;
+    title: string;
+    body: string;
+    status: string;
+    priority: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    createdById: string | null;
+    createdByCustomerId: string | null;
+    assignedToId: string | null;
+  };
+  messages: SupportThreadMessage[];
+  messageIdentities: SupportIdentityProfile[];
+  messageCustomers: SupportCustomerProfile[];
+  platformMemberships: SupportPlatformMembership[];
+  ticketAttachments: SupportAttachment[];
+  messageAttachments: SupportAttachment[];
+};
+
 /**
  * Get support ticket by ID
  */
 export async function getSupportTicketById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Ticket ID is required');
 
-  const ticket = await supportTicketQueries.byId(id);
+  const ticket = await supportTicketQueries.findUnique({
+    where: { id },
+  });
 
   if (!ticket) throwError(ERR.NOT_FOUND, 'Support ticket not found');
 
@@ -250,6 +306,35 @@ export async function listAssignedSupportTickets(assignedToId: string) {
   });
 }
 
+export async function getWorkspaceSupportTicketById(
+  workspaceId: string,
+  ticketId: string,
+) {
+  if (!workspaceId || !ticketId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and ticketId are required');
+  }
+
+  const ticket = await supportTicketQueries.findFirst({
+    where: {
+      id: ticketId,
+      workspaceId,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      title: true,
+      status: true,
+      contextType: true,
+    },
+  });
+
+  if (!ticket) {
+    throwError(ERR.NOT_FOUND, 'Support ticket not found for this workspace');
+  }
+
+  return ticket;
+}
+
 /**
  * =========================
  * Support Ticket Messages
@@ -259,7 +344,9 @@ export async function listAssignedSupportTickets(assignedToId: string) {
 export async function getSupportTicketMessageById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Message ID is required');
 
-  const msg = await supportTicketMessageQueries.byId(id);
+  const msg = await supportTicketMessageQueries.findUnique({
+    where: { id },
+  });
 
   if (!msg) throwError(ERR.NOT_FOUND, 'Message not found');
 
@@ -394,4 +481,377 @@ export async function listSupportTicketInternalNotes(ticketId: string) {
     },
     orderBy: { createdAt: 'asc' },
   });
+}
+
+export async function getWorkspaceSupportSummary(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+  }
+
+  const openStatuses = ['open', 'in_progress'];
+
+  const [
+    totalWorkspaceTickets,
+    totalPlatformEscalations,
+    openWorkspaceTickets,
+    openPlatformEscalations,
+  ] = await Promise.all([
+    supportTicketQueries.count({
+      where: {
+        workspaceId,
+        contextType: {
+          not: 'PLATFORM',
+        },
+      },
+    }),
+    supportTicketQueries.count({
+      where: {
+        workspaceId,
+        contextType: 'PLATFORM',
+      },
+    }),
+    supportTicketQueries.count({
+      where: {
+        workspaceId,
+        contextType: {
+          not: 'PLATFORM',
+        },
+        status: {
+          in: openStatuses,
+        },
+      },
+    }),
+    supportTicketQueries.count({
+      where: {
+        workspaceId,
+        contextType: 'PLATFORM',
+        status: {
+          in: openStatuses,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    openWorkspaceTickets,
+    openPlatformEscalations,
+    totalWorkspaceTickets,
+    totalPlatformEscalations,
+  };
+}
+
+function resolveWorkspaceSupportSenderName(params: {
+  identity?: {
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  } | null;
+  customer?: {
+    identity: {
+      firstName: string | null;
+      lastName: string | null;
+      email: string | null;
+    };
+  } | null;
+}) {
+  if (params.customer) {
+    return (
+      `${params.customer.identity.firstName ?? ''} ${params.customer.identity.lastName ?? ''}`.trim() ||
+      params.customer.identity.email ||
+      'Customer'
+    );
+  }
+
+  if (params.identity) {
+    return (
+      `${params.identity.firstName ?? ''} ${params.identity.lastName ?? ''}`.trim() ||
+      params.identity.email ||
+      'Workspace member'
+    );
+  }
+
+  return 'System';
+}
+
+export async function hydrateWorkspaceSupportTicketListItems(
+  tickets: Array<{
+    id: string;
+    contextType: string;
+    title: string;
+    body: string;
+    status: string;
+    priority: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    createdById: string | null;
+    createdByCustomerId: string | null;
+    assignedToId: string | null;
+  }>,
+) {
+  const createdByIds = Array.from(
+    new Set(
+      tickets
+        .map((ticket) => ticket.createdById)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const createdByCustomerIds = Array.from(
+    new Set(
+      tickets
+        .map((ticket) => ticket.createdByCustomerId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const assignedToIds = Array.from(
+    new Set(
+      tickets
+        .map((ticket) => ticket.assignedToId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const [identities, customers, messageCounts]: [
+    SupportIdentityProfile[],
+    SupportCustomerProfile[],
+    SupportMessageCountGroup[],
+  ] = await Promise.all([
+    createdByIds.length + assignedToIds.length > 0
+      ? listIdentityDisplayProfilesByIds(
+          Array.from(new Set([...createdByIds, ...assignedToIds])),
+        )
+      : Promise.resolve([] as SupportIdentityProfile[]),
+    createdByCustomerIds.length > 0
+      ? listCustomerIdentityProfilesByIds(createdByCustomerIds)
+      : Promise.resolve([] as SupportCustomerProfile[]),
+    tickets.length > 0
+      ? (supportTicketMessageQueries.delegate.groupBy({
+          by: ['ticketId'],
+          where: {
+            ticketId: {
+              in: tickets.map((ticket) => ticket.id),
+            },
+          },
+          _count: {
+            _all: true,
+          },
+        }) as unknown as Promise<SupportMessageCountGroup[]>)
+      : Promise.resolve([] as SupportMessageCountGroup[]),
+  ]);
+
+  const identityMap = new Map(
+    identities.map((identity: SupportIdentityProfile) => [identity.id, identity]),
+  );
+  const customerMap = new Map(
+    customers.map((customer: SupportCustomerProfile) => [customer.id, customer]),
+  );
+  const messageCountMap = new Map(
+    messageCounts.map((count: SupportMessageCountGroup) => [
+      count.ticketId,
+      count._count._all,
+    ]),
+  );
+
+  return tickets.map((ticket) => {
+    const createdBy = ticket.createdById
+      ? identityMap.get(ticket.createdById)
+      : null;
+    const createdByCustomer = ticket.createdByCustomerId
+      ? customerMap.get(ticket.createdByCustomerId)
+      : null;
+    const assignedTo = ticket.assignedToId
+      ? identityMap.get(ticket.assignedToId)
+      : null;
+
+    return {
+      id: ticket.id,
+      contextType: ticket.contextType,
+      title: ticket.title,
+      body: ticket.body,
+      status: ticket.status,
+      priority: ticket.priority ?? null,
+      createdAt: ticket.createdAt.toISOString(),
+      updatedAt: ticket.updatedAt.toISOString(),
+      messageCount: messageCountMap.get(ticket.id) ?? 0,
+      createdById: ticket.createdById ?? null,
+      createdByCustomerId: ticket.createdByCustomerId ?? null,
+      createdByName: createdBy
+        ? resolveWorkspaceSupportSenderName({ identity: createdBy })
+        : null,
+      createdByCustomerName: createdByCustomer
+        ? resolveWorkspaceSupportSenderName({ customer: createdByCustomer })
+        : null,
+      assignedToId: ticket.assignedToId ?? null,
+      assignedToName: assignedTo
+        ? resolveWorkspaceSupportSenderName({ identity: assignedTo })
+        : null,
+    };
+  });
+}
+
+export async function listWorkspaceSupportQueueTickets(params: {
+  workspaceId: string;
+  queue: 'workspace' | 'platform';
+  page: number;
+  pageSize: number;
+}) {
+  if (!params.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+  }
+
+  const queueWhere =
+    params.queue === 'platform'
+      ? {
+          workspaceId: params.workspaceId,
+          contextType: 'PLATFORM' as const,
+        }
+      : {
+          workspaceId: params.workspaceId,
+          contextType: {
+            not: 'PLATFORM' as const,
+          },
+        };
+
+  const [totalItems, tickets] = await Promise.all([
+    supportTicketQueries.count({
+      where: {
+        ...queueWhere,
+      },
+    }),
+    supportTicketQueries.many({
+      where: {
+        ...queueWhere,
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      skip: (params.page - 1) * params.pageSize,
+      take: params.pageSize,
+      select: {
+        id: true,
+        contextType: true,
+        title: true,
+        body: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        createdById: true,
+        createdByCustomerId: true,
+        assignedToId: true,
+      },
+    }),
+  ]);
+
+  return {
+    totalItems,
+    tickets,
+  };
+}
+
+export async function getWorkspaceSupportThreadSnapshot(
+  workspaceId: string,
+  ticketId: string,
+): Promise<WorkspaceSupportThreadSnapshot | null> {
+  if (!workspaceId || !ticketId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and ticketId are required');
+  }
+
+  const ticket = await supportTicketQueries.findFirst({
+    where: {
+      id: ticketId,
+      workspaceId,
+    },
+    select: {
+      id: true,
+      contextType: true,
+      title: true,
+      body: true,
+      status: true,
+      priority: true,
+      createdAt: true,
+      updatedAt: true,
+      createdById: true,
+      createdByCustomerId: true,
+      assignedToId: true,
+    },
+  });
+
+  if (!ticket) {
+    return null;
+  }
+
+  const messages: SupportThreadMessage[] = await supportTicketMessageQueries.many({
+    where: {
+      ticketId: ticket.id,
+    },
+    orderBy: [{ createdAt: 'asc' }],
+    select: {
+      id: true,
+      senderType: true,
+      senderIdentityId: true,
+      senderCustomerId: true,
+      message: true,
+      isInternalNote: true,
+      createdAt: true,
+    },
+  });
+
+  const messageIdentityIds = Array.from(
+    new Set(
+      messages
+        .map((message) => message.senderIdentityId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const messageCustomerIds = Array.from(
+    new Set(
+      messages
+        .map((message) => message.senderCustomerId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const [
+    messageIdentities,
+    messageCustomers,
+    platformMemberships,
+    ticketAttachments,
+    messageAttachments,
+  ]: [
+    SupportIdentityProfile[],
+    SupportCustomerProfile[],
+    SupportPlatformMembership[],
+    SupportAttachment[],
+    SupportAttachment[],
+  ] = await Promise.all([
+    messageIdentityIds.length > 0
+      ? listIdentityDisplayProfilesByIds(messageIdentityIds)
+      : Promise.resolve([] as SupportIdentityProfile[]),
+    messageCustomerIds.length > 0
+      ? listCustomerIdentityProfilesByIds(messageCustomerIds)
+      : Promise.resolve([] as SupportCustomerProfile[]),
+    messageIdentityIds.length > 0
+      ? listActivePlatformMembershipsByIdentityIds(messageIdentityIds)
+      : Promise.resolve([] as SupportPlatformMembership[]),
+    listFileAttachmentsByEntityIds({
+      entityType: 'SUPPORT_TICKET',
+      entityIds: [ticket.id],
+      orderByCreatedAt: 'asc',
+    }),
+    messages.length > 0
+      ? listFileAttachmentsByEntityIds({
+          entityType: 'SUPPORT_TICKET_MESSAGE',
+          entityIds: messages.map((message: SupportThreadMessage) => message.id),
+          orderByCreatedAt: 'asc',
+        })
+      : Promise.resolve([] as SupportAttachment[]),
+  ]);
+
+  return {
+    ticket,
+    messages,
+    messageIdentities,
+    messageCustomers,
+    platformMemberships,
+    ticketAttachments,
+    messageAttachments,
+  };
 }

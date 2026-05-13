@@ -1,4 +1,3 @@
-import { prisma } from '@/lib/prisma';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -7,8 +6,11 @@ import {
   getRoleDefinitionById,
   getRoleDefinitionByKey,
 } from '@/modules/roles/role.services';
-import { membershipQueries } from '@/modules/workspace/db';
-import { deactivateMembership } from '@/modules/workspace/services/membership.services';
+import {
+  countActiveWorkspaceOwners,
+  deactivateMembership,
+  getMembershipWorkspaceSnapshot,
+} from '@/modules/workspace/services/membership.services';
 
 export async function removeWorkspaceMemberWorkflow(input: {
   membershipId: string;
@@ -17,28 +19,7 @@ export async function removeWorkspaceMemberWorkflow(input: {
   currentWorkspaceRoleKey?: string;
 }) {
   return withUnitOfWork(async () => {
-    const membership = await prisma.membership.findUnique({
-      where: { id: input.membershipId },
-      select: {
-        id: true,
-        workspaceId: true,
-        identityId: true,
-        isActive: true,
-        roleKey: true,
-        roleSystemKey: true,
-        roleDefinition: {
-          select: {
-            id: true,
-            name: true,
-            hierarchyRank: true,
-          },
-        },
-      },
-    });
-
-    if (!membership) {
-      throwError(ERR.NOT_FOUND, 'Membership not found.');
-    }
+    const membership = await getMembershipWorkspaceSnapshot(input.membershipId);
 
     if (!membership.isActive) {
       throwError(ERR.INVALID_STATE, 'This member has already been removed.');
@@ -83,11 +64,9 @@ export async function removeWorkspaceMemberWorkflow(input: {
     }
 
     if (membership.roleSystemKey === 'WORKSPACE_OWNER') {
-      const activeOwnerCount = await membershipQueries.count({
-        workspaceId: membership.workspaceId,
-        roleSystemKey: 'WORKSPACE_OWNER',
-        isActive: true,
-      });
+      const activeOwnerCount = await countActiveWorkspaceOwners(
+        membership.workspaceId,
+      );
 
       if (activeOwnerCount <= 1) {
         throwError(

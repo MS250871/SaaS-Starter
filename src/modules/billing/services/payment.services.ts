@@ -1,7 +1,7 @@
 import {
   paymentCrud,
-  paymentQueries,
   paymentAttemptCrud,
+  paymentQueries,
 } from '@/modules/billing/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
@@ -12,7 +12,9 @@ export async function getPaymentById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Payment ID is required');
   }
 
-  const payment = await paymentQueries.byId(id);
+  const payment = await paymentQueries.findUnique({
+    where: { id },
+  });
 
   if (!payment) {
     throwError(ERR.NOT_FOUND, 'Payment not found');

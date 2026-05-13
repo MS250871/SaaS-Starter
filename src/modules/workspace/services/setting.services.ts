@@ -4,6 +4,7 @@ import {
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -56,8 +57,8 @@ export async function updateWorkspaceSettings(
  */
 export async function upsertWorkspaceSettings(params: {
   workspaceId: string;
-  themes?: any;
-  settings?: any;
+  themes?: Prisma.InputJsonValue;
+  settings?: Prisma.InputJsonValue;
 }) {
   if (!params.workspaceId) {
     throwError(ERR.INVALID_INPUT, 'workspaceId required');
@@ -74,18 +75,25 @@ export async function upsertWorkspaceSettings(params: {
   }
 
   return updateWorkspaceSettings(existing.id, {
-    themes: params.themes ?? existing.themes,
-    settings: params.settings ?? existing.settings,
+    themes:
+      params.themes ??
+      (existing.themes === null ? Prisma.JsonNull : existing.themes),
+    settings:
+      params.settings ??
+      (existing.settings === null ? Prisma.JsonNull : existing.settings),
   });
 }
 
-export async function updateWorkspaceTheme(workspaceId: string, themes: any) {
+export async function updateWorkspaceTheme(
+  workspaceId: string,
+  themes: Prisma.InputJsonValue,
+) {
   return upsertWorkspaceSettings({ workspaceId, themes });
 }
 
 export async function updateWorkspaceConfig(
   workspaceId: string,
-  settings: any,
+  settings: Prisma.InputJsonValue,
 ) {
   return upsertWorkspaceSettings({ workspaceId, settings });
 }

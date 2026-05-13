@@ -39,10 +39,10 @@ import { Input } from '@/components/ui/input';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
-import { addWorkspaceSupportTicketInternalNoteAction } from '@/modules/workspace/actions/add-workspace-support-ticket-internal-note.action';
-import { addWorkspaceSupportTicketReplyAction } from '@/modules/workspace/actions/add-workspace-support-ticket-reply.action';
-import { updateWorkspaceSupportTicketAssignmentAction } from '@/modules/workspace/actions/update-workspace-support-ticket-assignment.action';
-import { updateWorkspaceSupportTicketStatusAction } from '@/modules/workspace/actions/update-workspace-support-ticket-status.action';
+import { addWorkspaceSupportTicketInternalNoteAction } from '@/modules/support/actions/add-workspace-support-ticket-internal-note.action';
+import { addWorkspaceSupportTicketReplyAction } from '@/modules/support/actions/add-workspace-support-ticket-reply.action';
+import { updateWorkspaceSupportTicketAssignmentAction } from '@/modules/support/actions/update-workspace-support-ticket-assignment.action';
+import { updateWorkspaceSupportTicketStatusAction } from '@/modules/support/actions/update-workspace-support-ticket-status.action';
 
 type SupportThreadItem = {
   id: string;

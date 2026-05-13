@@ -1,4 +1,5 @@
 import {
+  type Prisma,
   WorkspaceDomainType,
   type WorkspaceDomainRoutingMode,
 } from '@/generated/prisma/client';
@@ -33,6 +34,21 @@ type WorkspaceDomainRedirectAlias = {
   redirectStatusCode: 301 | 302 | 307 | 308;
   verified: boolean;
 };
+
+export type WorkspaceCustomDomainVerificationSnapshot =
+  Prisma.WorkspaceDomainGetPayload<{
+    include: {
+      dnsRecords: true;
+      workspace: {
+        select: {
+          id: true;
+          slug: true;
+          isActive: true;
+          defaultDomain: true;
+        };
+      };
+    };
+  }>;
 
 function normalizeDomainValue(value: string) {
   return value
@@ -428,7 +444,7 @@ export async function createWorkspaceCustomDomainSetup(params: {
 
 export async function getWorkspaceCustomDomainVerificationSnapshot(
   workspaceDomainId: string,
-) {
+): Promise<WorkspaceCustomDomainVerificationSnapshot> {
   if (!workspaceDomainId) {
     throwError(ERR.INVALID_INPUT, 'workspaceDomainId is required');
   }
@@ -459,7 +475,7 @@ export async function getWorkspaceCustomDomainVerificationSnapshot(
     );
   }
 
-  return domain;
+  return domain as unknown as WorkspaceCustomDomainVerificationSnapshot;
 }
 
 export async function applyWorkspaceCustomDomainVerificationResult(params: {

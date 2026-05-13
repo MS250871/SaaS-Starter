@@ -40,7 +40,9 @@ function applyRoleSnapshot(
 export async function getPlatformMembershipById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Membership ID is required")
 
-  const membership = await platformMembershipQueries.byId(id)
+  const membership = await platformMembershipQueries.findUnique({
+    where: { id },
+  })
   if (!membership) throwError(ERR.NOT_FOUND, "Membership not found")
 
   return membership
@@ -78,6 +80,28 @@ export async function listIdentityPlatformMemberships(identityId: string) {
   return platformMembershipQueries.many({
     where: { identityId },
     orderBy: { createdAt: "desc" },
+  })
+}
+
+export async function listActivePlatformMembershipsByIdentityIds(
+  identityIds: string[],
+) {
+  const uniqueIds = Array.from(new Set(identityIds.filter(Boolean)))
+
+  if (uniqueIds.length === 0) {
+    return []
+  }
+
+  return platformMembershipQueries.many({
+    where: {
+      identityId: {
+        in: uniqueIds,
+      },
+      isActive: true,
+    },
+    select: {
+      identityId: true,
+    },
   })
 }
 
@@ -136,7 +160,7 @@ export async function createPlatformMembershipEntry(params: {
   identityId: string
   roleDefinitionId?: string | null
   roleKey?: string | null
-  roleSystemKey?: string | null
+  roleSystemKey?: PlatformRoleSystemKey | null
 }) {
   const defaultRole =
     !params.roleDefinitionId && !params.roleKey && !params.roleSystemKey
@@ -147,7 +171,10 @@ export async function createPlatformMembershipEntry(params: {
     identityId: params.identityId,
     roleDefinitionId: params.roleDefinitionId ?? defaultRole?.id,
     roleKey: params.roleKey ?? defaultRole?.key,
-    roleSystemKey: params.roleSystemKey ?? defaultRole?.systemKey ?? undefined,
+    roleSystemKey:
+      params.roleSystemKey ??
+      ((defaultRole?.systemKey as PlatformRoleSystemKey | null | undefined) ??
+        undefined),
   })
 }
 
@@ -233,11 +260,15 @@ export async function hasPlatformRole(
     throwError(ERR.INVALID_INPUT, "identityId and roleSystemKey required")
   }
 
-  return platformMembershipQueries.exists({
-    identityId,
-    roleSystemKey,
-    isActive: true,
-  })
+  return (
+    (await platformMembershipQueries.count({
+      where: {
+        identityId,
+        roleSystemKey,
+        isActive: true,
+      },
+    })) > 0
+  )
 }
 
 export async function isPlatformUser(identityId: string) {
@@ -245,10 +276,14 @@ export async function isPlatformUser(identityId: string) {
     throwError(ERR.INVALID_INPUT, "identityId required")
   }
 
-  return platformMembershipQueries.exists({
-    identityId,
-    isActive: true,
-  })
+  return (
+    (await platformMembershipQueries.count({
+      where: {
+        identityId,
+        isActive: true,
+      },
+    })) > 0
+  )
 }
 
 export async function getPlatformAccessContext(identityId: string): Promise<{

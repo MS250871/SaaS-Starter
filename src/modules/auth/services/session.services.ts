@@ -10,7 +10,6 @@ import {
 } from '@/lib/auth/auth-config';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { prisma } from '@/lib/prisma';
 
 const USER_SESSION_LIFETIME_MS = USER_SESSION_LIFETIME_SECONDS * 1000;
 const USER_SESSION_REFRESH_THRESHOLD_MS =
@@ -26,13 +25,25 @@ export async function getSessionById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Session ID is required');
   }
 
-  const session = await sessionQueries.byId(id);
+  const session = await sessionQueries.findUnique({
+    where: { id },
+  });
 
   if (!session) {
     throwError(ERR.NOT_FOUND, 'Session not found');
   }
 
   return session;
+}
+
+export async function findSessionById(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Session ID is required');
+  }
+
+  return sessionQueries.findUnique({
+    where: { id },
+  });
 }
 
 /**
@@ -115,12 +126,12 @@ export async function endAllIdentitySessions(
     throwError(ERR.INVALID_INPUT, 'Identity ID is required');
   }
 
-  const sessions = (await sessionQueries.many({
+  const sessions = await sessionQueries.many({
     where: {
       identityId,
       isActive: true,
     },
-  })) as Session[];
+  });
 
   const updates = sessions.map((s) =>
     sessionCrud.update(s.id, {
@@ -141,12 +152,12 @@ export async function endMembershipSessions(
     throwError(ERR.INVALID_INPUT, 'Membership ID is required');
   }
 
-  const sessions = (await sessionQueries.many({
+  const sessions = await sessionQueries.many({
     where: {
       membershipId,
       isActive: true,
     },
-  })) as Session[];
+  });
 
   const updates = sessions.map((session) =>
     sessionCrud.update(session.id, {
@@ -228,7 +239,7 @@ export async function expireIdentitySessionsIfNeeded(identityId: string) {
 
   const now = new Date();
 
-  return prisma.session.updateMany({
+  return sessionQueries.delegate.updateMany({
     where: {
       identityId,
       isActive: true,
@@ -249,7 +260,7 @@ export async function syncSessionActivity(sessionId: string) {
     throwError(ERR.INVALID_INPUT, 'Session ID is required');
   }
 
-  const session = await prisma.session.findUnique({
+  const session = await sessionQueries.findUnique({
     where: {
       id: sessionId,
     },
@@ -272,7 +283,7 @@ export async function syncSessionActivity(sessionId: string) {
   const now = new Date();
 
   if (session.expiresAt <= now) {
-    const expiredSession = await prisma.session.update({
+    const expiredSession = await sessionQueries.delegate.update({
       where: {
         id: session.id,
       },
@@ -303,7 +314,7 @@ export async function syncSessionActivity(sessionId: string) {
     };
   }
 
-  const updatedSession = await prisma.session.update({
+  const updatedSession = await sessionQueries.delegate.update({
     where: {
       id: session.id,
     },

@@ -30,9 +30,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { updateWorkspaceRolePermissionOverrideAction } from '@/modules/workspace/actions/update-workspace-role-permission-override.action';
-import { updateWorkspaceUserPermissionOverrideAction } from '@/modules/workspace/actions/update-workspace-user-permission-override.action';
-import { revokeWorkspaceUserPermissionOverrideAction } from '@/modules/workspace/actions/revoke-workspace-user-permission-override.action';
+import { updateWorkspaceRolePermissionOverrideAction } from '@/modules/permissions/actions/update-workspace-role-permission-override.action';
+import { updateWorkspaceUserPermissionOverrideAction } from '@/modules/permissions/actions/update-workspace-user-permission-override.action';
+import { revokeWorkspaceUserPermissionOverrideAction } from '@/modules/permissions/actions/revoke-workspace-user-permission-override.action';
 
 type AccessRole = {
   id: string;

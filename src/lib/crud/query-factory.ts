@@ -1,22 +1,21 @@
-// /lib/crud/query-factory.ts
-
-import { prisma as rootPrisma } from '@/lib/prisma';
 import { getRequestContext } from '@/lib/context/request-context';
+import type { Prisma } from '@/generated/prisma/client';
 import {
   getWorkspaceId,
   shouldBypassWorkspace,
 } from '@/lib/context/workspace-utils';
+import { extractAppError, throwError } from '@/lib/errors/app-error';
+import { ERR } from '@/lib/errors/codes';
 
 import type {
-  ModelName,
   DelegateName,
-  WhereInput,
   IncludeInput,
+  ModelDelegate,
+  ModelName,
   SelectInput,
+  UniqueWhereInput,
+  WhereInput,
 } from './prisma-types';
-
-import { throwError } from '@/lib/errors/app-error';
-import { ERR } from '@/lib/errors/codes';
 
 type SortEntry = { column: string; dir: 'asc' | 'desc' };
 
@@ -26,13 +25,17 @@ type SearchColumn = {
 };
 
 type FilterValue =
-  | { op: 'eq'; value: any }
-  | { op: 'in'; value: any[] }
+  | { op: 'eq'; value: unknown }
+  | { op: 'in'; value: unknown[] }
   | { op: 'contains'; value: string }
-  | { op: 'gte'; value: any }
-  | { op: 'lte'; value: any }
-  | { op: 'between'; value: [any, any] }
+  | { op: 'gte'; value: unknown }
+  | { op: 'lte'; value: unknown }
+  | { op: 'between'; value: [unknown, unknown] }
   | { op: 'isNull'; value?: boolean };
+
+type FilterEntry = FilterValue & {
+  relationType?: 'one' | 'many';
+};
 
 type SearchOptions = {
   text?: string;
@@ -46,6 +49,12 @@ type Options<M extends ModelName> = {
   activeField?: string;
   workspaceField?: string;
 };
+
+type WhereArg<M extends ModelName> =
+  | WhereInput<M>
+  | {
+      where?: WhereInput<M>;
+    };
 
 function toDelegate<M extends string>(model: M) {
   return model.charAt(0).toLowerCase() + model.slice(1);
@@ -65,11 +74,39 @@ function getPrisma() {
   return ctx.prisma;
 }
 
-function buildNestedWhere(
+function hasKeys(value: unknown) {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.keys(value as Record<string, unknown>).length > 0
+  );
+}
+
+function mergeWhereClauses<M extends ModelName>(
+  ...clauses: Array<WhereInput<M> | undefined>
+) {
+  const filtered = clauses.filter(
+    (clause): clause is WhereInput<M> => hasKeys(clause),
+  );
+
+  if (filtered.length === 0) {
+    return {} as WhereInput<M>;
+  }
+
+  if (filtered.length === 1) {
+    return filtered[0];
+  }
+
+  return {
+    AND: filtered,
+  } as WhereInput<M>;
+}
+
+function buildNestedSearchWhere(
   path: string[],
   text: string,
   relationType?: 'one' | 'many',
-): any {
+): Record<string, unknown> {
   if (path.length === 1) {
     return {
       [path[0]]: {
@@ -84,59 +121,130 @@ function buildNestedWhere(
   if (relationType === 'many') {
     return {
       [first]: {
-        some: buildNestedWhere(rest, text),
+        some: buildNestedSearchWhere(rest, text),
       },
     };
   }
 
   return {
-    [first]: buildNestedWhere(rest, text),
+    [first]: buildNestedSearchWhere(rest, text),
   };
 }
 
-function filterToPrisma(where: any, column: string, filter: FilterValue) {
-  if (column.startsWith('_count.')) return;
-
-  const path = column.split('.');
-  let cur = where;
-
-  for (let i = 0; i < path.length - 1; i++) {
-    const p = path[i];
-    cur[p] = cur[p] ?? {};
-    cur = cur[p];
-  }
-
-  const last = path[path.length - 1];
-
+function buildFilterOperation(filter: FilterValue) {
   switch (filter.op) {
     case 'eq':
-      cur[last] = filter.value;
-      break;
+      return filter.value;
 
     case 'in':
-      cur[last] = { in: filter.value };
-      break;
+      return { in: filter.value };
 
     case 'contains':
-      cur[last] = { contains: filter.value, mode: 'insensitive' };
-      break;
+      return { contains: filter.value, mode: 'insensitive' };
 
     case 'gte':
-      cur[last] = { gte: filter.value };
-      break;
+      return { gte: filter.value };
 
     case 'lte':
-      cur[last] = { lte: filter.value };
-      break;
+      return { lte: filter.value };
 
     case 'between':
-      cur[last] = { gte: filter.value[0], lte: filter.value[1] };
-      break;
+      return { gte: filter.value[0], lte: filter.value[1] };
 
     case 'isNull':
-      cur[last] = filter.value === true ? null : { not: null };
-      break;
+      return filter.value === true ? null : { not: null };
   }
+}
+
+function buildNestedFilterWhere(
+  path: string[],
+  filter: FilterEntry,
+  relationType?: 'one' | 'many',
+): Record<string, unknown> {
+  if (path.length === 1) {
+    return {
+      [path[0]]: buildFilterOperation(filter),
+    };
+  }
+
+  const [first, ...rest] = path;
+
+  if (relationType === 'many') {
+    return {
+      [first]: {
+        some: buildNestedFilterWhere(rest, filter),
+      },
+    };
+  }
+
+  return {
+    [first]: buildNestedFilterWhere(rest, filter),
+  };
+}
+
+function buildFiltersWhere<M extends ModelName>(
+  filters?: Record<string, FilterEntry>,
+) {
+  if (!filters) {
+    return undefined;
+  }
+
+  const clauses = Object.entries(filters)
+    .filter(([column]) => !column.startsWith('_count.'))
+    .map(([column, filter]) =>
+      buildNestedFilterWhere(
+        column.split('.'),
+        filter,
+        filter.relationType,
+      ),
+    );
+
+  if (clauses.length === 0) {
+    return undefined;
+  }
+
+  return mergeWhereClauses<M>(...(clauses as Array<WhereInput<M>>));
+}
+
+function buildSearchWhere<M extends ModelName>(search?: SearchOptions) {
+  if (!search?.text || !search.columns?.length) {
+    return undefined;
+  }
+
+  return {
+    OR: search.columns.map((column) =>
+      buildNestedSearchWhere(
+        column.column.split('.'),
+        search.text as string,
+        column.relationType,
+      ),
+    ),
+  } as WhereInput<M>;
+}
+
+function rethrowKnownAppError(error: unknown): never | void {
+  if (extractAppError(error)) {
+    throw error;
+  }
+}
+
+function normalizeWhereArg<M extends ModelName>(
+  arg?: WhereArg<M>,
+): WhereInput<M> | undefined {
+  if (!arg) {
+    return undefined;
+  }
+
+  if (
+    typeof arg === 'object' &&
+    arg !== null &&
+    'where' in arg &&
+    Object.keys(arg).every((key) => key === 'where')
+  ) {
+    return (arg as { where?: WhereInput<M> }).where;
+  }
+
+  return arg as WhereInput<M>;
 }
 
 export function buildQueries<M extends ModelName>({
@@ -155,18 +263,72 @@ export function buildQueries<M extends ModelName>({
     if (!d) {
       throwError(
         ERR.INTERNAL_ERROR,
-        `Prisma delegate not found for model: ${model} → ${delegateName}`,
+        `Prisma delegate not found for model: ${model} -> ${delegateName}`,
       );
     }
 
-    return d as any;
+    return d as ModelDelegate<M>;
+  }
+
+  function callFindUnique<
+    A extends {
+      where: UniqueWhereInput<M>;
+      include?: IncludeInput<M>;
+      select?: SelectInput<M>;
+    },
+  >(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'findUnique'>
+    // Prisma delegate methods become an incompatible union at this generic boundary.
+    // Keep the looseness contained here rather than leaking it into callers.
+    const fn = delegate().findUnique as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function callFindFirst<
+    A extends {
+      where?: WhereInput<M>;
+      include?: IncludeInput<M>;
+      select?: SelectInput<M>;
+      orderBy?: unknown;
+    },
+  >(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'findFirst'>
+    const fn = delegate().findFirst as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function callFindMany<
+    A extends {
+      where?: WhereInput<M>;
+      include?: IncludeInput<M>;
+      select?: SelectInput<M>;
+      orderBy?: unknown;
+      take?: number;
+      skip?: number;
+    },
+  >(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'findMany'>
+    const fn = delegate().findMany as unknown as (args: A) => Promise<Result>;
+    return fn(args);
+  }
+
+  function callCount<A extends { where?: WhereInput<M> }>(args: A) {
+    type Result = Prisma.Result<ModelDelegate<M>, A, 'count'>
+    const fn = delegate().count as unknown as (args: A) => Promise<Result>;
+    return fn(args);
   }
 
   function withDefaultWhere(where?: WhereInput<M>): WhereInput<M> {
-    let finalWhere: any = { ...(where ?? {}) };
+    const clauses: Array<WhereInput<M>> = [];
+
+    if (where && hasKeys(where)) {
+      clauses.push(where);
+    }
 
     if (defaultActiveFilter && activeField) {
-      finalWhere[activeField] = true;
+      clauses.push({
+        [activeField]: true,
+      } as WhereInput<M>);
     }
 
     if (workspaceScoped && !shouldBypassWorkspace()) {
@@ -179,10 +341,12 @@ export function buildQueries<M extends ModelName>({
         );
       }
 
-      finalWhere[workspaceField] = workspaceId;
+      clauses.push({
+        [workspaceField]: workspaceId,
+      } as WhereInput<M>);
     }
 
-    return finalWhere as WhereInput<M>;
+    return mergeWhereClauses<M>(...clauses);
   }
 
   return {
@@ -194,33 +358,29 @@ export function buildQueries<M extends ModelName>({
       },
     ) {
       try {
-        return await delegate().findFirst({
-          where: withDefaultWhere({ id } as any),
+        return await callFindFirst({
+          where: withDefaultWhere({ id } as WhereInput<M>),
           ...opts,
         });
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
       }
     },
 
     async findUnique(opts: {
-      where: WhereInput<M>;
+      where: UniqueWhereInput<M>;
       include?: IncludeInput<M>;
       select?: SelectInput<M>;
     }) {
       try {
-        if (workspaceScoped) {
-          throwError(
-            ERR.INTERNAL_ERROR,
-            `findUnique is not allowed on workspace-scoped model: ${model}. Use findFirst instead.`,
-          );
-        }
-        return await delegate().findUnique({
+        return await callFindUnique({
           where: opts.where,
           include: opts.include,
           select: opts.select,
         });
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
       }
     },
@@ -229,14 +389,15 @@ export function buildQueries<M extends ModelName>({
       where?: WhereInput<M>;
       include?: IncludeInput<M>;
       select?: SelectInput<M>;
-      orderBy?: any;
+      orderBy?: unknown;
     }) {
       try {
-        return await delegate().findFirst({
+        return await callFindFirst({
           ...opts,
           where: withDefaultWhere(opts?.where),
         });
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to fetch ${model}`, undefined, e);
       }
     },
@@ -245,16 +406,17 @@ export function buildQueries<M extends ModelName>({
       where?: WhereInput<M>;
       include?: IncludeInput<M>;
       select?: SelectInput<M>;
-      orderBy?: any;
+      orderBy?: unknown;
       take?: number;
       skip?: number;
     }) {
       try {
-        return await delegate().findMany({
+        return await callFindMany({
           ...opts,
           where: withDefaultWhere(opts?.where),
         });
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to list ${model}`, undefined, e);
       }
     },
@@ -263,57 +425,45 @@ export function buildQueries<M extends ModelName>({
       where?: WhereInput<M>;
       include?: IncludeInput<M>;
       select?: SelectInput<M>;
-      orderBy?: any;
+      orderBy?: unknown;
       page?: number;
       pageSize?: number;
       sort?: SortEntry[];
       search?: SearchOptions;
-      filters?: Record<string, FilterValue>;
+      filters?: Record<string, FilterEntry>;
     }) {
       try {
         const page = opts?.page ?? 1;
         const pageSize = opts?.pageSize ?? 20;
-
-        const where = withDefaultWhere(opts?.where ?? {});
-
-        if (opts?.filters) {
-          for (const col of Object.keys(opts.filters)) {
-            filterToPrisma(where, col, opts.filters[col]);
-          }
-        }
-
-        if (opts?.search?.text && opts?.search?.columns?.length) {
-          const or = opts.search.columns.map((c) => {
-            const path = c.column.split('.');
-            return buildNestedWhere(path, opts.search!.text!, c.relationType);
-          });
-
-          (where as any).OR = or;
-        }
+        const where = mergeWhereClauses<M>(
+          withDefaultWhere(opts?.where),
+          buildFiltersWhere<M>(opts?.filters),
+          buildSearchWhere<M>(opts?.search),
+        );
 
         let orderBy = opts?.orderBy ?? undefined;
 
         if (opts?.sort && opts.sort.length > 0) {
-          orderBy = opts.sort.map((s) => {
-            if (s.column.startsWith('_count.')) {
-              const rel = s.column.split('.')[1];
-              return { [rel]: { _count: s.dir } };
+          orderBy = opts.sort.map((sort) => {
+            if (sort.column.startsWith('_count.')) {
+              const relation = sort.column.split('.')[1];
+              return { [relation]: { _count: sort.dir } };
             }
 
-            if (s.column.includes('.')) {
-              const parts = s.column.split('.');
-              return parts.reduceRight<any>(
+            if (sort.column.includes('.')) {
+              const parts = sort.column.split('.');
+              return parts.reduceRight<unknown>(
                 (acc, part) => ({ [part]: acc }),
-                s.dir,
+                sort.dir,
               );
             }
 
-            return { [s.column]: s.dir };
+            return { [sort.column]: sort.dir };
           });
         }
 
         const [items, total] = await Promise.all([
-          delegate().findMany({
+          callFindMany({
             where,
             include: opts?.include,
             select: opts?.select,
@@ -321,7 +471,7 @@ export function buildQueries<M extends ModelName>({
             skip: (page - 1) * pageSize,
             take: pageSize,
           }),
-          delegate().count({ where }),
+          callCount({ where }),
         ]);
 
         return {
@@ -332,29 +482,35 @@ export function buildQueries<M extends ModelName>({
           pageCount: Math.ceil(total / pageSize),
         };
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to query ${model}`, undefined, e);
       }
     },
 
-    async count(where?: WhereInput<M>) {
+    async count(whereArg?: WhereArg<M>) {
       try {
-        return await delegate().count({
+        const where = normalizeWhereArg(whereArg);
+
+        return await callCount({
           where: withDefaultWhere(where),
         });
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(ERR.DB_ERROR, `Failed to count ${model}`, undefined, e);
       }
     },
 
-    async exists(where?: WhereInput<M>) {
+    async exists(whereArg?: WhereArg<M>) {
       try {
-        const r = await delegate().findFirst({
+        const where = normalizeWhereArg(whereArg);
+        const result = await callFindFirst({
           where: withDefaultWhere(where),
-          select: { id: true },
+          select: { id: true } as SelectInput<M>,
         });
 
-        return !!r;
+        return !!result;
       } catch (e) {
+        rethrowKnownAppError(e);
         throwError(
           ERR.DB_ERROR,
           `Failed to check existence of ${model}`,

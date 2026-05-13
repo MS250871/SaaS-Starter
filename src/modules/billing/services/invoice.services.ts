@@ -1,7 +1,7 @@
 import {
   invoiceCrud,
-  invoiceQueries,
   invoiceItemCrud,
+  invoiceQueries,
 } from '@/modules/billing/db';
 import type { CreateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
@@ -12,7 +12,9 @@ export async function getInvoiceById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Invoice ID is required');
   }
 
-  const invoice = await invoiceQueries.byId(id);
+  const invoice = await invoiceQueries.findUnique({
+    where: { id },
+  });
 
   if (!invoice) {
     throwError(ERR.NOT_FOUND, 'Invoice not found');

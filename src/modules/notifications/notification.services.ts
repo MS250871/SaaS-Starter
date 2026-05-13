@@ -1,10 +1,11 @@
 import {
   notificationCrud,
   notificationDeliveryCrud,
-  notificationDeliveryQueries,
   notificationQueries,
+  notificationDeliveryQueries,
 } from '@/modules/notifications/db';
-import { customerQueries, identityQueries } from '@/modules/auth/db';
+import { getIdentityNotificationRecipient } from '@/modules/auth/services/identity.services';
+import { getCustomerNotificationRecipient } from '@/modules/customer/services/customer.services';
 
 import type { CreateInput } from '@/lib/crud/prisma-types';
 import {
@@ -43,6 +44,25 @@ export type CreateNotificationWithDeliveriesInput = {
   deliveries?: CreateNotificationDeliveryInput[];
 };
 
+export type WorkspaceIdentityNotificationListItem =
+  Prisma.NotificationGetPayload<{
+    include: {
+      deliveries: {
+        select: {
+          id: true;
+          channel: true;
+          status: true;
+          recipient: true;
+          subject: true;
+          errorMessage: true;
+          sentAt: true;
+          deliveredAt: true;
+          failedAt: true;
+        };
+      };
+    };
+  }>;
+
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
@@ -69,7 +89,9 @@ function getDefaultProvider(channel: NotificationChannel) {
 export async function getNotificationById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Notification ID is required');
 
-  const notification = await notificationQueries.byId(id);
+  const notification = await notificationQueries.findUnique({
+    where: { id },
+  });
 
   if (!notification) {
     throwError(ERR.NOT_FOUND, 'Notification not found');
@@ -86,7 +108,9 @@ export async function getNotificationDeliveryById(id: string) {
     throwError(ERR.INVALID_INPUT, 'Notification delivery ID is required');
   }
 
-  const delivery = await notificationDeliveryQueries.byId(id);
+  const delivery = await notificationDeliveryQueries.findUnique({
+    where: { id },
+  });
 
   if (!delivery) {
     throwError(ERR.NOT_FOUND, 'Notification delivery not found');
@@ -273,25 +297,9 @@ export async function resolveNotificationRecipientForChannel(params: {
   }
 
   if (params.recipientCustomerId) {
-    const customer = await customerQueries.findFirst({
-      where: {
-        id: params.recipientCustomerId,
-      },
-      select: {
-        id: true,
-        identity: {
-          select: {
-            id: true,
-            email: true,
-            phone: true,
-          },
-        },
-      },
-    });
-
-    if (!customer) {
-      throwError(ERR.NOT_FOUND, 'Notification customer recipient not found');
-    }
+    const customer = await getCustomerNotificationRecipient(
+      params.recipientCustomerId,
+    );
 
     if (params.channel === NotificationChannel.IN_APP) {
       return {
@@ -324,20 +332,9 @@ export async function resolveNotificationRecipientForChannel(params: {
   }
 
   if (params.recipientIdentityId) {
-    const identity = await identityQueries.findFirst({
-      where: {
-        id: params.recipientIdentityId,
-      },
-      select: {
-        id: true,
-        email: true,
-        phone: true,
-      },
-    });
-
-    if (!identity) {
-      throwError(ERR.NOT_FOUND, 'Notification identity recipient not found');
-    }
+    const identity = await getIdentityNotificationRecipient(
+      params.recipientIdentityId,
+    );
 
     if (params.channel === NotificationChannel.IN_APP) {
       return {
@@ -448,6 +445,33 @@ export async function listIdentityNotifications(identityId: string) {
   });
 }
 
+export async function getWorkspaceIdentityNotification(
+  workspaceId: string,
+  identityId: string,
+  notificationId: string,
+) {
+  if (!workspaceId || !identityId || !notificationId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId, identityId, and notificationId are required',
+    );
+  }
+
+  const notification = await notificationQueries.findFirst({
+    where: {
+      id: notificationId,
+      workspaceId,
+      recipientIdentityId: identityId,
+    },
+  });
+
+  if (!notification) {
+    throwError(ERR.NOT_FOUND, 'Notification not found for this workspace user');
+  }
+
+  return notification;
+}
+
 /**
  * List customer notifications
  */
@@ -475,8 +499,10 @@ export async function countUnreadIdentityNotifications(identityId: string) {
   }
 
   return notificationQueries.count({
-    recipientIdentityId: identityId,
-    isRead: false,
+    where: {
+      recipientIdentityId: identityId,
+      isRead: false,
+    },
   });
 }
 
@@ -489,8 +515,10 @@ export async function countUnreadCustomerNotifications(customerId: string) {
   }
 
   return notificationQueries.count({
-    recipientCustomerId: customerId,
-    isRead: false,
+    where: {
+      recipientCustomerId: customerId,
+      isRead: false,
+    },
   });
 }
 
@@ -649,4 +677,83 @@ export async function markNotificationDeliveryFailed(params: {
       e,
     );
   }
+}
+
+export async function listWorkspaceIdentityNotifications(params: {
+  workspaceId: string;
+  identityId: string;
+  limit?: number;
+  unreadOnly?: boolean;
+  excludeTypes?: string[];
+}): Promise<WorkspaceIdentityNotificationListItem[]> {
+  if (!params.workspaceId || !params.identityId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId and identityId are required',
+    );
+  }
+
+  const notifications = await notificationQueries.many({
+    where: {
+      workspaceId: params.workspaceId,
+      recipientIdentityId: params.identityId,
+      ...(params.unreadOnly ? { isRead: false } : {}),
+      ...(params.excludeTypes?.length
+        ? {
+            type: {
+              notIn: params.excludeTypes,
+            },
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    take: params.limit,
+    include: {
+      deliveries: {
+        orderBy: [{ createdAt: 'desc' }],
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          recipient: true,
+          subject: true,
+          errorMessage: true,
+          sentAt: true,
+          deliveredAt: true,
+          failedAt: true,
+        },
+      },
+    },
+  });
+
+  return notifications as WorkspaceIdentityNotificationListItem[];
+}
+
+export async function countWorkspaceIdentityNotifications(params: {
+  workspaceId: string;
+  identityId: string;
+  unreadOnly?: boolean;
+  excludeTypes?: string[];
+}) {
+  if (!params.workspaceId || !params.identityId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId and identityId are required',
+    );
+  }
+
+  return notificationQueries.count({
+    where: {
+      workspaceId: params.workspaceId,
+      recipientIdentityId: params.identityId,
+      ...(params.unreadOnly ? { isRead: false } : {}),
+      ...(params.excludeTypes?.length
+        ? {
+            type: {
+              notIn: params.excludeTypes,
+            },
+          }
+        : {}),
+    },
+  });
 }

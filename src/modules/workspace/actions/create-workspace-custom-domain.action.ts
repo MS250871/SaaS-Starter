@@ -1,15 +1,9 @@
 'use server';
 
-import {
-  WorkspaceDomainType,
-  type SubscriptionStatus,
-} from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createAction } from '@/lib/http/create-action';
-import { prisma } from '@/lib/prisma';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import {
   createWorkspaceCustomDomainActionSchema,
@@ -17,59 +11,8 @@ import {
   type CreateWorkspaceCustomDomainActionInput,
   type CreateWorkspaceCustomDomainDomain,
 } from '@/modules/workspace/schema';
+import { getWorkspaceDomainEntitlements } from '@/modules/workspace/services/domains.services';
 import { createWorkspaceCustomDomainWorkflow } from '@/modules/workspace/workflows/create-workspace-custom-domain.workflow';
-
-async function getWorkspaceDomainEntitlements(workspaceId: string) {
-  const [activeSubscription, customDomainSetupCount] = await Promise.all([
-    prisma.subscription.findFirst({
-      where: {
-        workspaceId,
-        status: {
-          in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] satisfies SubscriptionStatus[],
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      select: {
-        price: {
-          select: {
-            product: {
-              select: {
-                plan: {
-                  select: {
-                    id: true,
-                    key: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    }),
-    prisma.workspaceDomain.count({
-      where: {
-        workspaceId,
-        type: WorkspaceDomainType.CUSTOM,
-        isPrimary: true,
-      },
-    }),
-  ]);
-
-  const activePlan = activeSubscription?.price?.product?.plan ?? null;
-  const entitlements = await resolveEntitlements({
-    workspaceId,
-    planId: activePlan?.id,
-  });
-
-  return {
-    activePlan,
-    customDomainSetupCount,
-    entitlements,
-  };
-}
 
 const createWorkspaceCustomDomainActionImpl = createAction(
   async (formData: FormData) => {

@@ -3,19 +3,41 @@ import {
   workspaceInviteCrud,
   workspaceInviteQueries,
 } from "@/modules/workspace/db"
+import type { Prisma } from "@/generated/prisma/client"
 import {
   getRoleDefinitionById,
   getWorkspaceDefaultRoleDefinition,
   resolveRoleAssignment,
 } from "@/modules/roles/role.services"
+import type { WorkspaceRoleSystemKey } from "@/modules/roles/role.types"
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"
 
 type WorkspaceInviteRoleInput = {
   roleDefinitionId?: string | null
   roleKey?: string | null
-  roleSystemKey?: string | null
+  roleSystemKey?: WorkspaceRoleSystemKey | null
 }
+
+export type WorkspacePendingInviteWithRole = Prisma.WorkspaceInviteGetPayload<{
+  select: {
+    id: true
+    email: true
+    roleKey: true
+    roleSystemKey: true
+    roleDefinition: {
+      select: {
+        id: true
+        name: true
+        hierarchyRank: true
+      }
+    }
+    status: true
+    token: true
+    expiresAt: true
+    createdAt: true
+  }
+}>
 
 export function generateInviteToken() {
   return crypto.randomBytes(32).toString("hex")
@@ -24,7 +46,9 @@ export function generateInviteToken() {
 export async function getInviteById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
-  const invite = await workspaceInviteQueries.byId(id)
+  const invite = await workspaceInviteQueries.findUnique({
+    where: { id },
+  })
   if (!invite) throwError(ERR.NOT_FOUND, "Invite not found")
 
   return invite
@@ -94,7 +118,10 @@ export async function createWorkspaceInvite(params: {
     scope: "WORKSPACE",
     roleDefinitionId: params.roleDefinitionId ?? defaultRole?.id,
     roleKey: params.roleKey ?? defaultRole?.key,
-    roleSystemKey: params.roleSystemKey ?? defaultRole?.systemKey ?? undefined,
+    roleSystemKey:
+      params.roleSystemKey ??
+      ((defaultRole?.systemKey as WorkspaceRoleSystemKey | null | undefined) ??
+        undefined),
     fallbackToDefault: true,
   })
   const roleDefinition = await getRoleDefinitionById(role.roleDefinitionId)
@@ -187,6 +214,58 @@ export async function listWorkspaceInvites(workspaceId: string) {
     where: { workspaceId },
     orderBy: { createdAt: "desc" },
   })
+}
+
+export async function countPendingWorkspaceInvites(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, "workspaceId is required")
+  }
+
+  return workspaceInviteQueries.count({
+    where: {
+      workspaceId,
+      status: "PENDING",
+    },
+  })
+}
+
+export async function listPendingWorkspaceInvitesWithRoles(
+  workspaceId: string,
+  limit = 20,
+): Promise<WorkspacePendingInviteWithRole[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, "workspaceId is required")
+  }
+
+  const invites = await workspaceInviteQueries.many({
+    where: {
+      workspaceId,
+      status: "PENDING",
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+    select: {
+      id: true,
+      email: true,
+      roleKey: true,
+      roleSystemKey: true,
+      roleDefinition: {
+        select: {
+          id: true,
+          name: true,
+          hierarchyRank: true,
+        },
+      },
+      status: true,
+      token: true,
+      expiresAt: true,
+      createdAt: true,
+    },
+  })
+
+  return invites as unknown as WorkspacePendingInviteWithRole[]
 }
 
 export function isInviteExpired(invite: { expiresAt?: Date | null }) {

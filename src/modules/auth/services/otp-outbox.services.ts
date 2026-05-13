@@ -88,7 +88,7 @@ export async function processOtpOutboxEvent(outboxEventId: string) {
     await sendOtp({
       identifier: claimed.payload.identifier,
       otp: claimed.payload.otp,
-      name: claimed.payload.name,
+      name: claimed.payload.name ?? 'there',
       brand: claimed.payload.brand,
     });
 
