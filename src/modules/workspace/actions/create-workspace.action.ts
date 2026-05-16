@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { runWithActor } from '@/lib/context/actor-context';
 import {
@@ -23,10 +24,11 @@ import {
   buildFinalSessionWorkflow,
   resolveWorkspaceSurfaceRedirect,
 } from '@/modules/auth/workflows/post-login.workflow';
+import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 import {
-  buildWorkspaceRoutingCachePayload,
-  cacheWorkspaceSlug,
-} from '@/modules/workspace/services/routing-cache.services';
+  buildHostTransferPath,
+  issueHostTransferToken,
+} from '@/modules/auth/services/host-transfer.services';
 
 const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
@@ -79,17 +81,10 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
         workspaceName: domain.workspaceName,
         workspaceSlug: domain.workspaceSlug,
         intent: auth.intent,
+        pendingPriceId: auth.pendingPriceId,
+        pendingPaymentId: auth.pendingPaymentId,
+        pendingSubscriptionId: auth.pendingSubscriptionId,
       }),
-  );
-
-  await cacheWorkspaceSlug(
-    result.slug,
-    buildWorkspaceRoutingCachePayload({
-      workspaceId: result.workspaceId,
-      slug: result.slug,
-      isActive: result.isActive,
-      primaryDomain: result.primaryDomain,
-    }),
   );
 
   await setAuthCookies({
@@ -99,6 +94,30 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
       createdAt: Date.now(),
     },
   });
+
+  const redirectPath = await resolveWorkspaceSurfaceRedirect({
+    workspaceId: result.workspaceId,
+    fallbackPath: '/app',
+  });
+  const currentHost = normalizeHostname((await headers()).get('host') ?? '');
+
+  if (
+    result.routingStrategy !== 'free_path' &&
+    result.primaryDomain &&
+    currentHost !== result.primaryDomain
+  ) {
+    const token = await issueHostTransferToken({
+      session: identitySession,
+      workspaceId: result.workspaceId,
+      targetHost: result.primaryDomain,
+      intent: result.intent,
+      returnPath: redirectPath,
+    });
+
+    await clearAuthCookie();
+
+    redirect(buildHostTransferPath(token));
+  }
 
   const finalSession = await buildFinalSessionWorkflow({
     identitySession,
@@ -115,12 +134,7 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
   await setUserSession(finalSession);
   await clearAuthCookie();
 
-  redirect(
-    await resolveWorkspaceSurfaceRedirect({
-      workspaceId: result.workspaceId,
-      fallbackPath: '/app',
-    }),
-  );
+  redirect(redirectPath);
 });
 
 export async function createWorkspaceAction(formData: FormData) {

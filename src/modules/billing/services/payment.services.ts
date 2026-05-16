@@ -1,6 +1,7 @@
 import {
   paymentCrud,
   paymentAttemptCrud,
+  paymentAttemptQueries,
   paymentQueries,
 } from '@/modules/billing/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
@@ -21,6 +22,45 @@ export async function getPaymentById(id: string) {
   }
 
   return payment;
+}
+
+export async function findPaymentByProviderOrderId(providerOrderId: string) {
+  if (!providerOrderId) {
+    throwError(ERR.INVALID_INPUT, 'Provider order id is required');
+  }
+
+  return paymentQueries.findFirst({
+    where: {
+      providerOrderId,
+    },
+  });
+}
+
+export async function findPaymentByProviderPaymentId(providerPaymentId: string) {
+  if (!providerPaymentId) {
+    throwError(ERR.INVALID_INPUT, 'Provider payment id is required');
+  }
+
+  return paymentQueries.findFirst({
+    where: {
+      providerPaymentId,
+    },
+  });
+}
+
+export async function findPaymentBySubscriptionId(subscriptionId: string) {
+  if (!subscriptionId) {
+    throwError(ERR.INVALID_INPUT, 'Subscription id is required');
+  }
+
+  return paymentQueries.findFirst({
+    where: {
+      subscriptionId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
 }
 
 export async function createPayment(data: CreateInput<'Payment'>) {
@@ -58,6 +98,29 @@ export async function listWorkspacePayments(workspaceId: string) {
   });
 }
 
+export async function listIdentityPayments(identityId: string) {
+  if (!identityId) {
+    throwError(ERR.INVALID_INPUT, 'Identity ID is required');
+  }
+
+  return paymentQueries.many({
+    where: { identityId },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+export async function countPaymentAttempts(paymentId: string) {
+  if (!paymentId) {
+    throwError(ERR.INVALID_INPUT, 'Payment ID is required');
+  }
+
+  return paymentAttemptQueries.count({
+    where: {
+      paymentId,
+    },
+  });
+}
+
 export async function createPaymentAttempt(
   data: CreateInput<'PaymentAttempt'>,
 ) {
@@ -69,5 +132,20 @@ export async function createPaymentAttempt(
     return await paymentAttemptCrud.create(data);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create payment attempt', undefined, e);
+  }
+}
+
+export async function updatePaymentAttempt(
+  id: string,
+  data: UpdateInput<'PaymentAttempt'>,
+) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Payment attempt ID is required');
+  }
+
+  try {
+    return await paymentAttemptCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update payment attempt', undefined, e);
   }
 }

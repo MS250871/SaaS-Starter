@@ -8,6 +8,7 @@ import {
 } from '@/modules/auth/schema';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { getActor } from '@/lib/context/actor-context';
+import { getRequestContext } from '@/lib/context/request-context';
 import {
   setAuthCookies,
   setVerificationSession,
@@ -16,6 +17,7 @@ import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { redirect } from 'next/navigation';
 import { loginWorkflow } from '@/modules/auth/workflows/login.workflow';
 import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
+import { buildWorkspaceSurfacePath } from '@/modules/workspace/routing';
 
 const loginActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
@@ -24,16 +26,19 @@ const loginActionImpl = createNavAction(async (formData: FormData) => {
   const domain: LoginDomain = loginSchema.parse(parsed);
 
   const actor = getActor();
+  const requestContext = getRequestContext();
 
   let workspaceId: AuthCookies['workspaceId'] = null;
 
   const entry: AuthCookies['entry'] =
-    parsed.entry ?? (actor.workspaceId ? 'workspace' : 'platform');
+    requestContext.workspace?.workspaceId
+      ? 'workspace'
+      : parsed.entry ?? (actor.workspaceId ? 'workspace' : 'platform');
 
   const mode: AuthCookies['mode'] = 'normal';
 
   if (entry === 'workspace') {
-    workspaceId = actor.workspaceId ?? null;
+    workspaceId = parsed.workspaceId ?? actor.workspaceId ?? null;
   }
 
   const cookiesData: AuthCookies = {
@@ -43,6 +48,7 @@ const loginActionImpl = createNavAction(async (formData: FormData) => {
     channel: 'web',
     intent: parsed.intent,
     workspaceId,
+    returnPath: parsed.returnPath,
     createdAt: Date.now(),
   };
 
@@ -63,7 +69,13 @@ const loginActionImpl = createNavAction(async (formData: FormData) => {
     createdAt: result.createdAt,
   });
 
-  redirect(`/verify-otp?mode=${result.mode}`);
+  const verifyPath = buildWorkspaceSurfacePath({
+    strategy: requestContext.workspace?.strategy,
+    slug: requestContext.workspace?.slug,
+    path: '/verify-otp',
+  });
+
+  redirect(`${verifyPath}?mode=${result.mode}`);
 });
 
 export async function loginAction(formData: FormData) {

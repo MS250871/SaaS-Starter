@@ -33,7 +33,19 @@ import {
   type CreateWorkspaceFormInput,
 } from '@/modules/workspace/schema';
 
-export function CreateWorkspaceForm({ className }: { className?: string }) {
+export function CreateWorkspaceForm({
+  className,
+  intent = 'free',
+  rootDomain = 'platform.localhost',
+  brandedSurface = false,
+  hideTopBrand = false,
+}: {
+  className?: string;
+  intent?: 'free' | 'paid';
+  rootDomain?: string;
+  brandedSurface?: boolean;
+  hideTopBrand?: boolean;
+}) {
   const form = useForm<CreateWorkspaceFormInput>({
     resolver: zodResolver(createWorkspaceFormSchema),
     defaultValues: {
@@ -49,11 +61,27 @@ export function CreateWorkspaceForm({ className }: { className?: string }) {
 
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const cardClassName = brandedSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]'
+    : '';
+  const primaryButtonClassName = brandedSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const spinnerClassName = brandedSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const errorClassName = brandedSurface
+    ? 'rounded-xl border border-red-200 bg-red-50/90 p-3 dark:border-red-400/30 dark:bg-red-500/10'
+    : 'rounded-lg border border-red-400 bg-red-200/50 p-2';
 
   const workspaceSlug = slugifyWorkspaceName(workspaceName);
   const workspaceUrl = workspaceSlug
-    ? `app.skillmaxx.com/${workspaceSlug}`
-    : 'app.skillmaxx.com/your-workspace-slug';
+    ? intent === 'paid'
+      ? `${workspaceSlug}.${rootDomain}`
+      : `${rootDomain}/${workspaceSlug}`
+    : intent === 'paid'
+      ? `your-workspace-slug.${rootDomain}`
+      : `${rootDomain}/your-workspace-slug`;
 
   const onSubmit = async (data: CreateWorkspaceFormInput) => {
     setLoading(true);
@@ -96,15 +124,19 @@ export function CreateWorkspaceForm({ className }: { className?: string }) {
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      <Card className="pt-0">
+      <Card className={cn('pt-0', cardClassName)}>
         <CardHeader>
-          <div className="mx-auto pt-6 pb-2">
-            <Logo />
-          </div>
+          {!hideTopBrand ? (
+            <>
+              <div className="mx-auto pt-6 pb-2">
+                <Logo />
+              </div>
 
-          <FieldSeparator />
+              <FieldSeparator />
+            </>
+          ) : null}
 
-          <CardTitle className="text-sm md:text-lg mt-2 font-medium text-center">
+          <CardTitle className="mt-2 text-center text-sm font-medium md:text-lg">
             Welcome, create your workspace
           </CardTitle>
 
@@ -149,7 +181,9 @@ export function CreateWorkspaceForm({ className }: { className?: string }) {
                     <span className="font-medium text-foreground" aria-live="polite">
                       {workspaceUrl}
                     </span>
-                    .
+                    {intent === 'paid'
+                      ? '. You can connect a custom domain after DNS verification.'
+                      : '.'}
                   </FieldDescription>
                   {workspaceName.trim().length > 0 && !workspaceSlug && (
                     <FieldError>Enter a workspace name to generate a slug.</FieldError>
@@ -157,7 +191,7 @@ export function CreateWorkspaceForm({ className }: { className?: string }) {
                 </Field>
 
                 {formError && (
-                  <Field className="rounded-lg border border-red-400 bg-red-200/50 p-2">
+                  <Field className={errorClassName}>
                     <FieldError className="text-center">{formError}</FieldError>
                   </Field>
                 )}
@@ -167,10 +201,14 @@ export function CreateWorkspaceForm({ className }: { className?: string }) {
                     <SpinnerButton
                       message="Creating workspace..."
                       size="default"
-                      className="w-full"
+                      className={spinnerClassName}
                     />
                   ) : (
-                    <Button type="submit" className="w-full" disabled={!workspaceSlug}>
+                    <Button
+                      type="submit"
+                      className={primaryButtonClassName}
+                      disabled={!workspaceSlug}
+                    >
                       Create workspace
                     </Button>
                   )}

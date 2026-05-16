@@ -59,11 +59,13 @@ function formatPlanLabel(planKey?: string | null) {
 }
 
 function formatLimitValue(value: number, unit?: string | null) {
+  const formattedValue = value.toLocaleString('en-IN');
+
   if (!unit) {
-    return String(value);
+    return formattedValue;
   }
 
-  return `${value.toLocaleString()} ${unit}`;
+  return `${formattedValue} ${unit}`;
 }
 
 function buildPaymentHref(params: {

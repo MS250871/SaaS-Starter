@@ -27,9 +27,13 @@ export const authCookiesSchema = z.object({
   intent: z.enum(['free', 'paid']).optional(),
   planKey: z.string().optional(),
   planName: z.string().optional(),
+  pendingPriceId: z.string().uuid().optional(),
+  pendingPaymentId: z.string().uuid().optional(),
+  pendingSubscriptionId: z.string().uuid().optional(),
 
   inviteToken: z.string().optional(),
   workspaceId: z.string().nullable().optional(),
+  returnPath: z.string().optional(),
 
   createdAt: z.number(),
 });
@@ -104,6 +108,23 @@ export const sessionPayloadSchema = z.object({
 });
 
 export type SessionPayload = z.infer<typeof sessionPayloadSchema>;
+
+/* =========================================================
+   HOST TRANSFER TOKEN
+========================================================= */
+
+export const hostTransferTokenSchema = z.object({
+  sessionId: z.string(),
+  identityId: z.string(),
+  workspaceId: z.string(),
+  targetHost: z.string(),
+  intent: z.enum(['free', 'paid']).optional(),
+  returnPath: z.string().optional(),
+  createdAt: z.number(),
+  expiresAt: z.number(),
+});
+
+export type HostTransferToken = z.infer<typeof hostTransferTokenSchema>;
 
 /* =========================================================
    DEVICE ID

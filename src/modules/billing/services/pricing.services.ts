@@ -3,6 +3,10 @@ import {
   listLimitCatalog,
   listPublicPricingPlans,
 } from '@/modules/entitlements/entitlement.services';
+import {
+  listActiveOneTimePurchaseOffers,
+  type OneTimePurchaseOffer,
+} from '@/modules/billing/services/catalog.services';
 
 type PublicPricingPlan = Awaited<ReturnType<typeof listPublicPricingPlans>>[number];
 type PricingFeatureCatalogItem = Awaited<ReturnType<typeof listFeatureCatalog>>[number];
@@ -20,6 +24,16 @@ export type PricingPagePlan = {
   highlight: boolean;
   featureSet: Set<string>;
   limitMap: Map<string, { value: number; unit: string | null }>;
+};
+
+export type PricingPageOneTimeOffer = {
+  priceId: string;
+  productCode: string;
+  name: string;
+  description: string;
+  amountLabel: string;
+  currency: string;
+  link: string;
 };
 
 const featuredFeatureKeys = [
@@ -90,10 +104,11 @@ function planButtonConfig(planKey: string) {
 }
 
 export async function getPricingPageData() {
-  const [plans, featureCatalog, limitCatalog] = await Promise.all([
+  const [plans, featureCatalog, limitCatalog, oneTimeOffers] = await Promise.all([
     listPublicPricingPlans(),
     listFeatureCatalog(),
     listLimitCatalog(),
+    listActiveOneTimePurchaseOffers(),
   ]);
 
   const pricingPlans: PricingPagePlan[] = plans.map((plan: PublicPricingPlan) => {
@@ -175,6 +190,15 @@ export async function getPricingPageData() {
 
   return {
     plans: pricingPlans,
+    oneTimeOffers: oneTimeOffers.map((offer: OneTimePurchaseOffer) => ({
+      priceId: offer.priceId,
+      productCode: offer.productCode,
+      name: offer.name,
+      description: offer.description,
+      amountLabel: formatCurrency(offer.amount, offer.currency),
+      currency: offer.currency,
+      link: `/payment?mode=one_time&priceId=${offer.priceId}&productCode=${offer.productCode}`,
+    })),
     featureCatalog: featureCatalog as PricingFeatureCatalogItem[],
     limitCatalog: limitCatalog as PricingLimitCatalogItem[],
   };

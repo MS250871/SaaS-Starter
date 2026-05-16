@@ -109,6 +109,7 @@ const createWorkspaceInviteActionImpl = createAction(async (formData: FormData) 
       roleRank: null,
       status: result.invite.status,
       token: result.invite.token,
+      signupPath: result.signupPath,
       expiresAt: result.invite.expiresAt?.toISOString() ?? null,
       createdAt: result.invite.createdAt.toISOString(),
     },

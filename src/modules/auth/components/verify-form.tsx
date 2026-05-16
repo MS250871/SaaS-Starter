@@ -1,6 +1,7 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { otpSchema, type OtpSchema } from '@/modules/auth/schema';
 import { verifyAction } from '@/modules/auth/actions/verify.action';
@@ -31,19 +32,22 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from '@/components/ui/input-otp';
-import { useState, useEffect } from 'react';
 import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 type Mode = 'email' | 'phone';
 
-const RESEND_COOLDOWN = 30; // seconds
+const RESEND_COOLDOWN = 30;
 
 export function VerifyForm({
   mode,
   className,
+  workspaceSurface = false,
+  hideTopBrand = false,
 }: {
   mode?: Mode;
   className?: string;
+  workspaceSurface?: boolean;
+  hideTopBrand?: boolean;
 }) {
   const form = useForm<OtpSchema>({
     resolver: zodResolver(otpSchema),
@@ -55,16 +59,28 @@ export function VerifyForm({
 
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN);
-  const [isCooldownActive, setIsCooldownActive] = useState(true);
+  const otpValue = useWatch({
+    control: form.control,
+    name: 'otp',
+  });
+  const isCooldownActive = cooldown > 0;
 
-  /* ---------------- COUNTDOWN TIMER ---------------- */
+  const cardClassName = workspaceSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]'
+    : '';
+  const primaryButtonClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95 capitalize'
+    : 'w-full capitalize';
+  const spinnerClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const errorClassName = workspaceSurface
+    ? 'rounded-xl border border-red-200 bg-red-50/90 p-3 dark:border-red-400/30 dark:bg-red-500/10'
+    : 'rounded-lg border border-red-400 bg-red-200/50 p-2';
+
   useEffect(() => {
-    if (!isCooldownActive) return;
-
     if (cooldown <= 0) {
-      setIsCooldownActive(false);
       return;
     }
 
@@ -73,9 +89,8 @@ export function VerifyForm({
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [cooldown, isCooldownActive]);
+  }, [cooldown]);
 
-  /* ---------------- VERIFY ---------------- */
   const onSubmit = async (data: OtpSchema) => {
     setLoading(true);
     setFormError(null);
@@ -122,23 +137,18 @@ export function VerifyForm({
     }
   };
 
-  /* ---------------- RESEND ---------------- */
   const handleResend = async () => {
     if (isCooldownActive) return;
 
     try {
       await resendAction();
-
-      // 🔥 reset cooldown
       setCooldown(RESEND_COOLDOWN);
-      setIsCooldownActive(true);
-    } catch (e) {
-      console.error('Resend failed', e);
+    } catch (error) {
+      console.error('Resend failed', error);
     }
   };
 
   const formatted = cooldown.toString().padStart(2, '0');
-
   const title = mode === 'email' ? 'Verify your email' : 'Verify your phone';
   const description =
     mode === 'email'
@@ -147,12 +157,17 @@ export function VerifyForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      <Card className="pt-0">
+      <Card className={cn('pt-0', cardClassName)}>
         <CardHeader>
-          <div className="mx-auto pt-6">
-            <Logo />
-          </div>
-          <FieldSeparator className="my-2" />
+          {!hideTopBrand ? (
+            <>
+              <div className="mx-auto pt-6">
+                <Logo />
+              </div>
+              <FieldSeparator className="my-2" />
+            </>
+          ) : null}
+
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
@@ -161,7 +176,6 @@ export function VerifyForm({
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet>
               <FieldGroup>
-                {/* OTP FIELD */}
                 <Field>
                   <FieldLabel>Verification Code</FieldLabel>
 
@@ -169,7 +183,7 @@ export function VerifyForm({
                     <InputOTP
                       maxLength={6}
                       pattern="[0-9]*"
-                      value={form.watch('otp')}
+                      value={otpValue ?? ''}
                       onChange={(val) =>
                         form.setValue('otp', val, { shouldValidate: true })
                       }
@@ -192,37 +206,37 @@ export function VerifyForm({
                   <FieldError>{form.formState.errors.otp?.message}</FieldError>
                 </Field>
 
-                {/* FORM ERROR */}
-                {formError && (
-                  <Field className="bg-red-200/50 p-2 rounded-lg border border-red-400">
+                {formError ? (
+                  <Field className={errorClassName}>
                     <FieldError className="text-center capitalize">
                       {formError}
                     </FieldError>
                   </Field>
-                )}
+                ) : null}
 
-                {/* SUBMIT */}
                 <Field>
                   {loading ? (
-                    <SpinnerButton message="Verifying..." />
+                    <SpinnerButton
+                      message="Verifying..."
+                      className={spinnerClassName}
+                    />
                   ) : (
-                    <Button type="submit" className="w-full capitalize">
+                    <Button type="submit" className={primaryButtonClassName}>
                       Verify Code
                     </Button>
                   )}
                 </Field>
 
-                {/* RESEND */}
                 <Field>
                   <FieldDescription className="text-start">
-                    Didn’t receive the code?{' '}
+                    Didn&apos;t receive the code?{' '}
                     <button
                       type="button"
                       onClick={handleResend}
                       disabled={isCooldownActive}
                       className={cn(
-                        'underline underline-offset-4 hover:text-primary tabular-nums',
-                        isCooldownActive && 'opacity-50 cursor-not-allowed',
+                        'tabular-nums underline underline-offset-4 hover:text-primary',
+                        isCooldownActive && 'cursor-not-allowed opacity-50',
                       )}
                     >
                       {isCooldownActive ? `Resend in ${formatted}s` : 'Resend'}

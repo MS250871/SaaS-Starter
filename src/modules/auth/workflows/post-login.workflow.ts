@@ -1,4 +1,5 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { getRequestContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
 import {
   AuthCookies,
@@ -58,9 +59,26 @@ import {
   findCustomerByIdentityId,
   findCustomerByWorkspaceIdentity,
 } from '@/modules/customer/services/customer.services';
+import {
+  buildWorkspaceCanonicalPath,
+  buildWorkspaceSurfacePath,
+  normalizeWorkspaceDomainStrategy,
+} from '@/modules/workspace/routing';
 import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
 import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
 import { SessionEndReason } from '@/generated/prisma/client';
+
+export type IdentitySessionSnapshot = {
+  sessionId: string;
+  identityId: string;
+  ip?: string;
+  browser?: string;
+  os?: string;
+  device?: string;
+  deviceId?: string;
+  deviceFingerprint?: string;
+  userAgent?: string;
+};
 
 type AuthStep =
   | 'verify_phone'
@@ -109,7 +127,7 @@ export async function buildFinalSessionWorkflow({
   workspaceId,
   workspaceMembership: inputWorkspaceMembership,
 }: {
-  identitySession: SessionPayload;
+  identitySession: IdentitySessionSnapshot;
   customerId?: string;
   workspaceId?: string;
   workspaceMembership?: WorkspaceMembershipSnapshot | null;
@@ -233,14 +251,45 @@ export async function resolveWorkspaceSurfaceRedirect(params: {
   return withUnitOfWork(async () => {
     const workspace = await getWorkspaceById(params.workspaceId);
     const settings = await getWorkspaceSettings(params.workspaceId);
-    const strategy = (settings?.settings as { domain?: { strategy?: string } } | undefined)
-      ?.domain?.strategy;
+    const strategy = normalizeWorkspaceDomainStrategy(
+      (settings?.settings as { domain?: { strategy?: string } } | undefined)
+        ?.domain?.strategy,
+    );
 
-    if (strategy === 'free_path') {
-      return `/${workspace.slug}${params.fallbackPath}`;
-    }
+    return buildWorkspaceCanonicalPath({
+      strategy,
+      slug: workspace.slug,
+      path: params.fallbackPath,
+    });
+  });
+}
 
-    return params.fallbackPath;
+function sanitizeReturnPath(value: string | undefined) {
+  if (!value || !value.startsWith('/')) {
+    return null;
+  }
+
+  if (value.startsWith('//')) {
+    return null;
+  }
+
+  return value;
+}
+
+async function resolvePostLoginRedirect(params: {
+  auth: AuthCookies;
+  workspaceId: string;
+  fallbackPath: '/app' | '/customer';
+}) {
+  const returnPath = sanitizeReturnPath(params.auth.returnPath);
+
+  if (returnPath) {
+    return returnPath;
+  }
+
+  return resolveWorkspaceSurfaceRedirect({
+    workspaceId: params.workspaceId,
+    fallbackPath: params.fallbackPath,
   });
 }
 
@@ -271,6 +320,7 @@ async function buildPhoneVerificationResult(params: {
   phoneAuthAccountId: string;
   identifier: string;
   name?: string;
+  redirectTo: string;
 }): Promise<PostLoginResult> {
   const existingOtp = await getLatestOtpRequestForAccount(
     params.phoneAuthAccountId,
@@ -315,12 +365,36 @@ async function buildPhoneVerificationResult(params: {
 
   return {
     nextStep: 'verify_phone',
-    redirectTo: VERIFY_PHONE_REDIRECT,
+    redirectTo: params.redirectTo,
     meta: {
       verificationSession,
       outboxEventId,
     },
   };
+}
+
+function buildWorkspaceAwareAuthPath(params: {
+  auth: AuthCookies;
+  path: string;
+}) {
+  if (params.auth.entry !== 'workspace' || !params.auth.workspaceId) {
+    return params.path;
+  }
+
+  const requestContext = getRequestContext();
+
+  if (
+    !requestContext.workspace?.slug ||
+    requestContext.workspace.workspaceId !== params.auth.workspaceId
+  ) {
+    return params.path;
+  }
+
+  return buildWorkspaceSurfacePath({
+    strategy: requestContext.workspace.strategy,
+    slug: requestContext.workspace.slug,
+    path: params.path,
+  });
 }
 
 async function ensureWorkspaceCustomer(params: {
@@ -573,6 +647,10 @@ export async function postLoginWorkflow(input: {
         name:
           `${identity.firstName ?? ''} ${identity.lastName ?? ''}`.trim() ||
           phoneAuthAccount.value,
+        redirectTo: buildWorkspaceAwareAuthPath({
+          auth,
+          path: VERIFY_PHONE_REDIRECT,
+        }),
       });
     }
 
@@ -629,21 +707,34 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: await resolveWorkspaceSurfaceRedirect({
+          redirectTo: await resolvePostLoginRedirect({
+            auth,
             workspaceId: requestedWorkspaceId,
             fallbackPath: '/app',
           }),
         };
       }
 
-      if (requestedWorkspaceId && !requestedWorkspaceMembership) {
-        throwError(ERR.INVALID_STATE, 'Workspace owner membership missing');
-      }
+        if (requestedWorkspaceId && !requestedWorkspaceMembership) {
+          throwError(ERR.INVALID_STATE, 'Workspace owner membership missing');
+        }
 
-      if (auth.intent === 'paid') {
-        return {
-          nextStep: 'finalize',
-          redirectTo: PAYMENT_REDIRECT,
+        if (
+          auth.intent === 'paid' &&
+          auth.pendingPaymentId &&
+          auth.pendingSubscriptionId &&
+          auth.pendingPriceId
+        ) {
+          return {
+            nextStep: 'workspace_create',
+            redirectTo: WORKSPACE_CREATE_REDIRECT,
+          };
+        }
+
+        if (auth.intent === 'paid') {
+          return {
+            nextStep: 'finalize',
+            redirectTo: PAYMENT_REDIRECT,
         };
       }
 
@@ -671,7 +762,8 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: await resolveWorkspaceSurfaceRedirect({
+        redirectTo: await resolvePostLoginRedirect({
+          auth,
           workspaceId: auth.workspaceId,
           fallbackPath: '/customer',
         }),
@@ -702,7 +794,8 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: await resolveWorkspaceSurfaceRedirect({
+        redirectTo: await resolvePostLoginRedirect({
+          auth,
           workspaceId: requestedWorkspaceId,
           fallbackPath: '/app',
         }),
@@ -710,6 +803,10 @@ export async function postLoginWorkflow(input: {
     }
 
     if (auth.entry === 'workspace') {
+      if (!requestedWorkspaceId) {
+        throwError(ERR.INVALID_STATE, 'Workspace context missing for workspace login');
+      }
+
       if (requestedWorkspaceId && requestedWorkspaceCustomer) {
         const finalSession = await buildFinalSessionWorkflow({
           identitySession,
@@ -719,7 +816,8 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: await resolveWorkspaceSurfaceRedirect({
+          redirectTo: await resolvePostLoginRedirect({
+            auth,
             workspaceId: requestedWorkspaceId,
             fallbackPath: '/customer',
           }),
@@ -735,55 +833,15 @@ export async function postLoginWorkflow(input: {
 
         return {
           finalSession,
-          redirectTo: await resolveWorkspaceSurfaceRedirect({
+          redirectTo: await resolvePostLoginRedirect({
+            auth,
             workspaceId: requestedWorkspaceId,
             fallbackPath: '/app',
           }),
         };
       }
 
-      if (memberships.length > 1) {
-        return {
-          nextStep: 'workspace_select',
-          redirectTo: WORKSPACE_SELECT_REDIRECT,
-        };
-      }
-
-      if (memberships.length === 1) {
-        requestedWorkspaceMembership = toWorkspaceMembershipSnapshot(memberships[0]);
-
-        const finalSession = await buildFinalSessionWorkflow({
-          identitySession,
-          workspaceId: memberships[0].workspaceId,
-          workspaceMembership: requestedWorkspaceMembership,
-        });
-
-        return {
-          finalSession,
-          redirectTo: await resolveWorkspaceSurfaceRedirect({
-            workspaceId: memberships[0].workspaceId,
-            fallbackPath: '/app',
-          }),
-        };
-      }
-
-      if (firstCustomer) {
-        const finalSession = await buildFinalSessionWorkflow({
-          identitySession,
-          customerId: firstCustomer.id,
-          workspaceId: firstCustomer.workspaceId,
-        });
-
-        return {
-          finalSession,
-          redirectTo: await resolveWorkspaceSurfaceRedirect({
-            workspaceId: firstCustomer.workspaceId,
-            fallbackPath: '/customer',
-          }),
-        };
-      }
-
-      throwError(ERR.UNAUTHORIZED, 'No workspace access found');
+      throwError(ERR.UNAUTHORIZED, 'You do not have access to this workspace');
     }
 
     if (platformRoles.length > 0) {
@@ -815,7 +873,8 @@ export async function postLoginWorkflow(input: {
 
       return {
         finalSession,
-        redirectTo: await resolveWorkspaceSurfaceRedirect({
+        redirectTo: await resolvePostLoginRedirect({
+          auth,
           workspaceId: memberships[0].workspaceId,
           fallbackPath: '/app',
         }),
@@ -823,19 +882,10 @@ export async function postLoginWorkflow(input: {
     }
 
     if (firstCustomer) {
-      const finalSession = await buildFinalSessionWorkflow({
-        identitySession,
-        customerId: firstCustomer.id,
-        workspaceId: firstCustomer.workspaceId,
-      });
-
-      return {
-        finalSession,
-        redirectTo: await resolveWorkspaceSurfaceRedirect({
-          workspaceId: firstCustomer.workspaceId,
-          fallbackPath: '/customer',
-        }),
-      };
+      throwError(
+        ERR.UNAUTHORIZED,
+        'Use your workspace login page to access this account',
+      );
     }
 
     return {

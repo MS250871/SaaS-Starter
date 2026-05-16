@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginFormSchema, type LoginFormInput } from '@/modules/auth/schema';
@@ -27,21 +29,51 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { GoogleButton } from './google-button';
-import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
 import type { AuthCookies } from '@/lib/auth/auth.schema';
-import { useState } from 'react';
 import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 export function LoginForm({
   className,
   intent,
+  entry,
+  workspaceId,
+  returnPath,
   message,
+  workspaceSurface = false,
+  hideTopBrand = false,
 }: {
   className?: string;
   intent: AuthCookies['intent'];
+  entry?: AuthCookies['entry'];
+  workspaceId?: string;
+  returnPath?: string;
   message?: string;
+  workspaceSurface?: boolean;
+  hideTopBrand?: boolean;
 }) {
+  const signupHref = (() => {
+    const search = new URLSearchParams();
+
+    if (intent) {
+      search.set('intent', intent);
+    }
+
+    if (entry) {
+      search.set('entry', entry);
+    }
+
+    if (workspaceId) {
+      search.set('workspaceId', workspaceId);
+    }
+
+    if (returnPath) {
+      search.set('returnTo', returnPath);
+    }
+
+    return `/signup?${search.toString()}`;
+  })();
+
   const form = useForm<LoginFormInput>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: {
@@ -53,12 +85,46 @@ export function LoginForm({
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const cardClassName = workspaceSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]'
+    : '';
+  const primaryButtonClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const spinnerClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const secondaryButtonClassName = workspaceSurface
+    ? 'mb-4 w-full border-[var(--workspace-accent-border-light)] bg-white/85 hover:bg-[var(--workspace-accent-soft-light)] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
+    : 'mb-4 w-full';
+  const separatorClassName = workspaceSurface
+    ? 'my-2 text-slate-500 dark:text-slate-400'
+    : 'my-2';
+  const messageClassName = workspaceSurface
+    ? 'rounded-xl border border-[var(--workspace-accent-border-light)] bg-[var(--workspace-accent-soft-light)] p-3 dark:border-white/10 dark:bg-white/6'
+    : 'rounded-lg border border-amber-300 bg-amber-100/70 p-2';
+  const errorClassName = workspaceSurface
+    ? 'rounded-xl border border-red-200 bg-red-50/90 p-3 dark:border-red-400/30 dark:bg-red-500/10'
+    : 'rounded-lg border border-red-400 bg-red-200/50 p-2';
+
   const onSubmit = async (data: LoginFormInput) => {
     setLoading(true);
     setFormError(null);
 
     try {
       const formData = new FormData();
+
+      if (entry) {
+        formData.append('entry', entry);
+      }
+
+      if (workspaceId) {
+        formData.append('workspaceId', workspaceId);
+      }
+
+      if (returnPath) {
+        formData.append('returnPath', returnPath);
+      }
 
       Object.entries(data).forEach(([k, v]) => {
         formData.append(k, String(v));
@@ -97,15 +163,19 @@ export function LoginForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      <Card className="pt-0">
+      <Card className={cn('pt-0', cardClassName)}>
         <CardHeader>
-          <div className="mx-auto pt-6 pb-2">
-            <Logo />
-          </div>
+          {!hideTopBrand ? (
+            <>
+              <div className="mx-auto pt-6 pb-2">
+                <Logo />
+              </div>
 
-          <FieldSeparator />
+              <FieldSeparator />
+            </>
+          ) : null}
 
-          <CardTitle className="text-sm md:text-lg mt-2 font-medium">
+          <CardTitle className="mt-2 text-sm font-medium md:text-lg">
             Login to your account
           </CardTitle>
 
@@ -115,31 +185,32 @@ export function LoginForm({
         </CardHeader>
 
         <CardContent>
-          {/* GOOGLE */}
           <Field>
             <GoogleButton
               message="Continue with Google"
               size="default"
-              className="w-full mb-4"
+              className={secondaryButtonClassName}
               onClick={async () => {
                 await googleAuthAction();
               }}
             />
           </Field>
 
-          <FieldSeparator className="my-2">Or continue with</FieldSeparator>
+          <FieldSeparator className={separatorClassName}>
+            Or continue with
+          </FieldSeparator>
+
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet>
               <FieldGroup>
-                {message && (
-                  <Field className="bg-amber-100/70 p-2 rounded-lg border border-amber-300">
-                    <FieldDescription className="text-center text-amber-900">
+                {message ? (
+                  <Field className={messageClassName}>
+                    <FieldDescription className="text-center text-slate-700 dark:text-slate-200">
                       {message}
                     </FieldDescription>
                   </Field>
-                )}
+                ) : null}
 
-                {/* Identifier */}
                 <Field>
                   <FieldLabel>Email or Phone Number</FieldLabel>
 
@@ -155,31 +226,39 @@ export function LoginForm({
                   </FieldError>
                 </Field>
 
-                {/* FORM ERROR */}
-                {formError && (
-                  <Field className="bg-red-200/50 p-2 rounded-lg border border-red-400">
+                {formError ? (
+                  <Field className={errorClassName}>
                     <FieldError className="text-center capitalize">
                       {formError}
                     </FieldError>
                   </Field>
-                )}
+                ) : null}
 
-                {/* SUBMIT */}
                 <Field>
                   {loading ? (
-                    <SpinnerButton message="Sending OTP..." />
+                    <SpinnerButton
+                      message="Sending OTP..."
+                      className={spinnerClassName}
+                    />
                   ) : (
-                    <Button type="submit" className="w-full">
+                    <Button type="submit" className={primaryButtonClassName}>
                       Continue
                     </Button>
                   )}
                 </Field>
 
-                {/* SIGNUP */}
                 <Field>
                   <FieldDescription className="text-center">
                     New here?{' '}
-                    <Link href={`/signup?intent=${intent}`}>Create account</Link>
+                    <Link
+                      href={signupHref}
+                      className={cn(
+                        workspaceSurface &&
+                          'font-medium text-[var(--workspace-primary)]',
+                      )}
+                    >
+                      Create account
+                    </Link>
                   </FieldDescription>
                 </Field>
               </FieldGroup>

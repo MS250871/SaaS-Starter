@@ -72,6 +72,8 @@ export type LoginFormInput = z.input<typeof loginFormSchema>;
 // ---------- ACTION SCHEMA (optional for future) ----------
 export const loginActionSchema = loginFormSchema.extend({
   entry: z.enum(['platform', 'workspace']).optional(),
+  workspaceId: z.string().uuid().optional(),
+  returnPath: z.string().optional(),
 });
 
 export type LoginActionInput = z.input<typeof loginActionSchema>;
@@ -115,9 +117,11 @@ export type SignupFormInput = z.input<typeof signupFormSchema>;
 // ---------- ACTION SCHEMA (FORM + SYSTEM DATA) ----------
 export const signupActionSchema = signupFormSchema.extend({
   entry: z.enum(['platform', 'workspace']),
+  workspaceId: z.string().uuid().optional(),
   inviteToken: z.string().optional(),
   planKey: z.string().optional(),
   planName: z.string().optional(),
+  returnPath: z.string().optional(),
 });
 
 export type SignupActionInput = z.input<typeof signupActionSchema>;

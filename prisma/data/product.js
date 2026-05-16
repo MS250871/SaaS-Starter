@@ -39,4 +39,25 @@ export const PRODUCTS_SEED = [
     description: 'Yearly subscription for LMS Business plan.',
     isActive: true,
   },
+  {
+    code: 'LMS_CONTENT_MIGRATION',
+    name: 'LMS Content Migration Pack',
+    type: 'ONE_TIME',
+    description: 'One-time assisted migration for legacy course and learner data.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_INSTRUCTOR_BOOTCAMP',
+    name: 'Instructor Bootcamp',
+    type: 'ONE_TIME',
+    description: 'Paid onboarding workshop for instructor teams and workspace admins.',
+    isActive: true,
+  },
+  {
+    code: 'LMS_CERTIFICATE_DESIGN',
+    name: 'Certificate Design Upgrade',
+    type: 'ONE_TIME',
+    description: 'Custom branded certificate pack delivered as a one-time add-on.',
+    isActive: true,
+  },
 ];

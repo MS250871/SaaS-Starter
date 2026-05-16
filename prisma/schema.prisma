@@ -1151,6 +1151,8 @@ model Price {
 
   interval BillingInterval? // null = one-time
 
+  providerPriceId String? @unique @map("provider_price_id") // for recurring provider references (e.g. Razorpay plan_id, Stripe price_id)
+
   isActive Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -1291,7 +1293,8 @@ model Invoice {
   customerId String?   @map("customer_id") @db.Uuid // for B2B2C saas where invoice is linked to a customer (end-user) within a workspace
   customer   Customer? @relation(fields: [customerId], references: [id])
 
-  invoiceNumber String @unique @map("invoice_number")
+  invoiceNumber     String  @unique @map("invoice_number")
+  providerInvoiceId String? @unique @map("provider_invoice_id")
 
   amount   Decimal  @db.Decimal(12, 2)
   currency Currency @default(INR)

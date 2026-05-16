@@ -1,5 +1,25 @@
 import { NextRequest } from 'next/server';
+import type { SessionPayload } from '@/lib/auth/auth.schema';
 import { reservedWorkspaceSlugs } from '@/modules/workspace/constants';
+import {
+  buildWorkspaceCanonicalPath,
+  buildWorkspaceLoginPath,
+  buildWorkspaceSignupPath,
+  normalizeWorkspaceDomainStrategy,
+  WORKSPACE_PUBLIC_HOME_PATH,
+} from '@/modules/workspace/routing';
+import {
+  buildHostTransferPath,
+  issueHostTransferToken,
+} from '@/modules/auth/services/host-transfer.services';
+
+const workspaceAuthRoutes = new Set([
+  '/login',
+  '/signup',
+  '/verify-otp',
+  '/verify-phone',
+  '/post-login',
+]);
 
 export function getHostname(req: NextRequest) {
   return req.headers.get('host') || '';
@@ -53,7 +73,9 @@ export function extractApiKey(req: NextRequest): string | null {
 
 export function resolveFreeWorkspacePath(req: NextRequest) {
   const rootHost = getRootDomainHost();
+  // console.log('root host:' + rootHost);
   const host = normalizeHostname(getHostname(req));
+  // console.log('request host:' + host);
 
   if (!isRootWorkspaceHost(host, rootHost)) {
     return null;
@@ -75,7 +97,8 @@ export function resolveFreeWorkspacePath(req: NextRequest) {
   }
 
   const remaining = segments.slice(1).join('/');
-  const rewrittenPathname = remaining ? `/${remaining}` : '/app';
+  const rewrittenPathname = remaining ? `/${remaining}` : WORKSPACE_PUBLIC_HOME_PATH;
+  // console.log('re-written pathname:' + rewrittenPathname);
 
   return {
     slug,
@@ -96,5 +119,138 @@ export function isProtectedRoute(pathname: string) {
     pathname.startsWith('/payment') ||
     pathname.startsWith('/select-workspace') ||
     pathname.startsWith('/create-workspace')
+  );
+}
+
+type WorkspaceRoutingContext = {
+  workspaceId: string;
+  slug?: string;
+  isActive?: boolean;
+  primaryDomain?: string;
+  strategy?: string;
+};
+
+function inferWorkspaceIntent(strategy: string | undefined) {
+  return normalizeWorkspaceDomainStrategy(strategy) === 'free_path'
+    ? ('free' as const)
+    : ('paid' as const);
+}
+
+export function isWorkspaceAuthRoute(pathname: string) {
+  return workspaceAuthRoutes.has(pathname);
+}
+
+export function buildWorkspaceRedirectUrl(
+  req: NextRequest,
+  host: string,
+  path: string,
+) {
+  const url = new URL(path, req.url);
+  url.hostname = host;
+  url.port = req.nextUrl.port;
+
+  return url;
+}
+
+export async function resolveWorkspaceCanonicalRedirect(params: {
+  req: NextRequest;
+  workspace: WorkspaceRoutingContext;
+  normalizedPathname: string;
+  session: SessionPayload | null;
+}) {
+  if (params.req.nextUrl.pathname === '/host-transfer' || !params.workspace.slug) {
+    return null;
+  }
+
+  const host = normalizeHostname(getHostname(params.req));
+  const rootHost = getRootDomainHost();
+  const strategy = normalizeWorkspaceDomainStrategy(params.workspace.strategy);
+  const canonicalHost =
+    strategy === 'free_path'
+      ? rootHost
+      : params.workspace.primaryDomain ?? rootHost;
+  const intent = inferWorkspaceIntent(params.workspace.strategy);
+  const search = params.req.nextUrl.search;
+
+  if (isWorkspaceAuthRoute(params.normalizedPathname)) {
+    if (host === canonicalHost) {
+      return null;
+    }
+
+    const returnPath = buildWorkspaceCanonicalPath({
+      strategy,
+      slug: params.workspace.slug,
+      path: '/app',
+    });
+    const authPath =
+      params.normalizedPathname === '/signup'
+        ? buildWorkspaceSignupPath({
+            workspaceId: params.workspace.workspaceId,
+            intent,
+            returnPath,
+            strategy,
+            slug: params.workspace.slug,
+          })
+        : buildWorkspaceLoginPath({
+            workspaceId: params.workspace.workspaceId,
+            intent,
+            returnPath,
+            strategy,
+            slug: params.workspace.slug,
+          });
+    const authUrl = buildWorkspaceRedirectUrl(params.req, canonicalHost, authPath);
+    authUrl.searchParams.set('reason', 'workspace-moved');
+
+    if (!params.session) {
+      return authUrl;
+    }
+
+    const token = await issueHostTransferToken({
+      session: params.session,
+      workspaceId: params.workspace.workspaceId,
+      targetHost: canonicalHost,
+      intent,
+      returnPath,
+    });
+
+    return buildWorkspaceRedirectUrl(
+      params.req,
+      host,
+      buildHostTransferPath(token),
+    );
+  }
+
+  const canonicalPath = buildWorkspaceCanonicalPath({
+    strategy,
+    slug: params.workspace.slug,
+    path: params.normalizedPathname,
+  });
+  const currentPathWithSearch = `${params.req.nextUrl.pathname}${search}`;
+  const canonicalPathWithSearch = `${canonicalPath}${search}`;
+
+  if (host === canonicalHost && currentPathWithSearch === canonicalPathWithSearch) {
+    return null;
+  }
+
+  if (host !== canonicalHost && params.session) {
+    const token = await issueHostTransferToken({
+      session: params.session,
+      workspaceId: params.workspace.workspaceId,
+      targetHost: canonicalHost,
+      intent,
+      returnPath: canonicalPathWithSearch,
+    });
+
+    return buildWorkspaceRedirectUrl(
+      params.req,
+      host,
+      buildHostTransferPath(token),
+    );
+  }
+
+  return buildWorkspaceRedirectUrl(
+    params.req,
+    canonicalHost,
+    canonicalPathWithSearch,
   );
 }

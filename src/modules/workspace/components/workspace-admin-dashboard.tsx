@@ -105,6 +105,7 @@ export type DashboardInvite = {
   roleRank?: number | null;
   status: string;
   token: string;
+  signupPath: string;
   expiresAt: string | null;
   createdAt: string;
 };
@@ -630,7 +631,7 @@ export function WorkspaceTeamPanel({
               </div>
             ) : (
               invites.map((invite) => {
-                const signupPath = `/signup?entry=workspace&invite=${invite.token}&intent=free`;
+                const signupPath = invite.signupPath;
 
                 return (
                   <div

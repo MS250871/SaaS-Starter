@@ -6,12 +6,19 @@ import { resolveSession } from '@/lib/middleware/resolve-session';
 import { injectRequestHeaders } from '@/lib/middleware/request-headers';
 import { injectActorHeaders } from '@/lib/middleware/actor-headers';
 import { handleRouteGuards } from '@/lib/middleware/route-gaurds';
-import { resolveFreeWorkspacePath } from '@/lib/middleware/proxy-utils';
+import {
+  resolveFreeWorkspacePath,
+  resolveWorkspaceCanonicalRedirect,
+} from '@/lib/middleware/proxy-utils';
+import { WORKSPACE_PUBLIC_HOME_PATH } from '@/modules/workspace/routing';
 
 export async function proxy(req: NextRequest) {
   const freeWorkspacePath = resolveFreeWorkspacePath(req);
+  const workspace = await resolveWorkspace(req);
   const normalizedPathname =
-    freeWorkspacePath?.rewrittenPathname ?? req.nextUrl.pathname;
+    workspace && (freeWorkspacePath?.rewrittenPathname ?? req.nextUrl.pathname) === '/'
+      ? WORKSPACE_PUBLIC_HOME_PATH
+      : freeWorkspacePath?.rewrittenPathname ?? req.nextUrl.pathname;
   const rewrittenUrl = req.nextUrl.clone();
   rewrittenUrl.pathname = normalizedPathname;
 
@@ -20,12 +27,28 @@ export async function proxy(req: NextRequest) {
       ? NextResponse.rewrite(rewrittenUrl)
       : NextResponse.next();
 
-  /* ---------------- WORKSPACE (FIRST) ---------------- */
-  const workspace = await resolveWorkspace(req);
-
   /* ---------------- SESSION ---------------- */
   const session = await resolveSession(req);
   const hasStaleSessionCookie = req.cookies.has('user_session') && !session;
+
+  const canonicalRedirectUrl = workspace
+    ? await resolveWorkspaceCanonicalRedirect({
+        req,
+        workspace,
+        normalizedPathname,
+        session,
+      })
+    : null;
+
+  if (canonicalRedirectUrl) {
+    const canonicalRedirect = NextResponse.redirect(canonicalRedirectUrl);
+
+    if (hasStaleSessionCookie) {
+      canonicalRedirect.cookies.delete('user_session');
+    }
+
+    return canonicalRedirect;
+  }
 
   /* ---------------- REQUEST CONTEXT (IMPORTANT: AFTER workspace) ---------------- */
   await injectRequestHeaders(req, res, workspace, normalizedPathname);
@@ -34,7 +57,12 @@ export async function proxy(req: NextRequest) {
   injectActorHeaders(res, session);
 
   /* ---------------- ROUTE GUARDS ---------------- */
-  const guardResponse = handleRouteGuards(req, session, normalizedPathname);
+  const guardResponse = handleRouteGuards(
+    req,
+    session,
+    normalizedPathname,
+    workspace,
+  );
 
   if (guardResponse) {
     if (hasStaleSessionCookie) {

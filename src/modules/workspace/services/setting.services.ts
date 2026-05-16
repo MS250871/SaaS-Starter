@@ -97,3 +97,58 @@ export async function updateWorkspaceConfig(
 ) {
   return upsertWorkspaceSettings({ workspaceId, settings });
 }
+
+type WorkspaceSettingsJson = {
+  domain?: {
+    strategy?: string | null;
+    [key: string]: unknown;
+  };
+  billing?: {
+    planCode?: string | null;
+    subscriptionStatus?: string | null;
+    trialStartsAt?: string | null;
+    trialEndsAt?: string | null;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+export async function syncWorkspaceBillingSettings(params: {
+  workspaceId: string;
+  planCode: string;
+  subscriptionStatus: string;
+  domainStrategy?: string;
+}) {
+  if (!params.workspaceId || !params.planCode || !params.subscriptionStatus) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId, planCode and subscriptionStatus are required',
+    );
+  }
+
+  const existing = await getWorkspaceSettings(params.workspaceId);
+  const currentSettings =
+    existing?.settings && typeof existing.settings === 'object'
+      ? (existing.settings as unknown as WorkspaceSettingsJson)
+      : {};
+
+  const nextSettings: WorkspaceSettingsJson = {
+    ...currentSettings,
+    domain: {
+      ...(currentSettings.domain ?? {}),
+      ...(params.domainStrategy ? { strategy: params.domainStrategy } : {}),
+    },
+    billing: {
+      ...(currentSettings.billing ?? {}),
+      planCode: params.planCode,
+      subscriptionStatus: params.subscriptionStatus,
+      trialStartsAt: null,
+      trialEndsAt: null,
+    },
+  };
+
+  return updateWorkspaceConfig(
+    params.workspaceId,
+    nextSettings as Prisma.InputJsonValue,
+  );
+}

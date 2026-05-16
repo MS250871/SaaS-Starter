@@ -4,6 +4,7 @@ import {
   applyWorkspaceCustomDomainVerificationResult,
   getWorkspaceCustomDomainVerificationSnapshot,
 } from '@/modules/workspace/services/domain-verification.services';
+import { syncWorkspaceRoutingState } from '@/modules/workspace/services/workspace-routing.services';
 
 export async function refreshWorkspaceCustomDomainVerificationWorkflow(input: {
   workspaceDomainId: string;
@@ -17,10 +18,14 @@ export async function refreshWorkspaceCustomDomainVerificationWorkflow(input: {
     routingMode: snapshot.routingMode,
   });
 
-  return withUnitOfWork(() =>
+  const result = await withUnitOfWork(() =>
     applyWorkspaceCustomDomainVerificationResult({
       workspaceDomainId: input.workspaceDomainId,
       managedState,
     }),
   );
+
+  await withUnitOfWork(() => syncWorkspaceRoutingState(snapshot.workspaceId));
+
+  return result;
 }

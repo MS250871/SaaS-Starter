@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signupFormSchema, type SignupFormInput } from '@/modules/auth/schema';
@@ -27,29 +29,57 @@ import {
 } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { GoogleButton } from './google-button';
-import Link from 'next/link';
 import { Logo } from '@/components/layout/logo';
 import type { AuthCookies } from '@/lib/auth/auth.schema';
-import { useState } from 'react';
 import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
 
 export function SignupForm({
   intent,
   invite,
   entry,
+  workspaceId,
   planKey,
   planName,
+  returnPath,
   message,
   className,
+  workspaceSurface = false,
+  hideTopBrand = false,
 }: {
   intent: AuthCookies['intent'];
   invite?: string;
   entry: AuthCookies['entry'];
+  workspaceId?: string;
   planKey?: string;
   planName?: string;
+  returnPath?: string;
   message?: string;
   className?: string;
+  workspaceSurface?: boolean;
+  hideTopBrand?: boolean;
 }) {
+  const loginHref = (() => {
+    const search = new URLSearchParams();
+
+    if (intent) {
+      search.set('intent', intent);
+    }
+
+    if (entry) {
+      search.set('entry', entry);
+    }
+
+    if (workspaceId) {
+      search.set('workspaceId', workspaceId);
+    }
+
+    if (returnPath) {
+      search.set('returnTo', returnPath);
+    }
+
+    return `/login?${search.toString()}`;
+  })();
+
   const form = useForm<SignupFormInput>({
     resolver: zodResolver(signupFormSchema),
     defaultValues: {
@@ -64,6 +94,28 @@ export function SignupForm({
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const cardClassName = workspaceSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]'
+    : '';
+  const primaryButtonClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const spinnerClassName = workspaceSurface
+    ? 'w-full bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full';
+  const secondaryButtonClassName = workspaceSurface
+    ? 'mb-4 w-full border-[var(--workspace-accent-border-light)] bg-white/85 hover:bg-[var(--workspace-accent-soft-light)] dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
+    : 'mb-4 w-full';
+  const separatorClassName = workspaceSurface
+    ? 'my-2 text-slate-500 dark:text-slate-400'
+    : 'my-2';
+  const messageClassName = workspaceSurface
+    ? 'rounded-xl border border-[var(--workspace-accent-border-light)] bg-[var(--workspace-accent-soft-light)] p-3 dark:border-white/10 dark:bg-white/6'
+    : 'rounded-lg border border-amber-300 bg-amber-100/70 p-2';
+  const errorClassName = workspaceSurface
+    ? 'rounded-xl border border-red-200 bg-red-50/90 p-3 dark:border-red-400/30 dark:bg-red-500/10'
+    : '';
+
   const onSubmit = async (data: SignupFormInput) => {
     setLoading(true);
     setFormError(null);
@@ -74,21 +126,31 @@ export function SignupForm({
       if (invite) {
         formData.append('inviteToken', invite);
       }
+
       const safeEntry =
         entry === 'workspace' || entry === 'platform' ? entry : 'platform';
       formData.append('entry', safeEntry);
+
+      if (workspaceId) {
+        formData.append('workspaceId', workspaceId);
+      }
+
       if (planKey) {
         formData.append('planKey', planKey);
       }
+
       if (planName) {
         formData.append('planName', planName);
+      }
+
+      if (returnPath) {
+        formData.append('returnPath', returnPath);
       }
 
       Object.entries(data).forEach(([k, v]) => {
         formData.append(k, String(v));
       });
 
-      // 🚀 navigation action (redirect happens on success)
       await signupAction(formData);
     } catch (err: unknown) {
       if (isNextRedirectError(err)) {
@@ -100,7 +162,6 @@ export function SignupForm({
       const error = err as { details?: unknown; message?: string } | undefined;
       const details = error?.details;
 
-      // ✅ map only if it's a clean field-error object
       if (details && typeof details === 'object' && !Array.isArray(details)) {
         let mapped = false;
 
@@ -117,21 +178,25 @@ export function SignupForm({
         if (mapped) return;
       }
 
-      // ✅ fallback
       setFormError(error?.message || 'Something went wrong');
     }
   };
+
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      <Card className="pt-0">
+      <Card className={cn('pt-0', cardClassName)}>
         <CardHeader>
-          <div className="mx-auto pt-6 pb-2">
-            <Logo />
-          </div>
+          {!hideTopBrand ? (
+            <>
+              <div className="mx-auto pt-6 pb-2">
+                <Logo />
+              </div>
 
-          <FieldSeparator />
+              <FieldSeparator />
+            </>
+          ) : null}
 
-          <CardTitle className="text-sm md:text-lg mt-2 font-medium">
+          <CardTitle className="mt-2 text-sm font-medium md:text-lg">
             {invite ? 'Accept your workspace invite' : 'Create your account'}
           </CardTitle>
 
@@ -145,33 +210,33 @@ export function SignupForm({
         </CardHeader>
 
         <CardContent>
-          {/* GOOGLE */}
           <Field>
             <GoogleButton
               message="Continue with Google"
               size="default"
-              className="w-full mb-4"
+              className={secondaryButtonClassName}
               onClick={async () => {
                 await googleAuthAction();
               }}
             />
           </Field>
 
-          <FieldSeparator className="my-2">Or continue with</FieldSeparator>
+          <FieldSeparator className={separatorClassName}>
+            Or continue with
+          </FieldSeparator>
 
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldSet className="gap-3">
-              <FieldGroup className="gap-3 mt-3">
-                {message && (
-                  <Field className="bg-amber-100/70 p-2 rounded-lg border border-amber-300">
-                    <FieldDescription className="text-center text-amber-900">
+              <FieldGroup className="mt-3 gap-3">
+                {message ? (
+                  <Field className={messageClassName}>
+                    <FieldDescription className="text-center text-slate-700 dark:text-slate-200">
                       {message}
                     </FieldDescription>
                   </Field>
-                )}
+                ) : null}
 
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                  {/* First Name */}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                   <Field>
                     <FieldLabel>First Name</FieldLabel>
                     <FieldContent>
@@ -182,7 +247,6 @@ export function SignupForm({
                     </FieldError>
                   </Field>
 
-                  {/* Last Name */}
                   <Field>
                     <FieldLabel>Last Name</FieldLabel>
                     <FieldContent>
@@ -194,7 +258,6 @@ export function SignupForm({
                   </Field>
                 </div>
 
-                {/* Email */}
                 <Field>
                   <FieldLabel>Email</FieldLabel>
                   <FieldContent>
@@ -205,7 +268,6 @@ export function SignupForm({
                   </FieldError>
                 </Field>
 
-                {/* Phone */}
                 <Field>
                   <FieldLabel>Phone</FieldLabel>
                   <FieldContent>
@@ -216,25 +278,25 @@ export function SignupForm({
                   </FieldError>
                 </Field>
 
-                {/* FORM ERROR */}
-                {formError && (
-                  <Field>
+                {formError ? (
+                  <Field className={errorClassName}>
                     <FieldError className="text-center">{formError}</FieldError>
                   </Field>
-                )}
+                ) : null}
 
-                {/* SUBMIT */}
                 <Field>
                   {loading ? (
-                    <SpinnerButton message="Creating your account..." />
+                    <SpinnerButton
+                      message="Creating your account..."
+                      className={spinnerClassName}
+                    />
                   ) : (
-                    <Button type="submit" className="w-full">
+                    <Button type="submit" className={primaryButtonClassName}>
                       Continue
                     </Button>
                   )}
                 </Field>
 
-                {/* LOGIN */}
                 <Field>
                   <FieldDescription className="text-center">
                     {invite ? (
@@ -242,7 +304,15 @@ export function SignupForm({
                     ) : (
                       <>
                         Already have an account?{' '}
-                        <Link href={`/login?intent=${intent}`}>Login here</Link>
+                        <Link
+                          href={loginHref}
+                          className={cn(
+                            workspaceSurface &&
+                              'font-medium text-[var(--workspace-primary)]',
+                          )}
+                        >
+                          Login here
+                        </Link>
                       </>
                     )}
                   </FieldDescription>

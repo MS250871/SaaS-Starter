@@ -16,6 +16,7 @@ import {
 import { createWorkspaceCustomDomainAction } from "@/modules/workspace/actions/create-workspace-custom-domain.action"
 import { createWorkspaceRedirectAliasAction } from "@/modules/workspace/actions/create-workspace-redirect-alias.action"
 import { refreshWorkspaceCustomDomainVerificationAction } from "@/modules/workspace/actions/refresh-workspace-custom-domain-verification.action"
+import { changeWorkspacePlanAction } from "@/modules/billing/actions/change-workspace-plan.action"
 import {
   Alert,
   AlertDescription,
@@ -556,9 +557,12 @@ export function WorkspaceDomainsPanel({
   const [setupFieldError, setSetupFieldError] = useState<string | null>(null)
   const [refreshMessage, setRefreshMessage] = useState<string | null>(null)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [planChangeMessage, setPlanChangeMessage] = useState<string | null>(null)
+  const [planChangeError, setPlanChangeError] = useState<string | null>(null)
   const [dnsSubmittedLocally, setDnsSubmittedLocally] = useState(false)
   const [refreshingDomainId, setRefreshingDomainId] = useState<string | null>(null)
   const [whiteLabelDomainInput, setWhiteLabelDomainInput] = useState("")
+  const [isPlanChangePending, startPlanChangeTransition] = useTransition()
   const refreshInFlightRef = useRef(false)
 
   const customDomains = useMemo(
@@ -880,6 +884,8 @@ export function WorkspaceDomainsPanel({
     customDomainSlots > 0 &&
     whiteLabelConfig.currentCustomDomainCount >= customDomainSlots
   const showSubdomainUpgradeCard = currentMode === "free_path"
+  const showSubdomainDowngradeCard = currentMode === "subdomain"
+  const showCustomDowngradeCard = currentMode === "custom_domain"
   const hasVerificationStarted = verificationTargets.some(
     (domain) => domain.isVerified || Boolean(domain.lastCheckedAt)
   )
@@ -904,6 +910,26 @@ export function WorkspaceDomainsPanel({
     primaryRouteDomain?.dnsRecords.length
       ? mapDnsRecordsToRows(primaryRouteDomain.dnsRecords)
       : buildSampleRoutedRows(routedStepDomain ?? "www.domain.com")
+
+  const handleMoveToTrial = () => {
+    setPlanChangeMessage(null)
+    setPlanChangeError(null)
+
+    startPlanChangeTransition(async () => {
+      const response = await changeWorkspacePlanAction({
+        targetPlanKey: "trial",
+        source: "workspace-domains",
+      })
+
+      if (!response.success) {
+        setPlanChangeError(response.error.message)
+        return
+      }
+
+      setPlanChangeMessage(response.data.successMessage)
+      router.push(response.data.redirectTo)
+    })
+  }
 
   return (
     <section className="grid gap-6">
@@ -1065,6 +1091,83 @@ export function WorkspaceDomainsPanel({
                 payment finishes, the domain routing should update automatically
                 on the next session refresh.
               </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {(showSubdomainDowngradeCard || showCustomDowngradeCard) && (
+        <Card className="border-border/70 bg-background/85">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Layers3Icon className="size-4 text-accent" />
+              <CardTitle>Routing Downgrade Options</CardTitle>
+            </div>
+            <CardDescription>
+              Move this workspace to a lower routing tier when you no longer need the
+              current domain setup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {planChangeMessage && (
+              <Alert>
+                <AlertTitle>Plan change started</AlertTitle>
+                <AlertDescription>{planChangeMessage}</AlertDescription>
+              </Alert>
+            )}
+
+            {planChangeError && (
+              <Alert variant="destructive">
+                <AlertCircleIcon className="size-4" />
+                <AlertTitle>Unable to change the plan</AlertTitle>
+                <AlertDescription>{planChangeError}</AlertDescription>
+              </Alert>
+            )}
+
+            {showCustomDowngradeCard && (
+              <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <p className="text-sm font-medium">Move from custom domain to subdomain</p>
+                <p className="text-sm text-muted-foreground">
+                  Switching to Pro will disable the current white-label custom domain
+                  and fall back to the managed workspace subdomain.
+                </p>
+                <UpgradeButton
+                  href={buildPaymentHref({
+                    plan: "pro",
+                    planName: "Pro",
+                    upgrade: "subdomain",
+                  })}
+                  canUpgrade={canUpgrade}
+                  label="Change to Pro"
+                />
+              </div>
+            )}
+
+            {(showSubdomainDowngradeCard || showCustomDowngradeCard) && (
+              <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
+                <p className="text-sm font-medium">Move back to path-based routing</p>
+                <p className="text-sm text-muted-foreground">
+                  This will disable managed subdomain and custom-domain routing and
+                  return the workspace to <code>{pathPreview}</code>.
+                </p>
+                {isPlanChangePending ? (
+                  <SpinnerButton message="Moving to Trial..." />
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!canUpgrade}
+                    onClick={handleMoveToTrial}
+                  >
+                    Move to Trial
+                  </Button>
+                )}
+                {!canUpgrade && (
+                  <p className="text-xs text-muted-foreground">
+                    Only the workspace owner can change the billing plan.
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

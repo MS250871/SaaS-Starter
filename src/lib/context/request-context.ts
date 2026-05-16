@@ -10,6 +10,7 @@ type WorkspaceContext = {
   slug: string;
   isActive: boolean;
   primaryDomain?: string;
+  strategy?: string;
 };
 
 export type RequestContext = {

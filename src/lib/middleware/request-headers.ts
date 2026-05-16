@@ -10,6 +10,7 @@ type WorkspaceContext = {
   slug?: string;
   isActive?: boolean;
   primaryDomain?: string;
+  strategy?: string;
 };
 
 export async function injectRequestHeaders(
@@ -23,7 +24,7 @@ export async function injectRequestHeaders(
 
   /* ---------------- DEVICE ID ---------------- */
   const existingDeviceId = req.cookies.get('device_id')?.value;
-  let deviceId = ensureDeviceIdValue(existingDeviceId);
+  const deviceId = ensureDeviceIdValue(existingDeviceId);
 
   if (!existingDeviceId || existingDeviceId !== deviceId) {
     res.cookies.set('device_id', deviceId, {
@@ -48,6 +49,7 @@ export async function injectRequestHeaders(
           slug: workspace.slug,
           isActive: workspace.isActive ?? true,
           primaryDomain: workspace.primaryDomain,
+          strategy: workspace.strategy,
         }
       : undefined,
 

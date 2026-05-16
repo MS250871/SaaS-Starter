@@ -1,20 +1,26 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { getRequestContext } from '@/lib/context/request-context';
 import {
   createWorkspaceInvite,
   findPendingWorkspaceInviteByEmail,
 } from '@/modules/workspace/services/invite.services';
 import type { CreateWorkspaceInviteDomain } from '@/modules/workspace/schema';
+import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
 
 const INVITE_EXPIRY_DAYS = 7;
 
 function buildSignupPath(token: string) {
-  const params = new URLSearchParams({
-    entry: 'workspace',
-    invite: token,
+  const requestContext = getRequestContext();
+  const signupPath = buildWorkspaceSignupPath({
+    workspaceId: requestContext.workspace?.workspaceId ?? '',
     intent: 'free',
+    strategy: requestContext.workspace?.strategy,
+    slug: requestContext.workspace?.slug,
   });
+  const url = new URL(signupPath, 'https://skillmaxx.local');
 
-  return `/signup?${params.toString()}`;
+  url.searchParams.set('invite', token);
+  return `${url.pathname}?${url.searchParams.toString()}`;
 }
 
 export async function createWorkspaceInviteWorkflow(input: {

@@ -2,12 +2,14 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
+import { attachPendingPaidBillingToWorkspaceWorkflow } from '@/modules/billing/workflows/attach-pending-paid-billing-to-workspace.workflow';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
 import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/role.services';
 import type { WorkspaceRoleSystemKey } from '@/modules/roles/role.types';
 import { createMembership } from '@/modules/workspace/services/membership.services';
 import { createWorkspaceSettings } from '@/modules/workspace/services/setting.services';
+import { syncWorkspaceRoutingState } from '@/modules/workspace/services/workspace-routing.services';
 import {
   createWorkspace,
   findWorkspaceBySlug,
@@ -24,6 +26,9 @@ export async function createWorkspaceWorkflow(input: {
   workspaceName: string;
   workspaceSlug: string;
   intent?: 'free' | 'paid';
+  pendingPriceId?: string;
+  pendingPaymentId?: string;
+  pendingSubscriptionId?: string;
 }) {
   return withUnitOfWork(async () => {
     const existing = await findWorkspaceBySlug(input.workspaceSlug);
@@ -103,6 +108,30 @@ export async function createWorkspaceWorkflow(input: {
       settings: defaults.settings,
     });
 
+    if (input.intent === 'paid') {
+      if (
+        !input.pendingPriceId ||
+        !input.pendingPaymentId ||
+        !input.pendingSubscriptionId
+      ) {
+        throwError(
+          ERR.INVALID_STATE,
+          'Complete payment before creating a paid workspace.',
+        );
+      }
+
+      await attachPendingPaidBillingToWorkspaceWorkflow({
+        workspaceId: workspace.id,
+        identityId: input.identityId,
+        priceId: input.pendingPriceId,
+        paymentId: input.pendingPaymentId,
+        subscriptionId: input.pendingSubscriptionId,
+      });
+
+      subscriptionId = input.pendingSubscriptionId;
+    }
+    const routing = await syncWorkspaceRoutingState(workspace.id);
+
     return {
       workspaceId: workspace.id,
       membershipId: membership.id,
@@ -111,7 +140,9 @@ export async function createWorkspaceWorkflow(input: {
       roleSystemKey: membership.roleSystemKey,
       slug: workspace.slug,
       isActive: workspace.isActive,
-      primaryDomain: workspace.defaultDomain,
+      primaryDomain: routing.primaryHost,
+      routingStrategy: routing.strategy,
+      intent: routing.intent,
       subscriptionId,
     };
   });

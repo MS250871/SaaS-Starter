@@ -34,4 +34,25 @@ export const PRICES_SEED = [
     interval: 'YEAR',
     isActive: true,
   },
+  {
+    productCode: 'LMS_CONTENT_MIGRATION',
+    amount: 24999,
+    currency: 'INR',
+    interval: null,
+    isActive: true,
+  },
+  {
+    productCode: 'LMS_INSTRUCTOR_BOOTCAMP',
+    amount: 14999,
+    currency: 'INR',
+    interval: null,
+    isActive: true,
+  },
+  {
+    productCode: 'LMS_CERTIFICATE_DESIGN',
+    amount: 7999,
+    currency: 'INR',
+    interval: null,
+    isActive: true,
+  },
 ];

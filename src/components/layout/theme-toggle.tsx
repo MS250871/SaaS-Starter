@@ -21,7 +21,8 @@ export function ThemeToggle() {
     <Button
       variant="outline"
       size="icon-sm"
-      className="border-muted-foreground/20 text-accent hover:bg-accent/10 hover:text-accent"
+      className="border-border/70 bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
+      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
     >
       {isDark ? <Sun size={14} /> : <Moon size={14} />}

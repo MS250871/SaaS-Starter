@@ -1,7 +1,11 @@
 import { Check, Minus } from 'lucide-react';
+import Link from 'next/link';
 import { PricingCard } from '@/components/pricing/pricing-card';
 import { getPricingPageData } from '@/modules/billing/services/pricing.services';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { withPublicContext } from '@/lib/request/withPublicContext';
 
 function formatLimitDisplay(value: number, unit?: string | null) {
   if (value === 0) {
@@ -16,7 +20,9 @@ function formatLimitDisplay(value: number, unit?: string | null) {
 }
 
 export default async function PricingPage() {
-  const { plans, featureCatalog, limitCatalog } = await getPricingPageData();
+  const { plans, oneTimeOffers, featureCatalog, limitCatalog } = await withPublicContext(() =>
+    getPricingPageData(),
+  );
 
   return (
     <section id="pricing" className="py-24">
@@ -51,6 +57,42 @@ export default async function PricingPage() {
               highlight={plan.highlight}
             />
           ))}
+        </div>
+
+        <div className="mt-20">
+          <div className="mb-8 space-y-3">
+            <h3 className="text-2xl font-semibold tracking-tight">
+              One-time add-ons
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              These seeded one-time products use the same payment engine as subscriptions
+              and give you a direct way to test one-time Razorpay checkout.
+            </p>
+          </div>
+
+          <div className="grid gap-6 md:grid-cols-3">
+            {oneTimeOffers.map((offer) => (
+              <Card key={offer.priceId} className="border-border/70 bg-background/90">
+                <CardHeader className="space-y-3">
+                  <span className="inline-flex w-fit rounded-full border border-border/70 bg-muted/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    One-time purchase
+                  </span>
+                  <CardTitle>{offer.name}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    {offer.description}
+                  </p>
+                  <div className="text-2xl font-semibold text-primary">
+                    {offer.amountLabel}
+                  </div>
+                  <Button asChild className="w-full">
+                    <Link href={offer.link}>Buy Now</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
 
         <div className="mt-20">

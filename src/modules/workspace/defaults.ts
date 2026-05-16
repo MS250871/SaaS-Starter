@@ -48,6 +48,9 @@ export function buildDefaultWorkspaceSettings(params: {
         onboardingStatus: 'new',
         setupCompleted: false,
       },
+      website: {
+        templateKey: 'coaching-classic',
+      },
       domain: {
         strategy: params.intent === 'paid' ? 'pending_payment' : 'free_path',
         slug: params.slug,

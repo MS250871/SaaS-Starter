@@ -5,6 +5,7 @@ export const reservedWorkspaceSlugs = [
   'customer',
   'dashboard',
   'error-page',
+  'host-transfer',
   'login',
   'payment',
   'platform',
@@ -14,4 +15,5 @@ export const reservedWorkspaceSlugs = [
   'signup',
   'verify-otp',
   'verify-phone',
+  'workspace-home',
 ] as const;
