@@ -1,20 +1,10 @@
 import { runWithContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
-import type { ActorContext } from '@/lib/context/actor-context';
-import { buildActorContext } from '@/lib/context/build-actor';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-
-function readJsonArray(raw: string | null) {
-  if (!raw) return [] as string[];
-
-  try {
-    return JSON.parse(raw) as string[];
-  } catch {
-    return [] as string[];
-  }
-}
+import { readSessionClaimsFromHeaders } from '@/lib/request/session-claims';
+import { resolveSessionContext } from '@/lib/request/resolve-session-context';
 
 export async function withRequestContext(
   req: Request,
@@ -27,45 +17,18 @@ export async function withRequestContext(
   }
 
   const requestContext = JSON.parse(raw);
-
-  const permissionsHeader = req.headers.get('x-permissions');
-
-  let permissions: string[] = [];
-
-  if (permissionsHeader) {
-    try {
-      permissions = JSON.parse(permissionsHeader);
-    } catch {
-      permissions = [];
-    }
-  }
-  const platformRoleKeys = readJsonArray(req.headers.get('x-platform-role-keys'));
-  const legacyPlatformRoles = readJsonArray(req.headers.get('x-platform-roles'));
-
-  const actor: ActorContext = buildActorContext(
-    {
-      identityId: req.headers.get('x-identity-id') ?? undefined,
-      customerId: req.headers.get('x-customer-id') ?? undefined,
-      platformRole: req.headers.get('x-platform-role') ?? undefined,
-      platformRoleKeys:
-        platformRoleKeys.length > 0 ? platformRoleKeys : legacyPlatformRoles,
-      platformRoleSystemKeys: readJsonArray(
-        req.headers.get('x-platform-role-system-keys'),
-      ),
-      workspaceId: req.headers.get('x-workspace-id') ?? undefined,
-      workspaceRole: req.headers.get('x-workspace-role') ?? undefined,
-      workspaceRoleKey:
-        req.headers.get('x-workspace-role-key') ??
-        req.headers.get('x-workspace-role') ??
-        undefined,
-      workspaceRoleSystemKey:
-        req.headers.get('x-workspace-role-system-key') ?? undefined,
-      membershipId: req.headers.get('x-membership-id') ?? undefined,
-      permissions,
-    },
+  const sessionClaims = readSessionClaimsFromHeaders((name) =>
+    req.headers.get(name),
   );
 
-  return runWithContext(requestContext, () => runWithActor(actor, handler));
+  return runWithContext(requestContext, async () => {
+    const { actor } = await resolveSessionContext({
+      requestContext,
+      sessionClaims,
+    });
+
+    return runWithActor(actor, handler);
+  });
 }
 
 /**

@@ -1,66 +1,106 @@
-import { headers } from "next/headers"
+import { cache } from 'react';
+import { headers } from 'next/headers';
+import { buildActorContext } from '@/lib/context/build-actor';
+import { runWithContext } from '@/lib/context/request-context';
+import { readSessionClaimsFromHeaders } from '@/lib/request/session-claims';
+import { resolveSessionContext } from '@/lib/request/resolve-session-context';
 
 export type ActorContextSnapshot = {
-  sessionId?: string
-  identityId?: string
-  customerId?: string
-  workspaceId?: string
-  membershipId?: string
-  workspaceRoleId?: string
-  workspaceRoleKey?: string
-  workspaceRoleSystemKey?: string
-  workspaceRole?: string
-  platformRole?: string
-  platformRoleIds: string[]
-  platformRoleKeys: string[]
-  platformRoleSystemKeys: string[]
-  platformRoles: string[]
-  permissions: string[]
-}
+  sessionId?: string;
+  identityId?: string;
+  customerId?: string;
+  workspaceId?: string;
+  membershipId?: string;
+  workspaceRoleId?: string;
+  workspaceRoleKey?: string;
+  workspaceRoleSystemKey?: string;
+  workspaceRole?: string;
+  platformRole?: string;
+  platformRoleIds: string[];
+  platformRoleKeys: string[];
+  platformRoleSystemKeys: string[];
+  platformRoles: string[];
+  permissions: string[];
+  features: string[];
+  limits: Record<string, number>;
+};
 
-export async function readActorContext() {
-  const hdrs = await headers()
-  const rawPlatformRoleIds = hdrs.get("x-platform-role-ids")
-  const rawPlatformRoleKeys = hdrs.get("x-platform-role-keys")
-  const rawPlatformRoleSystemKeys = hdrs.get("x-platform-role-system-keys")
-  const rawPlatformRoles = hdrs.get("x-platform-roles")
-  const rawPermissions = hdrs.get("x-permissions")
-  const parsedPlatformRoles = rawPlatformRoles
-    ? (JSON.parse(rawPlatformRoles) as string[])
-    : []
-  const parsedPlatformRoleKeys = rawPlatformRoleKeys
-    ? (JSON.parse(rawPlatformRoleKeys) as string[])
-    : parsedPlatformRoles
+const readActorContextCached = cache(async () => {
+  const hdrs = await headers();
+  const rawRequestContext = hdrs.get('x-request-context');
+  const sessionClaims = readSessionClaimsFromHeaders((name) => hdrs.get(name));
 
-  const actor: ActorContextSnapshot = {
-    sessionId: hdrs.get("x-session-id") ?? undefined,
-    identityId: hdrs.get("x-identity-id") ?? undefined,
-    customerId: hdrs.get("x-customer-id") ?? undefined,
-    workspaceId: hdrs.get("x-workspace-id") ?? undefined,
-    membershipId: hdrs.get("x-membership-id") ?? undefined,
-    workspaceRoleId: hdrs.get("x-workspace-role-id") ?? undefined,
-    workspaceRoleKey:
-      hdrs.get("x-workspace-role-key") ??
-      hdrs.get("x-workspace-role") ??
-      undefined,
-    workspaceRoleSystemKey: hdrs.get("x-workspace-role-system-key") ?? undefined,
-    workspaceRole: hdrs.get("x-workspace-role") ?? undefined,
-    platformRole: hdrs.get("x-platform-role") ?? undefined,
-    platformRoleIds: rawPlatformRoleIds
-      ? (JSON.parse(rawPlatformRoleIds) as string[])
-      : [],
-    platformRoleKeys: parsedPlatformRoleKeys,
-    platformRoleSystemKeys: rawPlatformRoleSystemKeys
-      ? (JSON.parse(rawPlatformRoleSystemKeys) as string[])
-      : [],
-    platformRoles: parsedPlatformRoles,
-    permissions: rawPermissions ? (JSON.parse(rawPermissions) as string[]) : [],
+  if (!rawRequestContext) {
+    const actor = buildActorContext({
+      identityId: sessionClaims?.identityId,
+      customerId: sessionClaims?.customerId,
+      platformRole: sessionClaims?.platformRoles?.[0],
+      platformRoleKeys: sessionClaims?.platformRoleKeys,
+      platformRoleSystemKeys: sessionClaims?.platformRoleSystemKeys,
+      workspaceId: sessionClaims?.workspaceId,
+      workspaceRole: sessionClaims?.workspaceRole,
+      workspaceRoleKey: sessionClaims?.workspaceRoleKey,
+      workspaceRoleSystemKey: sessionClaims?.workspaceRoleSystemKey,
+      membershipId: sessionClaims?.membershipId,
+    });
+
+    return {
+      actor: {
+        sessionId: sessionClaims?.sessionId,
+        identityId: actor.identityId,
+        customerId: actor.customerId,
+        workspaceId: actor.workspaceId,
+        membershipId: actor.membershipId,
+        workspaceRoleId: sessionClaims?.workspaceRoleId,
+        workspaceRoleKey: actor.workspaceRoleKey,
+        workspaceRoleSystemKey: actor.workspaceRoleSystemKey,
+        workspaceRole: actor.workspaceRole,
+        platformRole: actor.platformRole,
+        platformRoleIds: sessionClaims?.platformRoleIds ?? [],
+        platformRoleKeys: actor.platformRoleKeys ?? [],
+        platformRoleSystemKeys: actor.platformRoleSystemKeys ?? [],
+        platformRoles: sessionClaims?.platformRoles ?? [],
+        permissions: actor.permissions,
+        features: actor.features,
+        limits: actor.limits,
+      } satisfies ActorContextSnapshot,
+      requestContext: null,
+    };
   }
 
-  const rawRequestContext = hdrs.get("x-request-context")
-  const requestContext = rawRequestContext
-    ? (JSON.parse(rawRequestContext) as unknown)
-    : null
+  const requestContext = JSON.parse(rawRequestContext);
 
-  return { actor, requestContext }
+  return runWithContext(requestContext, async () => {
+    const { actor, session } = await resolveSessionContext({
+      requestContext,
+      sessionClaims,
+    });
+
+    return {
+      actor: {
+        sessionId: session?.sessionId,
+        identityId: actor.identityId,
+        customerId: actor.customerId,
+        workspaceId: actor.workspaceId,
+        membershipId: actor.membershipId,
+        workspaceRoleId: session?.workspaceRoleId,
+        workspaceRoleKey: actor.workspaceRoleKey,
+        workspaceRoleSystemKey: actor.workspaceRoleSystemKey,
+        workspaceRole: actor.workspaceRole,
+        platformRole: actor.platformRole,
+        platformRoleIds: session?.platformRoleIds ?? [],
+        platformRoleKeys: actor.platformRoleKeys ?? [],
+        platformRoleSystemKeys: actor.platformRoleSystemKeys ?? [],
+        platformRoles: session?.platformRoles ?? [],
+        permissions: actor.permissions,
+        features: actor.features,
+        limits: actor.limits,
+      } satisfies ActorContextSnapshot,
+      requestContext,
+    };
+  });
+});
+
+export async function readActorContext() {
+  return readActorContextCached();
 }

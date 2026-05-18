@@ -7,7 +7,7 @@ import {
 import { withRequestContext } from '@/lib/request/withRequestContext';
 import { getRequestContext } from '@/lib/context/request-context';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import { normalizeHostname } from '@/lib/middleware/proxy-utils';
+import { getHostname, normalizeHostname } from '@/lib/middleware/proxy-utils';
 import { findSessionById } from '@/modules/auth/services/session.services';
 import {
   buildHostTransferPath,
@@ -81,17 +81,29 @@ export async function GET(req: NextRequest) {
     const token = req.nextUrl.searchParams.get('token') ?? '';
     const transfer = await readHostTransferToken(token);
     const requestContext = getRequestContext();
+    const requestHost = getHostname(req);
+    const requestPort = requestHost.split(':')[1] ?? req.nextUrl.port;
+    const buildTargetUrl = (path: string) => {
+      const url = new URL(path, req.url);
+
+      if (transfer?.targetHost) {
+        url.hostname = transfer.targetHost;
+        url.port = requestPort;
+      }
+
+      return url;
+    };
 
     if (!transfer) {
       return NextResponse.redirect(new URL('/login?reason=workspace-moved', req.url));
     }
 
-    const currentHost = normalizeHostname(req.nextUrl.host);
+    const currentHost = normalizeHostname(requestHost);
 
     if (currentHost !== transfer.targetHost) {
       const redirectUrl = new URL(buildHostTransferPath(token), req.url);
       redirectUrl.hostname = transfer.targetHost;
-      redirectUrl.port = req.nextUrl.port;
+      redirectUrl.port = requestPort;
 
       const response = NextResponse.redirect(redirectUrl);
       response.cookies.delete('auth_flow');
@@ -122,7 +134,7 @@ export async function GET(req: NextRequest) {
               ? requestContext.workspace.slug
               : undefined,
         }),
-        req.url,
+        buildTargetUrl('/'),
       );
 
       return NextResponse.redirect(loginUrl);
@@ -144,6 +156,6 @@ export async function GET(req: NextRequest) {
         fallbackPath: '/app',
       }));
 
-    return NextResponse.redirect(new URL(redirectTarget, req.url));
+    return NextResponse.redirect(new URL(redirectTarget, buildTargetUrl('/')));
   });
 }

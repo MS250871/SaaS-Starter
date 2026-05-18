@@ -59,6 +59,8 @@ export async function signupWorkflow(input: SignupDomain) {
         {
           actorType: 'system',
           permissions: [],
+          features: [],
+          limits: {},
           isPlatformAdmin: true,
         },
         () => validateInviteToken(input.inviteToken!),

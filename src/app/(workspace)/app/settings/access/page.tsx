@@ -1,5 +1,6 @@
 import { WorkspaceAccessPanel } from '@/modules/workspace/components/workspace-access-panel';
-import { getWorkspaceAccessPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceAccessPageData } from '@/modules/permissions/server/workspace-access-page-data';
+import { hasAnyPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceSettingsAccessPage() {
   const {
@@ -29,11 +30,11 @@ export default async function WorkspaceSettingsAccessPage() {
       userOverrides={userOverrides}
       members={members}
       accessSummary={accessSummary}
-      canManageAccess={
-        actor.permissions.includes('permission.grant') ||
-        actor.permissions.includes('permission.revoke') ||
-        actor.permissions.includes('permission.update')
-      }
+      canManageAccess={hasAnyPermission(actor.permissions, [
+        'permission.grant',
+        'permission.revoke',
+        'permission.update',
+      ])}
     />
   );
 }

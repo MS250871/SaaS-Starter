@@ -7,6 +7,7 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 type PlatformAuthShellMode =
   | 'login'
   | 'signup'
+  | 'payment'
   | 'create-workspace'
   | 'verify-email'
   | 'verify-phone';
@@ -30,6 +31,12 @@ const shellCopy: Record<
     headline: 'Launch your next workspace with a strong operational base.',
     description:
       'Create your owner account, set up the first workspace, and move from branding to delivery without stitching tools together.',
+  },
+  payment: {
+    eyebrow: 'Secure billing',
+    headline: 'Complete payment and continue with platform setup.',
+    description:
+      'Use the same owner-first platform surface to activate plans, unlock domain upgrades, and return straight to your billing or workspace setup flow.',
   },
   'create-workspace': {
     eyebrow: 'Workspace setup',

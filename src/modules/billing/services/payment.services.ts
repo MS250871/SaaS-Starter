@@ -5,8 +5,16 @@ import {
   paymentQueries,
 } from '@/modules/billing/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+function buildUpgradeMetadataFilter(expectedMode: string) {
+  return {
+    path: ['upgradeMode'],
+    equals: expectedMode,
+  } satisfies Prisma.JsonFilter;
+}
 
 export async function getPaymentById(id: string) {
   if (!id) {
@@ -56,6 +64,46 @@ export async function findPaymentBySubscriptionId(subscriptionId: string) {
   return paymentQueries.findFirst({
     where: {
       subscriptionId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+export async function findLatestSuccessfulPaymentBySubscriptionId(
+  subscriptionId: string,
+) {
+  if (!subscriptionId) {
+    throwError(ERR.INVALID_INPUT, 'Subscription id is required');
+  }
+
+  return paymentQueries.findFirst({
+    where: {
+      subscriptionId,
+      paymentStatus: 'SUCCESS',
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+export async function findPendingProratedUpgradePaymentBySubscriptionId(
+  subscriptionId: string,
+) {
+  if (!subscriptionId) {
+    throwError(ERR.INVALID_INPUT, 'Subscription id is required');
+  }
+
+  return paymentQueries.findFirst({
+    where: {
+      subscriptionId,
+      type: 'UPGRADE',
+      paymentStatus: {
+        in: ['PENDING', 'REQUIRES_ACTION'],
+      },
+      metadata: buildUpgradeMetadataFilter('card_proration'),
     },
     orderBy: {
       createdAt: 'desc',

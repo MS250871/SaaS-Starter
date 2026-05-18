@@ -31,20 +31,51 @@ type RazorpaySubscriptionCreateParams = {
   notes?: Record<string, string | number>;
 };
 
+type RazorpaySubscriptionUpdateParams = {
+  planId?: string;
+  totalCount?: number;
+  quantity?: number;
+  customerNotify?: boolean | 0 | 1;
+  scheduleChangeAt?: 'now' | 'cycle_end';
+  remainingCount?: number;
+  notes?: Record<string, string | number>;
+};
+
+type RazorpayRefundCreateParams = {
+  amountSubunits?: number;
+  speed?: 'normal' | 'optimum';
+  notes?: Record<string, string | number>;
+  receipt?: string | null;
+};
+
 let razorpayClient: Razorpay | null = null;
 
+const IS_PROD = process.env.NODE_ENV === 'production';
+
 function getRazorpayKeyId() {
-  return (
-    process.env.RAZORPAY_API_KEY ??
+  const liveKey =
+    process.env.RAZORPAY_API_KEY ?? process.env.NEXT_PUBLIC_RAZORPAY_API_KEY ?? null;
+  const testKey =
     process.env.RAZORPAY_TEST_API_KEY ??
-    process.env.NEXT_PUBLIC_RAZORPAY_API_KEY ??
     process.env.NEXT_PUBLIC_RAZORPAY_TEST_API_KEY ??
-    null
-  );
+    null;
+
+  if (IS_PROD) {
+    return liveKey ?? testKey;
+  }
+
+  return testKey;
 }
 
 function getRazorpayKeySecret() {
-  return process.env.RAZORPAY_API_SECRET ?? process.env.RAZORPAY_TEST_API_SECRET ?? null;
+  const liveSecret = process.env.RAZORPAY_API_SECRET ?? null;
+  const testSecret = process.env.RAZORPAY_TEST_API_SECRET ?? null;
+
+  if (IS_PROD) {
+    return liveSecret ?? testSecret;
+  }
+
+  return testSecret;
 }
 
 function getRazorpayWebhookSecret() {
@@ -65,6 +96,13 @@ export function getPublicRazorpayKeyId() {
     );
   }
 
+  if (!IS_PROD && !keyId.startsWith('rzp_test_')) {
+    throwError(
+      ERR.INVALID_STATE,
+      'Non-production checkout must use a Razorpay test key.',
+    );
+  }
+
   return keyId;
 }
 
@@ -80,6 +118,13 @@ export function getRazorpayClient() {
     throwError(
       ERR.INVALID_STATE,
       'Razorpay server keys are missing. Set RAZORPAY_TEST_API_KEY and RAZORPAY_TEST_API_SECRET.',
+    );
+  }
+
+  if (!IS_PROD && !keyId.startsWith('rzp_test_')) {
+    throwError(
+      ERR.INVALID_STATE,
+      'Non-production server checkout must use Razorpay test credentials.',
     );
   }
 
@@ -203,10 +248,41 @@ export async function fetchRazorpaySubscription(subscriptionId: string) {
   return client.subscriptions.fetch(subscriptionId);
 }
 
+export async function updateRazorpaySubscription(
+  subscriptionId: string,
+  params: RazorpaySubscriptionUpdateParams,
+) {
+  const client = getRazorpayClient();
+
+  return client.subscriptions.update(subscriptionId, {
+    plan_id: params.planId,
+    total_count: params.totalCount,
+    quantity: params.quantity,
+    customer_notify: params.customerNotify,
+    schedule_change_at: params.scheduleChangeAt,
+    remaining_count: params.remainingCount,
+    notes: params.notes,
+  });
+}
+
 export async function cancelRazorpaySubscription(
   subscriptionId: string,
   cancelAtCycleEnd = false,
 ) {
   const client = getRazorpayClient();
   return client.subscriptions.cancel(subscriptionId, cancelAtCycleEnd);
+}
+
+export async function createRazorpayPaymentRefund(
+  paymentId: string,
+  params: RazorpayRefundCreateParams,
+) {
+  const client = getRazorpayClient();
+
+  return client.payments.refund(paymentId, {
+    amount: params.amountSubunits,
+    speed: params.speed,
+    notes: params.notes,
+    receipt: params.receipt,
+  });
 }

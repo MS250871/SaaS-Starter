@@ -1,5 +1,5 @@
 import { WorkspaceCustomerDetailsPanel } from '@/modules/workspace/components/workspace-customer-details-panel';
-import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
 export default async function WorkspaceCustomerPreviewPage() {
   const { basePath, workspaceId } = await getWorkspaceAdminSurfaceContext();

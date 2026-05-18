@@ -32,12 +32,15 @@ import { GoogleButton } from './google-button';
 import { Logo } from '@/components/layout/logo';
 import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { isNextRedirectError } from '@/lib/http/is-next-redirect-error';
+import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
 
 export function LoginForm({
   className,
   intent,
   entry,
   workspaceId,
+  workspaceSlug,
+  workspaceStrategy,
   returnPath,
   message,
   workspaceSurface = false,
@@ -47,12 +50,24 @@ export function LoginForm({
   intent: AuthCookies['intent'];
   entry?: AuthCookies['entry'];
   workspaceId?: string;
+  workspaceSlug?: string | null;
+  workspaceStrategy?: string | null;
   returnPath?: string;
   message?: string;
   workspaceSurface?: boolean;
   hideTopBrand?: boolean;
 }) {
   const signupHref = (() => {
+    if (workspaceSurface && workspaceId && workspaceSlug) {
+      return buildWorkspaceSignupPath({
+        workspaceId,
+        intent,
+        returnPath,
+        strategy: workspaceStrategy,
+        slug: workspaceSlug,
+      });
+    }
+
     const search = new URLSearchParams();
 
     if (intent) {

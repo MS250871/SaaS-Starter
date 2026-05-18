@@ -1,5 +1,5 @@
 import { WorkspaceCustomersPanel } from '@/modules/workspace/components/workspace-customers-panel';
-import { getWorkspaceCustomersPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceCustomersPageData } from '@/modules/customer/server/workspace-customers-page-data';
 
 export default async function WorkspaceCustomersPage({
   searchParams,

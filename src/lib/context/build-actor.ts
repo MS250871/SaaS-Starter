@@ -18,6 +18,8 @@ type BuildActorContextParams = {
   workspaceRoleSystemKey?: string
   membershipId?: string
   permissions?: string[]
+  features?: string[]
+  limits?: Record<string, number>
 }
 
 export function buildActorContext(
@@ -69,5 +71,7 @@ export function buildActorContext(
     workspaceRoleSystemKey,
     membershipId: params.membershipId,
     permissions: params.permissions ?? [],
+    features: params.features ?? [],
+    limits: params.limits ?? {},
   }
 }

@@ -1,5 +1,5 @@
 import { WorkspaceCustomerBulkCreatePanel } from '@/modules/workspace/components/workspace-customer-bulk-create-panel';
-import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
 export default async function WorkspaceCustomerBulkCreatePage() {
   const { basePath, workspaceId, workspace } =

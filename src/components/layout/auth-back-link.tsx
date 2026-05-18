@@ -13,19 +13,21 @@ type WorkspaceRequestContext = {
 
 export default async function AuthBackLink({
   className,
+  href: explicitHref,
 }: {
   className?: string;
+  href?: string;
 }) {
   const { requestContext } = await readActorContext();
   const workspaceContext = (requestContext as WorkspaceRequestContext | null)
     ?.workspace;
-  const href = workspaceContext?.slug
+  const href = explicitHref ?? (workspaceContext?.slug
     ? buildWorkspaceSurfacePath({
         strategy: workspaceContext.strategy,
         slug: workspaceContext.slug,
         path: '/',
       })
-    : '/';
+    : '/');
 
   return (
     <Link

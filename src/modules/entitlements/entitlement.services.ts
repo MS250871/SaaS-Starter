@@ -29,6 +29,48 @@ export type PlanLimitWithDefinition = Prisma.PlanLimitGetPayload<{
   include: { limitDefinition: true };
 }>;
 
+export type PlanCatalogSnapshot = Prisma.PlanGetPayload<{
+  include: {
+    features: {
+      include: {
+        feature: true;
+      };
+    };
+    limits: {
+      include: {
+        limitDefinition: true;
+      };
+    };
+    products: {
+      include: {
+        prices: true;
+      };
+    };
+  };
+}>;
+
+export type FeatureAdminSnapshot = Prisma.FeatureGetPayload<{
+  include: {
+    _count: {
+      select: {
+        planFeatures: true;
+        workspaceOverrides: true;
+      };
+    };
+  };
+}>;
+
+export type LimitAdminSnapshot = Prisma.LimitDefinitionGetPayload<{
+  include: {
+    _count: {
+      select: {
+        planLimits: true;
+        workspaceOverrides: true;
+      };
+    };
+  };
+}>;
+
 export type WorkspaceFeatureOverrideWithFeature =
   Prisma.WorkspaceFeatureOverrideGetPayload<{
     include: { feature: true };
@@ -62,6 +104,64 @@ export async function findPlanByKey(key: string) {
 
 export async function listPlans() {
   return planQueries.many({ orderBy: { sortOrder: 'asc' } });
+}
+
+export async function listPlanCatalogSnapshots(): Promise<PlanCatalogSnapshot[]> {
+  const plans = await planQueries.delegate.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      features: {
+        include: {
+          feature: true,
+        },
+      },
+      limits: {
+        include: {
+          limitDefinition: true,
+        },
+      },
+      products: {
+        include: {
+          prices: true,
+        },
+      },
+    },
+  });
+
+  return plans as PlanCatalogSnapshot[];
+}
+
+export async function getPlanCatalogSnapshotById(
+  id: string,
+): Promise<PlanCatalogSnapshot> {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
+
+  const plan = await planQueries.delegate.findUnique({
+    where: { id },
+    include: {
+      features: {
+        include: {
+          feature: true,
+        },
+      },
+      limits: {
+        include: {
+          limitDefinition: true,
+        },
+      },
+      products: {
+        include: {
+          prices: true,
+        },
+      },
+    },
+  });
+
+  if (!plan) {
+    throwError(ERR.NOT_FOUND, 'Plan not found');
+  }
+
+  return plan as PlanCatalogSnapshot;
 }
 
 export async function listPublicPricingPlans() {
@@ -152,6 +252,38 @@ export async function listFeatures() {
   return featureQueries.many({ orderBy: { sortOrder: 'asc' } });
 }
 
+export async function getFeatureById(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Feature ID is required');
+
+  const feature = await featureQueries.findUnique({
+    where: { id },
+  });
+
+  if (!feature) throwError(ERR.NOT_FOUND, 'Feature not found');
+
+  return feature;
+}
+
+export async function listFeatureAdminSnapshots(): Promise<FeatureAdminSnapshot[]> {
+  const features = await featureQueries.delegate.findMany({
+    orderBy: [
+      { category: 'asc' },
+      { sortOrder: 'asc' },
+      { createdAt: 'asc' },
+    ],
+    include: {
+      _count: {
+        select: {
+          planFeatures: true,
+          workspaceOverrides: true,
+        },
+      },
+    },
+  });
+
+  return features as FeatureAdminSnapshot[];
+}
+
 export async function listFeatureCatalog() {
   return featureQueries.many({
     where: { isActive: true },
@@ -189,12 +321,50 @@ export async function updateFeature(id: string, data: UpdateInput<'Feature'>) {
   }
 }
 
+export async function deleteFeature(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Feature ID is required');
+
+  try {
+    return await featureCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete feature', undefined, e);
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              LIMIT DEFINITIONS                             */
 /* -------------------------------------------------------------------------- */
 
 export async function listLimits() {
   return limitDefinitionQueries.many({ orderBy: { sortOrder: 'asc' } });
+}
+
+export async function getLimitDefinitionById(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Limit definition ID is required');
+
+  const limitDefinition = await limitDefinitionQueries.findUnique({
+    where: { id },
+  });
+
+  if (!limitDefinition) throwError(ERR.NOT_FOUND, 'Limit definition not found');
+
+  return limitDefinition;
+}
+
+export async function listLimitAdminSnapshots(): Promise<LimitAdminSnapshot[]> {
+  const limits = await limitDefinitionQueries.delegate.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    include: {
+      _count: {
+        select: {
+          planLimits: true,
+          workspaceOverrides: true,
+        },
+      },
+    },
+  });
+
+  return limits as LimitAdminSnapshot[];
 }
 
 export async function listLimitCatalog() {
@@ -221,6 +391,29 @@ export async function createLimit(data: CreateInput<'LimitDefinition'>) {
     return await limitDefinitionCrud.create(data);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create limit definition', undefined, e);
+  }
+}
+
+export async function updateLimitDefinition(
+  id: string,
+  data: UpdateInput<'LimitDefinition'>,
+) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Limit definition ID is required');
+
+  try {
+    return await limitDefinitionCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update limit definition', undefined, e);
+  }
+}
+
+export async function deleteLimitDefinition(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Limit definition ID is required');
+
+  try {
+    return await limitDefinitionCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete limit definition', undefined, e);
   }
 }
 
@@ -314,6 +507,73 @@ export async function listPlanLimits(
   });
 
   return limits as unknown as PlanLimitWithDefinition[];
+}
+
+export async function syncPlanFeatures(params: {
+  planId: string;
+  featureIds: string[];
+}) {
+  if (!params.planId) {
+    throwError(ERR.INVALID_INPUT, 'planId is required');
+  }
+
+  const featureIds = Array.from(new Set(params.featureIds.filter(Boolean)));
+
+  await planFeatureCrud.delegate.deleteMany?.({
+    where: {
+      planId: params.planId,
+      featureId: {
+        notIn: featureIds.length > 0 ? featureIds : ['00000000-0000-0000-0000-000000000000'],
+      },
+    },
+  });
+
+  for (const featureId of featureIds) {
+    await setPlanFeature({
+      planId: params.planId,
+      featureId,
+      isEnabled: true,
+    });
+  }
+}
+
+export async function syncPlanLimits(params: {
+  planId: string;
+  limits: Array<{
+    limitDefinitionId: string;
+    valueInt: number;
+  }>;
+}) {
+  if (!params.planId) {
+    throwError(ERR.INVALID_INPUT, 'planId is required');
+  }
+
+  const limits = params.limits.filter(
+    (entry) => entry.limitDefinitionId && entry.valueInt >= 0,
+  );
+  const limitDefinitionIds = Array.from(
+    new Set(limits.map((entry) => entry.limitDefinitionId)),
+  );
+
+  await planLimitCrud.delegate.deleteMany?.({
+    where: {
+      planId: params.planId,
+      limitDefinitionId: {
+        notIn:
+          limitDefinitionIds.length > 0
+            ? limitDefinitionIds
+            : ['00000000-0000-0000-0000-000000000000'],
+      },
+    },
+  });
+
+  for (const limit of limits) {
+    await setPlanLimit({
+      planId: params.planId,
+      limitDefinitionId: limit.limitDefinitionId,
+      valueInt: limit.valueInt,
+    });
+  }
 }
 
 /* -------------------------------------------------------------------------- */

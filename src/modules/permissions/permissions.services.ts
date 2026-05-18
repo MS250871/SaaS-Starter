@@ -795,11 +795,22 @@ export async function identityHasPermission(params: {
 }
 
 export function hasPermission(permissions: string[], required: string) {
-  return permissions.includes(required)
+  return permissions.includes('*') || permissions.includes(required)
 }
 
 export function assertPermission(permissions: string[], required: string) {
-  if (!permissions.includes(required)) {
+  if (!hasPermission(permissions, required)) {
     throwError(ERR.FORBIDDEN, `Permission denied: ${required}`)
   }
+}
+
+export function hasAnyPermission(
+  permissions: string[],
+  required: string[],
+) {
+  if (permissions.includes('*')) {
+    return true
+  }
+
+  return required.some((permission) => permissions.includes(permission))
 }

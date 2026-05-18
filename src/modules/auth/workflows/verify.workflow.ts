@@ -2,7 +2,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { getRequestContext } from '@/lib/context/request-context';
 import { createFingerprint } from '@/lib/auth/auth-utils';
 import type {
-  SessionPayload,
+  SessionClaims,
   VerificationSession,
 } from '@/lib/auth/auth.schema';
 import { OtpPurpose } from '@/generated/prisma/enums';
@@ -14,11 +14,11 @@ import { createSession } from '@/modules/auth/services/session.services';
 export type VerifyWorkflowInput = {
   otp: string;
   verificationSession: VerificationSession;
-  currentSession?: SessionPayload | null;
+  currentSession?: SessionClaims | null;
 };
 
 export type VerifyWorkflowResult = {
-  sessionPayload?: SessionPayload;
+  sessionPayload?: SessionClaims;
   redirectTo: string;
 };
 
@@ -71,6 +71,7 @@ export async function verifyWorkflow(
       sessionPayload: {
         sessionId: session.id,
         identityId: session.identityId,
+        customerId: session.customerId ?? undefined,
         workspaceId: session.workspaceId ?? undefined,
         membershipId: session.membershipId ?? undefined,
         workspaceRoleId: session.workspaceRoleDefinitionId ?? undefined,
@@ -91,9 +92,6 @@ export async function verifyWorkflow(
         deviceFingerprint: session.deviceFingerprint ?? undefined,
         userAgent: session.userAgent ?? undefined,
         isActive: session.isActive,
-        permissions: [],
-        features: [],
-        limits: {},
         createdAt: session.createdAt.getTime(),
         expiresAt: session.expiresAt.getTime(),
       },

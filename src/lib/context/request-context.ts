@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { SessionClaims, SessionPayload } from '@/lib/auth/auth.schema';
 import type { Prisma, PrismaClient } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -29,6 +30,9 @@ export type RequestContext = {
   method?: string;
   path?: string;
 
+  sessionClaims?: SessionClaims | null;
+  session?: SessionPayload | null;
+
   prisma?: DbClient;
 
   rlsInitialized?: boolean;
@@ -48,6 +52,10 @@ export function getRequestContext(): RequestContext {
   }
 
   return ctx;
+}
+
+export function maybeGetRequestContext(): RequestContext | undefined {
+  return storage.getStore();
 }
 
 export function setPrismaInContext(prisma: DbClient) {

@@ -23,6 +23,8 @@ export type ActorContext = {
   workspaceRoleSystemKey?: WorkspaceRoleSystemKey;
   membershipId?: string;
   permissions: string[];
+  features: string[];
+  limits: Record<string, number>;
 };
 
 const actorStorage = new AsyncLocalStorage<ActorContext>();
@@ -39,4 +41,8 @@ export function getActor(): ActorContext {
   }
 
   return actor;
+}
+
+export function maybeGetActor(): ActorContext | undefined {
+  return actorStorage.getStore();
 }

@@ -3,6 +3,7 @@ import type {
   Currency,
   PaymentStatus,
   Prisma,
+  RefundStatus,
 } from '@/generated/prisma/client';
 import { extractAppError, throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -29,8 +30,14 @@ import {
   createPaymentAttempt,
   findPaymentByProviderOrderId,
   findPaymentByProviderPaymentId,
+  findPendingProratedUpgradePaymentBySubscriptionId,
   updatePayment,
 } from '@/modules/billing/services/payment.services';
+import {
+  findLatestRefundByPaymentId,
+  findRefundByProviderRefundId,
+  updateRefund,
+} from '@/modules/billing/services/refund.services';
 import {
   findSubscriptionByProviderId,
   getSubscriptionById,
@@ -71,6 +78,17 @@ type RazorpayWebhookPayload = {
         id: string;
       };
     };
+    refund?: {
+      entity?: {
+        id: string;
+        payment_id?: string | null;
+        amount?: number;
+        currency?: string;
+        status?: string | null;
+        created_at?: number;
+        notes?: Record<string, string | number>;
+      };
+    };
   };
 };
 
@@ -103,6 +121,19 @@ function mapSubscriptionStatus(status?: string | null) {
       return 'EXPIRED' as const;
     default:
       return 'INCOMPLETE' as const;
+  }
+}
+
+function mapRefundStatus(status?: string | null): RefundStatus {
+  switch (status) {
+    case 'processed':
+      return 'SUCCESS';
+    case 'failed':
+      return 'FAILED';
+    case 'cancelled':
+      return 'CANCELLED';
+    default:
+      return 'PENDING';
   }
 }
 
@@ -302,7 +333,9 @@ async function updateSubscriptionFromWebhook(params: {
     return;
   }
 
-  const existingPayment = await findPaymentByProviderPaymentId(params.paymentEntity.id);
+  const existingPayment =
+    (await findPaymentByProviderPaymentId(params.paymentEntity.id)) ??
+    (await findPendingProratedUpgradePaymentBySubscriptionId(subscription.id));
 
   if (existingPayment) {
     await updatePayment(existingPayment.id, {
@@ -396,6 +429,53 @@ async function updateSubscriptionFromWebhook(params: {
   });
 }
 
+async function updateRefundFromWebhook(
+  refundEntity: NonNullable<
+    NonNullable<RazorpayWebhookPayload['payload']>['refund']
+  >['entity'],
+) {
+  if (!refundEntity?.id) {
+    return;
+  }
+
+  const localPayment = refundEntity.payment_id
+    ? await findPaymentByProviderPaymentId(refundEntity.payment_id)
+    : null;
+  const existingRefund =
+    (await findRefundByProviderRefundId(refundEntity.id)) ??
+    (localPayment
+      ? await findLatestRefundByPaymentId(localPayment.id)
+      : null);
+
+  if (!existingRefund) {
+    return;
+  }
+
+  await updateRefund(existingRefund.id, {
+    providerRefundId: refundEntity.id,
+    status: mapRefundStatus(refundEntity.status),
+    processedAt:
+      refundEntity.status === 'processed'
+        ? new Date((refundEntity.created_at ?? Date.now() / 1000) * 1000)
+        : undefined,
+    metadata: toJsonInput({
+      ...(existingRefund.metadata &&
+      typeof existingRefund.metadata === 'object' &&
+      !Array.isArray(existingRefund.metadata)
+        ? (existingRefund.metadata as Record<string, unknown>)
+        : {}),
+      providerStatus: refundEntity.status ?? null,
+      providerAmount:
+        refundEntity.amount != null
+          ? fromRazorpayAmountSubunits(refundEntity.amount)
+          : null,
+      providerCurrency: refundEntity.currency ?? null,
+      providerPaymentId: refundEntity.payment_id ?? null,
+      notes: refundEntity.notes ?? null,
+    }),
+  });
+}
+
 export async function processRazorpayWebhookEventWorkflow(webhookEventId: string) {
   if (!webhookEventId) {
     throwError(ERR.INVALID_INPUT, 'Webhook event id is required');
@@ -429,12 +509,14 @@ export async function processRazorpayWebhookEventWorkflow(webhookEventId: string
     const paymentEntity = payload.payload?.payment?.entity;
     const subscriptionEntity = payload.payload?.subscription?.entity;
     const providerInvoiceId = payload.payload?.invoice?.entity?.id ?? null;
+    const refundEntity = payload.payload?.refund?.entity;
 
     switch (event.eventType) {
       case 'payment.captured':
       case 'payment.failed':
         await updatePaymentFromWebhook(paymentEntity);
         break;
+      case 'subscription.updated':
       case 'subscription.authenticated':
       case 'subscription.activated':
       case 'subscription.charged':
@@ -446,6 +528,11 @@ export async function processRazorpayWebhookEventWorkflow(webhookEventId: string
           paymentEntity,
           providerInvoiceId,
         });
+        break;
+      case 'refund.created':
+      case 'refund.processed':
+      case 'refund.failed':
+        await updateRefundFromWebhook(refundEntity);
         break;
       default:
         break;

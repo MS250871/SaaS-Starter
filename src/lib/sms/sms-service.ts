@@ -20,6 +20,21 @@ export async function sendOtpSms({
     throwError(ERR.INVALID_INPUT, 'Phone numbers and OTP are required');
   }
 
+  const hasSmsConfig = Boolean(
+    process.env.COMBIRDS_BASE_URL &&
+      process.env.COMBIRDS_API_KEY &&
+      process.env.COMBIRDS_SENDER_ID,
+  );
+
+  if (process.env.NODE_ENV !== 'production' && !hasSmsConfig) {
+    console.info('[DEV OTP SMS]', {
+      numbers,
+      otp,
+      brand,
+    });
+    return;
+  }
+
   const message = otpSms({ brand, otp });
 
   try {

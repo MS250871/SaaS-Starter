@@ -73,6 +73,8 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
     {
       actorType: 'system',
       permissions: [],
+      features: [],
+      limits: {},
       isPlatformAdmin: true,
     },
     () =>

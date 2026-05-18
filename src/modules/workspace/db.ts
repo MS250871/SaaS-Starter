@@ -44,20 +44,6 @@ export const workspaceDomainDnsRecordQueries = buildQueries({
 });
 
 /**
- * Workspace Subscriptions
- */
-export const workspaceSubscriptionCrud = buildCud({
-  model: 'Subscription',
-  workspaceScoped: false,
-  softDelete: false,
-});
-
-export const workspaceSubscriptionQueries = buildQueries({
-  model: 'Subscription',
-  workspaceScoped: false,
-});
-
-/**
  * Workspace Invites
  */
 export const workspaceInviteCrud = buildCud({

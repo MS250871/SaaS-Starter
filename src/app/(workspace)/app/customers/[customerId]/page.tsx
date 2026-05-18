@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { WorkspaceCustomerDetailsPanel } from '@/modules/workspace/components/workspace-customer-details-panel';
-import { getWorkspaceCustomerDetailsPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceCustomerDetailsPageData } from '@/modules/customer/server/workspace-customers-page-data';
 
 export default async function WorkspaceCustomerDetailsPage({
   params,

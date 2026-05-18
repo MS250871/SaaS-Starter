@@ -1,5 +1,6 @@
 import { WorkspaceBillingPanel } from '@/modules/billing/components/workspace-billing-panel';
-import { getWorkspaceBillingPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceBillingPageData } from '@/modules/billing/server/workspace-billing-page-data';
+import { hasAnyPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceBillingPage() {
   const {
@@ -29,10 +30,10 @@ export default async function WorkspaceBillingPage() {
       invoices={invoices}
       oneTimeOffers={oneTimeOffers}
       billingConfig={billingConfig}
-      canManageBilling={
-        actor.permissions.includes('subscription.create') ||
-        actor.permissions.includes('payment.create')
-      }
+      canManageBilling={hasAnyPermission(actor.permissions, [
+        'subscription.create',
+        'payment.create',
+      ])}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { WorkspaceSupportQueuePanel } from '@/modules/workspace/components/workspace-support-queue-panel';
-import { getWorkspaceSupportQueuePageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceSupportQueuePageData } from '@/modules/support/server/workspace-support-page-data';
 
 export default async function WorkspaceSupportEscalationsPage({
   searchParams,

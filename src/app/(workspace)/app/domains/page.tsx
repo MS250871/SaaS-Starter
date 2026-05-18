@@ -1,5 +1,9 @@
 import { WorkspaceDomainsPanel } from "@/modules/workspace/components/workspace-domains-panel"
 import { getWorkspaceDomainsPageData } from "@/modules/workspace/server/workspace-admin-page-data"
+import {
+  hasAnyPermission,
+  hasPermission,
+} from "@/modules/permissions/permissions.services"
 
 export default async function WorkspaceDomainsPage() {
   const {
@@ -34,12 +38,18 @@ export default async function WorkspaceDomainsPage() {
       domains={domains}
       entitlements={entitlements}
       whiteLabelConfig={whiteLabelConfig}
-      canUpgrade={
-        actor.permissions.includes("subscription.create") ||
-        actor.permissions.includes("payment.create")
-      }
-      canManageDomains={actor.permissions.includes("workspaceDomain.create")}
-      canVerifyDomains={actor.permissions.includes("workspaceDomain.verify")}
+      canUpgrade={hasAnyPermission(actor.permissions, [
+        "subscription.create",
+        "payment.create",
+      ])}
+      canManageDomains={hasPermission(
+        actor.permissions,
+        "workspaceDomain.create",
+      )}
+      canVerifyDomains={hasPermission(
+        actor.permissions,
+        "workspaceDomain.verify",
+      )}
     />
   )
 }

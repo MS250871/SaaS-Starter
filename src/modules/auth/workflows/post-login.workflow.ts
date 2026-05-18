@@ -3,7 +3,7 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
 import {
   AuthCookies,
-  SessionPayload,
+  SessionClaims,
   VerificationSession,
 } from '@/lib/auth/auth.schema';
 import { throwError } from '@/lib/errors/app-error';
@@ -23,6 +23,7 @@ import {
   expireIdentitySessionsIfNeeded,
   endSession,
   findActiveSessionByContext,
+  findSessionById,
 } from '@/modules/auth/services/session.services';
 import { USER_SESSION_LIFETIME_SECONDS } from '@/lib/auth/auth-config';
 import { queueOtpDelivery } from '@/modules/auth/services/otp-outbox.services';
@@ -42,18 +43,16 @@ import {
   findPlatformInviteByToken,
   isPlatformInviteExpired,
   validatePlatformInviteToken,
-} from '@/modules/platform/services/invite,services';
+} from '@/modules/platform/services/invite.services';
 import {
   createPlatformMembership,
   findPlatformMembership,
   getPlatformAccessContext,
 } from '@/modules/platform/services/membership.services';
-import { resolvePermissions } from '@/modules/permissions/permissions.services';
 import type {
   PlatformRoleSystemKey,
   WorkspaceRoleSystemKey,
 } from '@/modules/roles/role.types';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
 import {
   createCustomer,
   findCustomerByIdentityId,
@@ -100,7 +99,7 @@ type PostLoginResult =
       finalSession?: never;
     }
   | {
-      finalSession: SessionPayload;
+      finalSession: SessionClaims;
       redirectTo?: string;
       nextStep?: never;
       meta?: never;
@@ -131,10 +130,17 @@ export async function buildFinalSessionWorkflow({
   customerId?: string;
   workspaceId?: string;
   workspaceMembership?: WorkspaceMembershipSnapshot | null;
-}): Promise<SessionPayload> {
+}): Promise<SessionClaims> {
   return withUnitOfWork(async () => {
     const identityId = identitySession.identityId;
     await expireIdentitySessionsIfNeeded(identityId);
+
+    if (customerId && inputWorkspaceMembership) {
+      throwError(
+        ERR.INVALID_INPUT,
+        'Session cannot target both a customer and a workspace membership',
+      );
+    }
 
     let workspaceMembership = inputWorkspaceMembership ?? null;
 
@@ -158,38 +164,35 @@ export async function buildFinalSessionWorkflow({
     const { roleIds: platformRoleIds, roleKeys: platformRoleKeys, roleSystemKeys: platformRoleSystemKeys } =
       await getPlatformAccessContext(identityId);
 
-    const permissions = await resolvePermissions({
-      identityId,
-      workspaceId,
-      workspaceRoleDefinitionId,
-      platformRoleDefinitionIds: platformRoleIds,
-    });
+    const currentSession = await findSessionById(identitySession.sessionId).catch(
+      () => null,
+    );
+    const currentSessionMatchesContext =
+      currentSession &&
+      currentSession.isActive &&
+      currentSession.expiresAt.getTime() > Date.now() &&
+      currentSession.identityId === identityId &&
+      (currentSession.workspaceId ?? null) === (workspaceId ?? null) &&
+      (currentSession.customerId ?? null) === (customerId ?? null) &&
+      (currentSession.membershipId ?? null) === (membershipId ?? null);
 
-    let features: string[] = [];
-    let limits: Record<string, number> = {};
-
-    if (workspaceId) {
-      const entitlements = await resolveEntitlements({
-        workspaceId,
-        planId: workspaceMembership?.planId,
-      });
-
-      features = entitlements.features;
-      limits = entitlements.limits;
-    }
-
-    const existingSession = await findActiveSessionByContext({
-      identityId,
-      workspaceId,
-      membershipId,
-      deviceFingerprint: identitySession.deviceFingerprint,
-    });
+    const existingSession =
+      currentSessionMatchesContext
+        ? currentSession
+        : await findActiveSessionByContext({
+            identityId,
+            workspaceId,
+            customerId,
+            membershipId,
+            deviceFingerprint: identitySession.deviceFingerprint,
+          });
 
     const session =
       existingSession ??
       (await createSession({
         identityId,
         workspaceId,
+        customerId,
         membershipId,
         workspaceRoleDefinitionId,
         workspaceRoleKey: workspaceMembership?.roleKey,
@@ -214,7 +217,7 @@ export async function buildFinalSessionWorkflow({
     return {
       sessionId: session.id,
       identityId,
-      customerId,
+      customerId: session.customerId ?? customerId,
       workspaceId,
       membershipId,
       workspaceRoleId: workspaceRoleDefinitionId,
@@ -235,9 +238,6 @@ export async function buildFinalSessionWorkflow({
       deviceFingerprint: session.deviceFingerprint ?? undefined,
       userAgent: session.userAgent ?? undefined,
       isActive: session.isActive,
-      permissions,
-      features,
-      limits,
       createdAt: session.createdAt.getTime(),
       expiresAt: session.expiresAt.getTime(),
     };
@@ -276,6 +276,10 @@ function sanitizeReturnPath(value: string | undefined) {
   return value;
 }
 
+function isCustomerSurfacePath(path: string) {
+  return path === '/customer' || path.startsWith('/customer/');
+}
+
 async function resolvePostLoginRedirect(params: {
   auth: AuthCookies;
   workspaceId: string;
@@ -283,7 +287,10 @@ async function resolvePostLoginRedirect(params: {
 }) {
   const returnPath = sanitizeReturnPath(params.auth.returnPath);
 
-  if (returnPath) {
+  if (
+    returnPath &&
+    (params.fallbackPath !== '/customer' || isCustomerSurfacePath(returnPath))
+  ) {
     return returnPath;
   }
 
@@ -436,6 +443,8 @@ async function acceptInviteAccess(params: {
       {
         actorType: 'system',
         permissions: [],
+        features: [],
+        limits: {},
         isPlatformAdmin: true,
       },
       () => findPlatformInviteByToken(params.auth.inviteToken!),
@@ -481,6 +490,8 @@ async function acceptInviteAccess(params: {
             {
               actorType: 'system',
               permissions: [],
+              features: [],
+              limits: {},
               isPlatformAdmin: true,
             },
             () => validatePlatformInviteToken(params.auth.inviteToken!),
@@ -491,6 +502,8 @@ async function acceptInviteAccess(params: {
       {
         actorType: 'system',
         permissions: [],
+        features: [],
+        limits: {},
         isPlatformAdmin: true,
       },
       async () => {
@@ -529,6 +542,8 @@ async function acceptInviteAccess(params: {
     {
       actorType: 'system',
       permissions: [],
+      features: [],
+      limits: {},
       isPlatformAdmin: true,
     },
     () => findInviteByToken(params.auth.inviteToken!),
@@ -571,6 +586,8 @@ async function acceptInviteAccess(params: {
           {
             actorType: 'system',
             permissions: [],
+            features: [],
+            limits: {},
             isPlatformAdmin: true,
           },
           () => validateInviteToken(params.auth.inviteToken!),
@@ -578,11 +595,13 @@ async function acceptInviteAccess(params: {
       : storedInvite;
 
   const workspaceMembership = await runWithActor(
-    {
-      actorType: 'system',
-      permissions: [],
-      isPlatformAdmin: true,
-    },
+      {
+        actorType: 'system',
+        permissions: [],
+        features: [],
+        limits: {},
+        isPlatformAdmin: true,
+      },
     async () => {
       if (normalizedEmail && invite.email.toLowerCase() !== normalizedEmail) {
         throwError(ERR.UNAUTHORIZED, 'Invite email mismatch');
@@ -622,7 +641,7 @@ async function acceptInviteAccess(params: {
 }
 
 export async function postLoginWorkflow(input: {
-  identitySession: SessionPayload;
+  identitySession: SessionClaims;
   auth: AuthCookies;
 }): Promise<PostLoginResult> {
   return withUnitOfWork(async () => {

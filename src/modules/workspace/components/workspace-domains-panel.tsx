@@ -17,6 +17,7 @@ import { createWorkspaceCustomDomainAction } from "@/modules/workspace/actions/c
 import { createWorkspaceRedirectAliasAction } from "@/modules/workspace/actions/create-workspace-redirect-alias.action"
 import { refreshWorkspaceCustomDomainVerificationAction } from "@/modules/workspace/actions/refresh-workspace-custom-domain-verification.action"
 import { changeWorkspacePlanAction } from "@/modules/billing/actions/change-workspace-plan.action"
+import { navigateClientRedirect } from "@/lib/navigation/client-redirect"
 import {
   Alert,
   AlertDescription,
@@ -927,7 +928,7 @@ export function WorkspaceDomainsPanel({
       }
 
       setPlanChangeMessage(response.data.successMessage)
-      router.push(response.data.redirectTo)
+      navigateClientRedirect(router, response.data.redirectTo)
     })
   }
 
@@ -1092,6 +1093,12 @@ export function WorkspaceDomainsPanel({
                 on the next session refresh.
               </p>
             )}
+            <p className="text-xs text-muted-foreground">
+              Billing note: card mandates keep the current renewal date with a
+              prorated upgrade charge. UPI or eMandate upgrades restart the
+              subscription today and refund the unused part of the current
+              cycle.
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1193,6 +1200,11 @@ export function WorkspaceDomainsPanel({
                   <p className="mt-1 text-sm text-muted-foreground">
                     Upgrade to Business. After payment, you will return to this
                     page and can continue with domain setup.
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Card mandates keep the current billing date with a prorated
+                    charge. UPI or eMandate upgrades restart billing today and
+                    refund the unused value of the current cycle.
                   </p>
                 </div>
                 {hasCustomDomainFeature ? (

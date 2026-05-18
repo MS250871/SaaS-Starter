@@ -1,7 +1,7 @@
 'use server';
 
 import { headers } from 'next/headers';
-import { createAction } from '@/lib/http/create-action';
+import { createTxAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
 import { throwError } from '@/lib/errors/app-error';
@@ -34,7 +34,7 @@ function getInviterName(params: {
   return params.email ?? null;
 }
 
-const createWorkspaceInviteActionImpl = createAction(async (formData: FormData) => {
+const createWorkspaceInviteActionImpl = createTxAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
   const parsed: CreateWorkspaceInviteActionInput =
     createWorkspaceInviteActionSchema.parse(raw);

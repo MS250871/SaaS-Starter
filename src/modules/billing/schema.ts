@@ -75,6 +75,23 @@ export type VerifyBillingPaymentActionInput = z.infer<
   typeof verifyBillingPaymentActionSchema
 >;
 
+export const recordBillingPaymentFailureActionSchema = z.object({
+  paymentId: z.string().uuid('Invalid payment id'),
+  mode: billingCheckoutModeSchema,
+  razorpayPaymentId: z.string().trim().optional(),
+  razorpayOrderId: z.string().trim().optional(),
+  razorpaySubscriptionId: z.string().trim().optional(),
+  errorCode: z.string().trim().optional(),
+  errorDescription: z.string().trim().min(1, 'Failure reason is required'),
+  errorSource: z.string().trim().optional(),
+  errorStep: z.string().trim().optional(),
+  errorReason: z.string().trim().optional(),
+});
+
+export type RecordBillingPaymentFailureActionInput = z.infer<
+  typeof recordBillingPaymentFailureActionSchema
+>;
+
 export const changeWorkspacePlanActionSchema = z.object({
   targetPlanKey: z.enum(['trial']),
   source: billingCheckoutSourceSchema,

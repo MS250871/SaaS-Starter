@@ -1,5 +1,6 @@
 import { WorkspaceNotificationsPanel } from '@/modules/workspace/components/workspace-notifications-panel';
-import { getWorkspaceNotificationsPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceNotificationsPageData } from '@/modules/notifications/server/workspace-notifications-page-data';
+import { hasPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceNotificationsPage() {
   const data = await getWorkspaceNotificationsPageData();
@@ -10,7 +11,7 @@ export default async function WorkspaceNotificationsPage() {
       inboxSummary={data.inboxSummary}
       workspaceRecipients={data.workspaceRecipients}
       customerRecipients={data.customerRecipients}
-      canCreate={data.actor.permissions.includes('notification.create')}
+      canCreate={hasPermission(data.actor.permissions, 'notification.create')}
     />
   );
 }

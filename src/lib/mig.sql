@@ -39,25 +39,52 @@ CHECK (
    SESSION CONTEXT CONSISTENCY (STRICT)
 ========================================================= */
 ALTER TABLE "Session"
+ADD COLUMN IF NOT EXISTS "customer_id" UUID;
+
+ALTER TABLE "Session"
 DROP CONSTRAINT IF EXISTS session_context_check;
 
 ALTER TABLE "Session"
 ADD CONSTRAINT session_context_check
 CHECK (
   (
-    -- B2C: identity-only session
+    -- Identity-only session (platform or pre-workspace auth)
     identity_id IS NOT NULL
     AND workspace_id IS NULL
+    AND customer_id IS NULL
     AND membership_id IS NULL
   )
   OR
   (
-    -- B2B / B2B2C: workspace session
+    -- Workspace customer session
     identity_id IS NOT NULL
     AND workspace_id IS NOT NULL
+    AND customer_id IS NOT NULL
+    AND membership_id IS NULL
+  )
+  OR
+  (
+    -- Workspace member/admin session
+    identity_id IS NOT NULL
+    AND workspace_id IS NOT NULL
+    AND customer_id IS NULL
     AND membership_id IS NOT NULL
   )
 );
+
+ALTER TABLE "Session"
+DROP CONSTRAINT IF EXISTS "Session_customer_id_fkey";
+
+ALTER TABLE "Session"
+ADD CONSTRAINT "Session_customer_id_fkey"
+FOREIGN KEY ("customer_id") REFERENCES "Customer"("id")
+ON DELETE SET NULL
+ON UPDATE CASCADE;
+
+DROP INDEX IF EXISTS session_customer_id_idx;
+
+CREATE INDEX IF NOT EXISTS session_customer_id_idx
+ON "Session" ("customer_id");
 
 /* =========================================================
    ONE PRIMARY DOMAIN PER WORKSPACE

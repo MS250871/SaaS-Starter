@@ -17,6 +17,19 @@ export async function sendOtpEmail({
     throwError(ERR.INVALID_INPUT, 'Email and OTP are required');
   }
 
+  const hasEmailConfig = Boolean(
+    process.env.RESEND_API_KEY && process.env.EMAIL_FROM,
+  );
+
+  if (process.env.NODE_ENV !== 'production' && !hasEmailConfig) {
+    console.info('[DEV OTP EMAIL]', {
+      to,
+      otp,
+      name,
+    });
+    return;
+  }
+
   const mail = otpTemplate({ otp, name });
 
   try {

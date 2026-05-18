@@ -1,9 +1,9 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import type { SessionPayload } from '@/lib/auth/auth.schema';
+import type { SessionClaims } from '@/lib/auth/auth.schema';
 import { syncSessionActivity } from '@/modules/auth/services/session.services';
 
 export type SessionHeartbeatWorkflowInput = {
-  sessionPayload: SessionPayload | null;
+  sessionPayload: SessionClaims | null;
 };
 
 export type SessionHeartbeatWorkflowResult =
@@ -15,7 +15,7 @@ export type SessionHeartbeatWorkflowResult =
   | {
       active: true;
       status: 'active' | 'refreshed';
-      sessionPayload: SessionPayload;
+      sessionPayload: SessionClaims;
     };
 
 export async function sessionHeartbeatWorkflow(
@@ -49,6 +49,7 @@ export async function sessionHeartbeatWorkflow(
       status: result.status,
       sessionPayload: {
         ...sessionPayload,
+        customerId: result.session.customerId ?? sessionPayload.customerId,
         isActive: result.session.isActive,
         expiresAt: result.session.expiresAt.getTime(),
       },

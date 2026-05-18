@@ -44,6 +44,8 @@ export default async function SignupPage({
       invite={invite}
       entry={entry}
       workspaceId={workspaceId}
+      workspaceSlug={workspaceAuth?.workspaceSlug}
+      workspaceStrategy={workspaceAuth?.strategy}
       planKey={planKey}
       planName={planName}
       returnPath={returnPath}

@@ -3,8 +3,8 @@ import { getRequestContext, setPrismaInContext } from './request-context';
 import { getActor } from './actor-context';
 import { applyDbContext } from '@/lib/context/apply-db-context';
 
-const TX_MAX_WAIT_MS = 10_000;
-const TX_TIMEOUT_MS = 20_000;
+const TX_MAX_WAIT_MS = 15_000;
+const TX_TIMEOUT_MS = 60_000;
 
 export async function withUnitOfWork<T>(fn: () => Promise<T>): Promise<T> {
   const ctx = getRequestContext();

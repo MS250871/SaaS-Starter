@@ -26,7 +26,7 @@ function BrandMark({ data }: { data: WorkspacePublicTemplateData }) {
 
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--workspace-primary)] text-sm font-semibold uppercase text-[var(--workspace-primary-foreground)] shadow-sm">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-(--workspace-primary) text-sm font-semibold uppercase text-(--workspace-primary-foreground) shadow-sm">
         {data.page.site.name.slice(0, 2)}
       </div>
       <span className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100 [font-family:var(--workspace-heading-font)]">
@@ -43,7 +43,7 @@ function HeaderActions({ data }: { data: WorkspacePublicTemplateData }) {
         <ThemeToggle />
         <Button
           asChild
-          className="rounded-full bg-[var(--workspace-primary)] px-5 text-[var(--workspace-primary-foreground)] hover:opacity-95"
+          className="rounded-full bg-(--workspace-primary) px-5 text-(--workspace-primary-foreground) hover:opacity-95"
         >
           <Link href={data.continuePath}>
             {data.continueLabel}
@@ -69,7 +69,7 @@ function HeaderActions({ data }: { data: WorkspacePublicTemplateData }) {
       </Button>
       <Button
         asChild
-        className="rounded-full bg-[var(--workspace-primary)] px-5 text-[var(--workspace-primary-foreground)] hover:opacity-95"
+        className="rounded-full bg-(--workspace-primary) px-5 text-(--workspace-primary-foreground) hover:opacity-95"
       >
         <Link href={data.signupPath}>
           <UserPlus2 className="mr-2 h-4 w-4" />
@@ -90,7 +90,7 @@ export function CoachingClassicTemplate({
       style={data.themeStyle}
       className="min-h-svh bg-stone-50 text-slate-900 transition-colors dark:bg-[#0a1020] dark:text-slate-100 [font-family:var(--workspace-body-font)]"
     >
-      <div className="absolute inset-x-0 top-0 -z-10 h-[34rem] bg-[radial-gradient(circle_at_top_left,var(--workspace-accent-soft-light),transparent_34%),radial-gradient(circle_at_top_right,var(--workspace-accent-soft-light),transparent_28%)] dark:bg-[radial-gradient(circle_at_top_left,var(--workspace-accent-soft-dark),transparent_34%),radial-gradient(circle_at_top_right,var(--workspace-accent-soft-dark),transparent_28%)]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-136 bg-[radial-gradient(circle_at_top_left,var(--workspace-accent-soft-light),transparent_34%),radial-gradient(circle_at_top_right,var(--workspace-accent-soft-light),transparent_28%)] dark:bg-[radial-gradient(circle_at_top_left,var(--workspace-accent-soft-dark),transparent_34%),radial-gradient(circle_at_top_right,var(--workspace-accent-soft-dark),transparent_28%)]" />
 
       <header className="sticky top-0 z-20 border-b border-black/5 bg-stone-50/88 backdrop-blur-xl dark:border-white/10 dark:bg-[#0a1020]/88">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-4 md:px-10">
@@ -114,7 +114,7 @@ export function CoachingClassicTemplate({
 
       <section className="mx-auto grid max-w-7xl gap-14 px-6 py-16 md:px-10 lg:grid-cols-[1.06fr_0.94fr] lg:items-center lg:py-24">
         <div className="space-y-8">
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-[var(--workspace-accent-border-light)] bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-[var(--workspace-primary)] shadow-sm dark:border-white/12 dark:bg-white/6">
+          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-(--workspace-accent-border-light) bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-(--workspace-primary) shadow-sm dark:border-white/12 dark:bg-white/6">
             <Sparkles className="h-3.5 w-3.5" />
             {data.page.hero.eyebrow}
           </div>
@@ -132,7 +132,7 @@ export function CoachingClassicTemplate({
             <Button
               asChild
               size="lg"
-              className="rounded-full bg-[var(--workspace-primary)] px-6 text-[var(--workspace-primary-foreground)] hover:opacity-95"
+              className="rounded-full bg-(--workspace-primary) px-6 text-(--workspace-primary-foreground) hover:opacity-95"
             >
               <Link href={data.page.hero.primaryAction.href}>
                 {data.page.hero.primaryAction.label}
@@ -142,7 +142,7 @@ export function CoachingClassicTemplate({
               asChild
               size="lg"
               variant="outline"
-              className="rounded-full border-[var(--workspace-accent-border-light)] bg-transparent px-6 text-slate-800 hover:bg-white/70 dark:border-white/12 dark:text-slate-100 dark:hover:bg-white/10"
+              className="rounded-full border-(--workspace-accent-border-light) bg-transparent px-6 text-slate-800 hover:bg-white/70 dark:border-white/12 dark:text-slate-100 dark:hover:bg-white/10"
             >
               <Link href={data.page.hero.secondaryAction.href}>
                 {data.page.hero.secondaryAction.label}
@@ -152,21 +152,21 @@ export function CoachingClassicTemplate({
         </div>
 
         <div className="relative">
-          <div className="absolute -left-5 top-10 h-24 w-24 rounded-full bg-[var(--workspace-accent-soft-light)] blur-2xl dark:bg-[var(--workspace-accent-soft-dark)]" />
-          <div className="absolute bottom-4 right-0 h-28 w-28 rounded-full bg-[var(--workspace-accent-soft-light)] blur-2xl dark:bg-[var(--workspace-accent-soft-dark)]" />
+          <div className="absolute -left-5 top-10 h-24 w-24 rounded-full bg-(--workspace-accent-soft-light) blur-2xl dark:bg-(--workspace-accent-soft-dark)" />
+          <div className="absolute bottom-4 right-0 h-28 w-28 rounded-full bg-(--workspace-accent-soft-light) blur-2xl dark:bg-(--workspace-accent-soft-dark)" />
 
-          <Card className="relative overflow-hidden border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
+          <Card className="relative overflow-hidden border border-(--workspace-accent-border-light) bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
             <CardContent className="space-y-8 p-8">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-[var(--workspace-primary)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-(--workspace-primary)">
                     Popular tracks
                   </p>
                   <h2 className="text-3xl font-semibold tracking-tight text-slate-950 dark:text-white [font-family:var(--workspace-heading-font)]">
                     Level-based language programs built for real fluency.
                   </h2>
                 </div>
-                <div className="rounded-2xl bg-[var(--workspace-accent-soft-light)] p-3 text-[var(--workspace-primary)] dark:bg-white/10">
+                <div className="rounded-2xl bg-(--workspace-accent-soft-light) p-3 text-(--workspace-primary) dark:bg-white/10">
                   <Languages className="h-5 w-5" />
                 </div>
               </div>
@@ -175,7 +175,7 @@ export function CoachingClassicTemplate({
                 {data.page.courses.map((course) => (
                   <div
                     key={course.title}
-                    className="rounded-3xl border border-[var(--workspace-accent-border-light)] bg-stone-50/90 p-4 dark:border-white/10 dark:bg-white/5"
+                    className="rounded-3xl border border-(--workspace-accent-border-light) bg-stone-50/90 p-4 dark:border-white/10 dark:bg-white/5"
                   >
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -198,12 +198,9 @@ export function CoachingClassicTemplate({
         </div>
       </section>
 
-      <section
-        id="why-us"
-        className="mx-auto max-w-7xl px-6 py-6 md:px-10"
-      >
+      <section id="why-us" className="mx-auto max-w-7xl px-6 py-6 md:px-10">
         <div className="mb-8 max-w-2xl space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--workspace-primary)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-(--workspace-primary)">
             Why learners choose us
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl dark:text-white [font-family:var(--workspace-heading-font)]">
@@ -215,10 +212,10 @@ export function CoachingClassicTemplate({
           {data.page.features.map((feature) => (
             <Card
               key={feature.title}
-              className="border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-sm dark:border-white/10 dark:bg-white/6"
+              className="border border-(--workspace-accent-border-light) bg-white/92 shadow-sm dark:border-white/10 dark:bg-white/6"
             >
               <CardContent className="space-y-4 p-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--workspace-accent-soft-light)] text-[var(--workspace-primary)] dark:bg-white/10">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-(--workspace-accent-soft-light) text-(--workspace-primary) dark:bg-white/10">
                   <Check className="h-5 w-5" />
                 </div>
                 <div className="space-y-2">
@@ -235,13 +232,10 @@ export function CoachingClassicTemplate({
         </div>
       </section>
 
-      <section
-        id="courses"
-        className="mx-auto max-w-7xl px-6 py-18 md:px-10"
-      >
+      <section id="courses" className="mx-auto max-w-7xl px-6 py-18 md:px-10">
         <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--workspace-primary)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-(--workspace-primary)">
               Courses
             </p>
             <h2 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl dark:text-white [font-family:var(--workspace-heading-font)]">
@@ -249,7 +243,8 @@ export function CoachingClassicTemplate({
             </h2>
           </div>
           <p className="max-w-xl text-sm leading-7 text-slate-600 dark:text-slate-300">
-            Beginner, intermediate, conversation-focused, or advanced communication tracks for learners who want consistent progress.
+            Beginner, intermediate, conversation-focused, or advanced
+            communication tracks for learners who want consistent progress.
           </p>
         </div>
 
@@ -257,11 +252,11 @@ export function CoachingClassicTemplate({
           {data.page.courses.map((course) => (
             <Card
               key={course.title}
-              className="border border-[var(--workspace-accent-border-light)] bg-white/94 shadow-sm dark:border-white/10 dark:bg-white/6"
+              className="border border-(--workspace-accent-border-light) bg-white/94 shadow-sm dark:border-white/10 dark:bg-white/6"
             >
               <CardContent className="space-y-5 p-6">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="rounded-full bg-[var(--workspace-accent-soft-light)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[var(--workspace-primary)] dark:bg-white/10">
+                  <span className="rounded-full bg-(--workspace-accent-soft-light) px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-(--workspace-primary) dark:bg-white/10">
                     {course.language}
                   </span>
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
@@ -287,12 +282,9 @@ export function CoachingClassicTemplate({
         </div>
       </section>
 
-      <section
-        id="reviews"
-        className="mx-auto max-w-7xl px-6 py-18 md:px-10"
-      >
+      <section id="reviews" className="mx-auto max-w-7xl px-6 py-18 md:px-10">
         <div className="mb-8 max-w-2xl space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--workspace-primary)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-(--workspace-primary)">
             Testimonials
           </p>
           <h2 className="text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl dark:text-white [font-family:var(--workspace-heading-font)]">
@@ -304,7 +296,7 @@ export function CoachingClassicTemplate({
           {data.page.testimonials.map((item) => (
             <Card
               key={`${item.name}-${item.role}`}
-              className="border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-sm dark:border-white/10 dark:bg-white/6"
+              className="border border-(--workspace-accent-border-light) bg-white/92 shadow-sm dark:border-white/10 dark:bg-white/6"
             >
               <CardContent className="space-y-5 p-6">
                 <p className="text-base leading-8 text-slate-700 dark:text-slate-200">
@@ -325,16 +317,16 @@ export function CoachingClassicTemplate({
       </section>
 
       <section className="mx-auto max-w-7xl px-6 pb-18 md:px-10">
-        <div className="overflow-hidden rounded-[2rem] border border-[var(--workspace-accent-border-light)] bg-[linear-gradient(135deg,var(--workspace-primary),var(--workspace-accent))] text-[var(--workspace-primary-foreground)] shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:border-white/10 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
+        <div className="overflow-hidden rounded-[2rem] border border-(--workspace-accent-border-light) bg-[linear-gradient(135deg,var(--workspace-primary),var(--workspace-accent))] text-(--workspace-primary-foreground) shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:border-white/10 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]">
           <div className="grid gap-8 px-8 py-10 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
             <div className="max-w-2xl space-y-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--workspace-primary-foreground)]/80">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-(--workspace-primary-foreground)/80">
                 {data.page.ctaStrip.eyebrow}
               </p>
               <h2 className="text-3xl font-semibold tracking-tight md:text-4xl [font-family:var(--workspace-heading-font)]">
                 {data.page.ctaStrip.headline}
               </h2>
-              <p className="text-base leading-8 text-[var(--workspace-primary-foreground)]/85">
+              <p className="text-base leading-8 text-(--workspace-primary-foreground)/85">
                 {data.page.ctaStrip.subheadline}
               </p>
             </div>
@@ -384,13 +376,22 @@ export function CoachingClassicTemplate({
               Quick links
             </p>
             <div className="flex flex-col gap-2 text-slate-600 dark:text-slate-300">
-              <Link href={data.homePath} className="transition-colors hover:text-slate-950 dark:hover:text-white">
+              <Link
+                href={data.homePath}
+                className="transition-colors hover:text-slate-950 dark:hover:text-white"
+              >
                 Home
               </Link>
-              <Link href={data.loginPath} className="transition-colors hover:text-slate-950 dark:hover:text-white">
+              <Link
+                href={data.loginPath}
+                className="transition-colors hover:text-slate-950 dark:hover:text-white"
+              >
                 Sign in
               </Link>
-              <Link href={data.signupPath} className="transition-colors hover:text-slate-950 dark:hover:text-white">
+              <Link
+                href={data.signupPath}
+                className="transition-colors hover:text-slate-950 dark:hover:text-white"
+              >
                 Learner signup
               </Link>
             </div>

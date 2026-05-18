@@ -1,5 +1,5 @@
 import { WorkspaceCustomerCreatePanel } from '@/modules/workspace/components/workspace-customer-create-panel';
-import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
 export default async function WorkspaceCustomerCreatePage() {
   const { basePath, workspaceId } = await getWorkspaceAdminSurfaceContext();

@@ -1,5 +1,6 @@
 import { WorkspaceFeaturesPanel } from '@/modules/workspace/components/workspace-features-panel';
-import { getWorkspaceFeaturesPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceFeaturesPageData } from '@/modules/entitlements/server/workspace-features-page-data';
+import { hasAnyPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceSettingsFeaturesPage() {
   const {
@@ -27,10 +28,10 @@ export default async function WorkspaceSettingsFeaturesPage() {
       featuresByCategory={featuresByCategory}
       limitsByCategory={limitsByCategory}
       overridesSummary={overridesSummary}
-      canUpgrade={
-        actor.permissions.includes('subscription.create') ||
-        actor.permissions.includes('payment.create')
-      }
+      canUpgrade={hasAnyPermission(actor.permissions, [
+        'subscription.create',
+        'payment.create',
+      ])}
     />
   );
 }

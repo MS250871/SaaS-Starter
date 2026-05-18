@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { getRequestContext } from '@/lib/context/request-context';
+import { resolvePublicRedirectTarget } from '@/lib/http/resolve-public-redirect';
 import {
   clearAuthCookie,
   clearVerificationSession,
@@ -25,17 +26,21 @@ async function redirectForExpiredVerification(): Promise<never> {
   if (!auth) {
     if (requestContext.workspace?.workspaceId) {
       redirect(
-        `${buildWorkspaceLoginPath({
-          workspaceId: requestContext.workspace.workspaceId,
-          intent:
-            requestContext.workspace.strategy === 'free_path' ? 'free' : 'paid',
-          strategy: requestContext.workspace.strategy,
-          slug: requestContext.workspace.slug,
-        })}&expired=verification`,
+        await resolvePublicRedirectTarget(
+          `${buildWorkspaceLoginPath({
+            workspaceId: requestContext.workspace.workspaceId,
+            intent:
+              requestContext.workspace.strategy === 'free_path'
+                ? 'free'
+                : 'paid',
+            strategy: requestContext.workspace.strategy,
+            slug: requestContext.workspace.slug,
+          })}&expired=verification`,
+        ),
       );
     }
 
-    redirect('/login?expired=verification');
+    redirect(await resolvePublicRedirectTarget('/login?expired=verification'));
   }
 
   const params = new URLSearchParams();
@@ -63,32 +68,36 @@ async function redirectForExpiredVerification(): Promise<never> {
 
     if (auth.entry === 'workspace' && auth.workspaceId) {
       redirect(
-        `${buildWorkspaceSignupPath({
-          workspaceId: auth.workspaceId,
-          intent: auth.intent,
-          strategy: requestContext.workspace?.strategy,
-          slug: requestContext.workspace?.slug,
-        })}&${params.toString()}`,
+        await resolvePublicRedirectTarget(
+          `${buildWorkspaceSignupPath({
+            workspaceId: auth.workspaceId,
+            intent: auth.intent,
+            strategy: requestContext.workspace?.strategy,
+            slug: requestContext.workspace?.slug,
+          })}&${params.toString()}`,
+        ),
       );
     }
 
-    redirect(`/signup?${params.toString()}`);
+    redirect(await resolvePublicRedirectTarget(`/signup?${params.toString()}`));
   }
 
   await clearAuthCookie();
 
   if (auth.entry === 'workspace' && auth.workspaceId) {
     redirect(
-      `${buildWorkspaceLoginPath({
-        workspaceId: auth.workspaceId,
-        intent: auth.intent,
-        strategy: requestContext.workspace?.strategy,
-        slug: requestContext.workspace?.slug,
-      })}&${params.toString()}`,
+      await resolvePublicRedirectTarget(
+        `${buildWorkspaceLoginPath({
+          workspaceId: auth.workspaceId,
+          intent: auth.intent,
+          strategy: requestContext.workspace?.strategy,
+          slug: requestContext.workspace?.slug,
+        })}&${params.toString()}`,
+      ),
     );
   }
 
-  redirect(`/login?${params.toString()}`);
+  redirect(await resolvePublicRedirectTarget(`/login?${params.toString()}`));
 }
 
 const resendActionImpl = createNavAction(async () => {

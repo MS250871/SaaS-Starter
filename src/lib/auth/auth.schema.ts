@@ -97,17 +97,25 @@ export const sessionPayloadSchema = z.object({
 
   isActive: z.boolean(),
 
-  permissions: z.array(z.string()),
-  features: z.array(z.string()),
-  limits: z.record(z.string(), z.number()),
-
   createdAt: z.number(),
   expiresAt: z.number(),
 
   version: z.number().optional(),
 });
 
-export type SessionPayload = z.infer<typeof sessionPayloadSchema>;
+export const sessionAccessSchema = z.object({
+  permissions: z.array(z.string()),
+  features: z.array(z.string()),
+  limits: z.record(z.string(), z.number()),
+});
+
+export const resolvedSessionPayloadSchema = sessionPayloadSchema.extend(
+  sessionAccessSchema.shape,
+);
+
+export type SessionClaims = z.infer<typeof sessionPayloadSchema>;
+export type SessionAccess = z.infer<typeof sessionAccessSchema>;
+export type SessionPayload = z.infer<typeof resolvedSessionPayloadSchema>;
 
 /* =========================================================
    HOST TRANSFER TOKEN

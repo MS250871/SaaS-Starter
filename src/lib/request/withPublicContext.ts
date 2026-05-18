@@ -13,6 +13,8 @@ export async function withPublicContext<T>(fn: () => Promise<T>) {
       runWithActor(
         buildActorContext({
           permissions: [],
+          features: [],
+          limits: {},
         }),
         () => withUnitOfWork(fn),
       ),

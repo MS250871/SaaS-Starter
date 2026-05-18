@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { changeWorkspacePlanAction } from '@/modules/billing/actions/change-workspace-plan.action';
+import { navigateClientRedirect } from '@/lib/navigation/client-redirect';
 
 type ActiveSubscription = {
   id: string;
@@ -170,6 +171,20 @@ export function WorkspaceBillingPanel({
       : billingConfig?.planCode ?? 'No paid plan');
   const currentPlanKey = activeSubscription?.price.plan?.key ?? billingConfig?.planCode ?? 'trial';
 
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        router.refresh();
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [router]);
+
   const handleMoveToTrial = () => {
     setPlanMessage(null);
     setPlanError(null);
@@ -186,7 +201,7 @@ export function WorkspaceBillingPanel({
       }
 
       setPlanMessage(response.data.successMessage);
-      router.push(response.data.redirectTo);
+      navigateClientRedirect(router, response.data.redirectTo);
     });
   };
 
@@ -276,6 +291,14 @@ export function WorkspaceBillingPanel({
               </div>
             )}
           </div>
+          {canManageBilling && (
+            <p className="text-xs text-muted-foreground">
+              Same-cycle upgrades on card mandates keep the current renewal date
+              and bill only the prorated difference. UPI or eMandate upgrades
+              restart the subscription today and refund the unused portion of the
+              current cycle.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {planMessage && (

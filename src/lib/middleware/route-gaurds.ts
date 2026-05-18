@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { SessionPayload } from '@/lib/auth/auth.schema';
-import { isProtectedRoute, isPublicRoute } from './proxy-utils';
+import type { SessionClaims } from '@/lib/auth/auth.schema';
+import {
+  buildWorkspaceRedirectUrl,
+  getHostname,
+  isProtectedRoute,
+  isPublicRoute,
+  normalizeHostname,
+} from './proxy-utils';
 import {
   buildWorkspaceCanonicalPath,
   buildWorkspaceLoginPath,
@@ -13,12 +19,21 @@ const VERIFY_PHONE_ROUTE = '/verify-phone';
 const POST_LOGIN_ROUTE = '/post-login';
 const CREATE_WORKSPACE_ROUTE = '/create-workspace';
 const PAYMENT_ROUTE = '/payment';
+const FORBIDDEN_ROUTE = '/forbidden';
 
 type WorkspaceContext = {
   workspaceId: string;
   slug?: string;
   strategy?: string;
 };
+
+function isCustomerSurface(pathname: string) {
+  return pathname === '/customer' || pathname.startsWith('/customer/');
+}
+
+function isWorkspaceAdminSurface(pathname: string) {
+  return pathname === '/app' || pathname.startsWith('/app/');
+}
 
 function isInviteAuthRoute(req: NextRequest, pathname: string) {
   if (!isPublicRoute(pathname)) {
@@ -30,7 +45,7 @@ function isInviteAuthRoute(req: NextRequest, pathname: string) {
 
 export function handleRouteGuards(
   req: NextRequest,
-  session: SessionPayload | null,
+  session: SessionClaims | null,
   pathnameOverride?: string,
   workspace?: WorkspaceContext | null,
 ): NextResponse | null {
@@ -45,10 +60,17 @@ export function handleRouteGuards(
       slug: workspace?.slug,
       path,
     });
+  const currentHost = normalizeHostname(getHostname(req));
+  const buildSameHostWorkspaceUrl = (path: string) =>
+    buildWorkspaceRedirectUrl(req, currentHost, buildWorkspacePath(path));
+  const buildForbiddenResponse = () =>
+    NextResponse.rewrite(buildSameHostWorkspaceUrl(FORBIDDEN_ROUTE), {
+      status: 403,
+    });
 
   const buildWorkspaceLoginUrl = () => {
     if (!workspace?.workspaceId) {
-      return new URL('/login', req.url);
+      return buildWorkspaceRedirectUrl(req, currentHost, '/login');
     }
 
     const returnPath = workspace.slug
@@ -67,8 +89,38 @@ export function handleRouteGuards(
       slug: workspace.slug,
     });
 
-    return new URL(loginPath, req.url);
+    return buildWorkspaceRedirectUrl(req, currentHost, loginPath);
   };
+
+  if (
+    hasSession &&
+    workspace?.workspaceId &&
+    (isWorkspaceAdminSurface(pathname) || isCustomerSurface(pathname))
+  ) {
+    const sameWorkspaceSession = session.workspaceId === workspace.workspaceId;
+    const isCustomerSession = sameWorkspaceSession && !!session.customerId;
+    const isWorkspaceMemberSession = sameWorkspaceSession && !!session.membershipId;
+
+    if (!sameWorkspaceSession) {
+      return buildForbiddenResponse();
+    }
+
+    if (isCustomerSurface(pathname) && !isCustomerSession) {
+      if (isWorkspaceMemberSession) {
+        return NextResponse.redirect(buildSameHostWorkspaceUrl('/app'));
+      }
+
+      return buildForbiddenResponse();
+    }
+
+    if (isWorkspaceAdminSurface(pathname) && !isWorkspaceMemberSession) {
+      if (isCustomerSession) {
+        return NextResponse.redirect(buildSameHostWorkspaceUrl('/customer'));
+      }
+
+      return buildForbiddenResponse();
+    }
+  }
 
   if (hasSession && isPublicRoute(pathname) && !isInviteAuthRoute(req, pathname)) {
     return NextResponse.redirect(

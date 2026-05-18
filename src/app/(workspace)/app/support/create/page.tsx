@@ -1,5 +1,6 @@
 import { WorkspaceSupportCreatePanel } from '@/modules/workspace/components/workspace-support-create-panel';
-import { getWorkspaceSupportCreatePageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceSupportCreatePageData } from '@/modules/support/server/workspace-support-page-data';
+import { hasPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceSupportCreatePage() {
   const { actor, basePath, workspaceId } =
@@ -18,7 +19,7 @@ export default async function WorkspaceSupportCreatePage() {
   return (
     <WorkspaceSupportCreatePanel
       basePath={basePath}
-      canCreateTicket={actor.permissions.includes('supportTicket.create')}
+      canCreateTicket={hasPermission(actor.permissions, 'supportTicket.create')}
     />
   );
 }

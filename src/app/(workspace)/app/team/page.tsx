@@ -1,5 +1,6 @@
 import { WorkspaceTeamPanel } from "@/modules/workspace/components/workspace-admin-dashboard"
 import { getWorkspaceTeamPageData } from "@/modules/workspace/server/workspace-admin-page-data"
+import { hasAnyPermission, hasPermission } from "@/modules/permissions/permissions.services"
 
 export default async function WorkspaceTeamPage() {
   const { actor, members, invites, assignableRoles, workspaceId } =
@@ -20,11 +21,11 @@ export default async function WorkspaceTeamPage() {
       members={members}
       initialInvites={invites}
       assignableRoles={assignableRoles}
-      canInvite={actor.permissions.includes("workspaceInvite.create")}
-      canRemoveMembers={
-        actor.permissions.includes("membership.delete") ||
-        actor.permissions.includes("membership.deactivate")
-      }
+      canInvite={hasPermission(actor.permissions, "workspaceInvite.create")}
+      canRemoveMembers={hasAnyPermission(actor.permissions, [
+        "membership.delete",
+        "membership.deactivate",
+      ])}
       actorMembershipId={actor.membershipId}
     />
   )

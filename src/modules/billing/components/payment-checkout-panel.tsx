@@ -1,9 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Script from 'next/script';
 import { useRouter } from 'next/navigation';
-import { CreditCardIcon, ArrowRightIcon, CheckCircle2Icon } from 'lucide-react';
+import {
+  CreditCardIcon,
+  ArrowRightIcon,
+  CheckCircle2Icon,
+  Loader2Icon,
+} from 'lucide-react';
 
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -17,8 +22,10 @@ import {
 } from '@/components/ui/card';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { createBillingCheckoutAction } from '@/modules/billing/actions/create-billing-checkout.action';
+import { recordBillingPaymentFailureAction } from '@/modules/billing/actions/record-billing-payment-failure.action';
 import { verifyBillingPaymentAction } from '@/modules/billing/actions/verify-billing-payment.action';
 import type { BillingCheckoutSource } from '@/modules/billing/schema';
+import { navigateClientRedirect } from '@/lib/navigation/client-redirect';
 
 type ReadySubscriptionData = {
   state: 'ready';
@@ -97,6 +104,11 @@ type PaymentCheckoutPanelProps =
   | ReadyOneTimeData
   | CompletedPendingWorkspaceData;
 
+type PaymentCheckoutPanelSurfaceProps = {
+  embedded?: boolean;
+  workspaceSurface?: boolean;
+};
+
 type RazorpaySuccessResponse = {
   razorpay_payment_id: string;
   razorpay_order_id?: string;
@@ -104,9 +116,24 @@ type RazorpaySuccessResponse = {
   razorpay_signature: string;
 };
 
+type RazorpayFailureResponse = {
+  error?: {
+    code?: string;
+    description?: string;
+    source?: string;
+    step?: string;
+    reason?: string;
+    metadata?: {
+      payment_id?: string;
+      order_id?: string;
+      subscription_id?: string;
+    };
+  };
+};
+
 type RazorpayInstance = {
   open: () => void;
-  on?: (event: string, callback: (response: { error?: { description?: string } }) => void) => void;
+  on?: (event: string, callback: (response: RazorpayFailureResponse) => void) => void;
 };
 
 declare global {
@@ -127,12 +154,21 @@ function intervalBadge(interval?: 'MONTHLY' | 'YEARLY' | null) {
   return 'One-time';
 }
 
-export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
+export function PaymentCheckoutPanel(
+  props: PaymentCheckoutPanelProps & PaymentCheckoutPanelSurfaceProps,
+) {
   const router = useRouter();
-  const [scriptReady, setScriptReady] = useState(false);
+  const [scriptReady, setScriptReady] = useState(
+    () => typeof window !== 'undefined' && !!window.Razorpay,
+  );
   const [busyMessage, setBusyMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [hadCheckoutFailure, setHadCheckoutFailure] = useState(false);
+  const [pendingFailureMessage, setPendingFailureMessage] = useState<string | null>(null);
+  const checkoutFailureMessageRef = useRef<string | null>(null);
+  const hadCheckoutFailureRef = useRef(false);
+  const isRecordingFailureRef = useRef(false);
   const [selectedPriceId, setSelectedPriceId] = useState(
     props.state === 'ready' && props.mode === 'subscription'
       ? props.selectedPriceId
@@ -153,24 +189,51 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
     );
   }, [props, selectedPriceId]);
 
+  const checkoutButtonLabel = hadCheckoutFailure
+    ? 'Retry payment'
+    : 'Continue to Razorpay';
+  const cardClassName = props.workspaceSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/92 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur dark:border-white/10 dark:bg-white/6 dark:shadow-[0_24px_60px_rgba(0,0,0,0.35)]'
+    : 'border-border/70 bg-background/90';
+  const secondaryCardClassName = props.workspaceSurface
+    ? 'border border-[var(--workspace-accent-border-light)] bg-white/88 shadow-[0_18px_50px_rgba(15,23,42,0.06)] backdrop-blur dark:border-white/10 dark:bg-white/5 dark:shadow-[0_18px_50px_rgba(0,0,0,0.28)]'
+    : 'border-border/70 bg-background/90';
+  const primaryButtonClassName = props.workspaceSurface
+    ? 'w-full sm:w-auto bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full sm:w-auto';
+  const spinnerClassName = props.workspaceSurface
+    ? 'w-full sm:w-auto bg-[var(--workspace-primary)] text-[var(--workspace-primary-foreground)] hover:opacity-95'
+    : 'w-full sm:w-auto';
+  const summaryBlockClassName = props.workspaceSurface
+    ? 'rounded-xl border border-[var(--workspace-accent-border-light)] bg-[var(--workspace-accent-soft-light)]/70 p-4 dark:border-white/10 dark:bg-white/6'
+    : 'rounded-xl border border-accent/40 bg-background p-4';
+
   if (props.state === 'completed_pending_workspace') {
+    const completedCard = (
+      <Card className={`w-full max-w-2xl ${cardClassName}`}>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <CheckCircle2Icon className="size-5 text-accent" />
+            <CardTitle>{props.title}</CardTitle>
+          </div>
+          <CardDescription>{props.description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => router.push(props.ctaHref)}>
+            {props.ctaLabel}
+            <ArrowRightIcon className="ml-2 size-4" />
+          </Button>
+        </CardContent>
+      </Card>
+    );
+
+    if (props.embedded) {
+      return <div className="w-full">{completedCard}</div>;
+    }
+
     return (
       <section className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-        <Card className="w-full max-w-2xl border-border/70 bg-background/90">
-          <CardHeader>
-            <div className="flex items-center gap-3">
-              <CheckCircle2Icon className="size-5 text-accent" />
-              <CardTitle>{props.title}</CardTitle>
-            </div>
-            <CardDescription>{props.description}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => router.push(props.ctaHref)}>
-              {props.ctaLabel}
-              <ArrowRightIcon className="ml-2 size-4" />
-            </Button>
-          </CardContent>
-        </Card>
+        {completedCard}
       </section>
     );
   }
@@ -178,6 +241,11 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
   const startCheckout = async () => {
     setError(null);
     setMessage(null);
+    setHadCheckoutFailure(false);
+    setPendingFailureMessage(null);
+    checkoutFailureMessageRef.current = null;
+    hadCheckoutFailureRef.current = false;
+    isRecordingFailureRef.current = false;
 
     if (!scriptReady || !window.Razorpay) {
       setError('Razorpay checkout is still loading. Please try again in a moment.');
@@ -218,25 +286,48 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
 
     const checkout = checkoutResponse.data;
 
+    if (checkout.kind === 'direct_upgrade') {
+      setBusyMessage('Applying prorated upgrade...');
+      setMessage(checkout.successMessage ?? 'Upgrade applied successfully.');
+      navigateClientRedirect(
+        router,
+        checkout.redirectTo ?? '/app/billing',
+      );
+      return;
+    }
+
+    const checkoutPayload = checkout.checkout!;
+
     const razorpay = new window.Razorpay({
-      key: checkout.checkout.key,
-      amount: checkout.checkout.amount,
-      currency: checkout.checkout.currency,
-      name: checkout.checkout.name,
-      description: checkout.checkout.description,
-      order_id: checkout.checkout.orderId,
-      subscription_id: checkout.checkout.subscriptionId,
+      key: checkoutPayload.key,
+      amount: checkoutPayload.amount,
+      currency: checkoutPayload.currency,
+      name: checkoutPayload.name,
+      description: checkoutPayload.description,
+      order_id: checkoutPayload.orderId,
+      subscription_id: checkoutPayload.subscriptionId,
       prefill: {
-        name: checkout.checkout.prefill.name,
-        email: checkout.checkout.prefill.email,
-        contact: checkout.checkout.prefill.contact,
+        name: checkoutPayload.prefill.name,
+        email: checkoutPayload.prefill.email,
+        contact: checkoutPayload.prefill.contact,
       },
-      notes: checkout.checkout.notes,
+      notes: checkoutPayload.notes,
+      retry: {
+        enabled: false,
+      },
       theme: {
         color: '#2563eb',
       },
       modal: {
+        handleback: false,
         ondismiss: () => {
+          if (hadCheckoutFailureRef.current && isRecordingFailureRef.current) {
+            setHadCheckoutFailure(true);
+            setPendingFailureMessage(checkoutFailureMessageRef.current);
+            setBusyMessage('Updating failed payment status...');
+            return;
+          }
+
           setBusyMessage(null);
         },
       },
@@ -260,16 +351,48 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
         }
 
         setMessage(verifyResponse.data.successMessage);
-        router.push(verifyResponse.data.redirectTo);
+        navigateClientRedirect(router, verifyResponse.data.redirectTo);
       },
     });
 
-    razorpay.on?.('payment.failed', (response) => {
-      setBusyMessage(null);
-      setError(
+    razorpay.on?.('payment.failed', async (response) => {
+      const description =
         response.error?.description ??
-          'Payment failed. Please try again or use a different payment method.',
-      );
+        'Payment failed. Please try again or use a different payment method.';
+
+      checkoutFailureMessageRef.current = description;
+      hadCheckoutFailureRef.current = true;
+      isRecordingFailureRef.current = true;
+
+      setMessage(null);
+      setHadCheckoutFailure(true);
+      setError(null);
+      setPendingFailureMessage(description);
+      setBusyMessage('Updating failed payment status...');
+
+      const failureResponse = await recordBillingPaymentFailureAction({
+        paymentId: checkout.paymentId,
+        mode: checkout.mode,
+        razorpayPaymentId: response.error?.metadata?.payment_id,
+        razorpayOrderId:
+          response.error?.metadata?.order_id ?? checkoutPayload.orderId,
+        razorpaySubscriptionId:
+          response.error?.metadata?.subscription_id ?? checkoutPayload.subscriptionId,
+        errorCode: response.error?.code,
+        errorDescription: description,
+        errorSource: response.error?.source,
+        errorStep: response.error?.step,
+        errorReason: response.error?.reason,
+      });
+
+      if (!failureResponse.success) {
+        console.error('Failed to record Razorpay payment failure', failureResponse.error);
+      }
+
+      isRecordingFailureRef.current = false;
+      setBusyMessage(null);
+      setPendingFailureMessage(null);
+      setError(description);
     });
 
     setBusyMessage(null);
@@ -277,15 +400,21 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
   };
 
   return (
-    <section className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+    <section
+      className={
+        props.embedded
+          ? 'w-full'
+          : 'flex min-h-svh w-full items-center justify-center p-6 md:p-10'
+      }
+    >
       <Script
         src="https://checkout.razorpay.com/v1/checkout.js"
         strategy="afterInteractive"
-        onLoad={() => setScriptReady(true)}
+        onReady={() => setScriptReady(true)}
       />
 
       <div className="grid w-full max-w-5xl gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card className="border-border/70 bg-background/90">
+        <Card className={cardClassName}>
           <CardHeader>
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="secondary">
@@ -297,6 +426,19 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
             <CardDescription className="mt-2">{props.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {pendingFailureMessage && (
+              <Alert className="border-accent/40 bg-accent/10 text-accent-foreground">
+                <AlertTitle className="flex items-center gap-2">
+                  <Loader2Icon className="size-4 animate-spin" />
+                  Payment failed
+                </AlertTitle>
+                <AlertDescription>
+                  We are updating your failed payment attempt so you can retry safely in a
+                  moment.
+                </AlertDescription>
+              </Alert>
+            )}
+
             {error && (
               <Alert variant="destructive">
                 <AlertTitle>Payment could not continue</AlertTitle>
@@ -313,6 +455,18 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
 
             {props.mode === 'subscription' ? (
               <div className="grid gap-3">
+                {props.upgrade && (
+                  <Alert>
+                    <AlertTitle>Upgrade billing policy</AlertTitle>
+                    <AlertDescription>
+                      Card mandates keep the current renewal date and charge only
+                      the prorated difference. UPI and eMandate upgrades restart
+                      the subscription today and refund the unused portion of the
+                      current cycle.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 {props.options.map((option) => {
                   const selected = option.priceId === selectedPriceId;
 
@@ -324,8 +478,12 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
                       className={[
                         'rounded-xl border p-4 text-left transition-colors',
                         selected
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border/70 bg-background hover:border-accent/60',
+                          ? props.workspaceSurface
+                            ? 'border-[var(--workspace-primary)] bg-[var(--workspace-accent-soft-light)]/75 dark:bg-white/8'
+                            : 'border-primary bg-primary/5'
+                          : props.workspaceSurface
+                            ? 'border-[var(--workspace-accent-border-light)] bg-white/80 hover:border-[var(--workspace-primary)]/45 dark:border-white/10 dark:bg-white/4'
+                            : 'border-border/70 bg-background hover:border-accent/60',
                       ].join(' ')}
                     >
                       <div className="flex items-center justify-between gap-3">
@@ -349,7 +507,7 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
                 })}
               </div>
             ) : (
-              <div className="rounded-xl border border-border/70 bg-background p-4">
+              <div className={summaryBlockClassName}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium">{props.product.name}</p>
@@ -368,21 +526,21 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
             )}
 
             {busyMessage ? (
-              <SpinnerButton message={busyMessage} className="w-full sm:w-auto" />
+              <SpinnerButton message={busyMessage} className={spinnerClassName} />
             ) : (
               <Button
                 onClick={startCheckout}
                 disabled={!scriptReady}
-                className="w-full sm:w-auto"
+                className={primaryButtonClassName}
               >
                 <CreditCardIcon className="mr-2 size-4" />
-                Continue to Razorpay
+                {checkoutButtonLabel}
               </Button>
             )}
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 bg-background/90">
+        <Card className={secondaryCardClassName}>
           <CardHeader>
             <CardTitle>Checkout Summary</CardTitle>
             <CardDescription>
@@ -390,7 +548,7 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="rounded-xl border border-accent/40 bg-background p-4">
+            <div className={summaryBlockClassName}>
               <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
                 Customer
               </p>
@@ -405,7 +563,7 @@ export function PaymentCheckoutPanel(props: PaymentCheckoutPanelProps) {
               </p>
             </div>
 
-            <div className="rounded-xl border border-accent/40 bg-background p-4">
+            <div className={summaryBlockClassName}>
               <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
                 Charge
               </p>

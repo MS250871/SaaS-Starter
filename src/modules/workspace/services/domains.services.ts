@@ -1,13 +1,11 @@
 import {
   workspaceDomainCrud,
   workspaceDomainQueries,
-  workspaceSubscriptionQueries,
 } from '@/modules/workspace/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import {
   type Prisma,
-  type SubscriptionStatus,
   WorkspaceDomain,
   WorkspaceDomainStatus,
   WorkspaceDomainType,
@@ -15,6 +13,7 @@ import {
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
+import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 
 export type WorkspaceDomainDetailed = Prisma.WorkspaceDomainGetPayload<{
   select: {
@@ -169,34 +168,7 @@ export async function getWorkspaceDomainEntitlements(workspaceId: string) {
   }
 
   const [activeSubscription, customDomainSetupCount] = await Promise.all([
-    workspaceSubscriptionQueries.findFirst({
-      where: {
-        workspaceId,
-        status: {
-          in: ['ACTIVE', 'TRIALING', 'PAST_DUE'] satisfies SubscriptionStatus[],
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      select: {
-        price: {
-          select: {
-            product: {
-              select: {
-                plan: {
-                  select: {
-                    id: true,
-                    key: true,
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    }),
+    getWorkspaceActiveSubscriptionPlanSummary(workspaceId),
     workspaceDomainQueries.count({
       where: {
         workspaceId,
@@ -206,18 +178,7 @@ export async function getWorkspaceDomainEntitlements(workspaceId: string) {
     }),
   ]);
 
-  const activePlan =
-    (activeSubscription as {
-      price?: {
-        product?: {
-          plan?: {
-            id: string;
-            key: string;
-            name: string;
-          } | null;
-        } | null;
-      } | null;
-    } | null)?.price?.product?.plan ?? null;
+  const activePlan = activeSubscription?.price?.product?.plan ?? null;
   const entitlements = await resolveEntitlements({
     workspaceId,
     planId: activePlan?.id,

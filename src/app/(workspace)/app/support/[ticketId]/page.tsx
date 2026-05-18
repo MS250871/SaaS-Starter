@@ -1,5 +1,6 @@
 import { WorkspaceSupportThreadPanel } from '@/modules/workspace/components/workspace-support-thread-panel';
-import { getWorkspaceSupportThreadPageData } from '@/modules/workspace/server/workspace-admin-page-data';
+import { getWorkspaceSupportThreadPageData } from '@/modules/support/server/workspace-support-page-data';
+import { hasAnyPermission } from '@/modules/permissions/permissions.services';
 
 export default async function WorkspaceSupportThreadPage({
   params,
@@ -30,23 +31,23 @@ export default async function WorkspaceSupportThreadPage({
       backHref={backHref}
       selectedTicket={selectedTicket}
       assigneeOptions={assigneeOptions}
-      canUpdateTicket={
-        actor.permissions.includes('supportTicket.update') ||
-        actor.permissions.includes('supportTicket.close') ||
-        actor.permissions.includes('supportTicket.reopen')
-      }
-      canAssignTicket={
-        actor.permissions.includes('supportTicket.assign') ||
-        actor.permissions.includes('supportTicket.update')
-      }
-      canReplyTicket={
-        actor.permissions.includes('supportTicket.reply') ||
-        actor.permissions.includes('supportTicket.update')
-      }
-      canAddInternalNote={
-        actor.permissions.includes('supportTicket.internalNote') ||
-        actor.permissions.includes('supportTicket.update')
-      }
+      canUpdateTicket={hasAnyPermission(actor.permissions, [
+        'supportTicket.update',
+        'supportTicket.close',
+        'supportTicket.reopen',
+      ])}
+      canAssignTicket={hasAnyPermission(actor.permissions, [
+        'supportTicket.assign',
+        'supportTicket.update',
+      ])}
+      canReplyTicket={hasAnyPermission(actor.permissions, [
+        'supportTicket.reply',
+        'supportTicket.update',
+      ])}
+      canAddInternalNote={hasAnyPermission(actor.permissions, [
+        'supportTicket.internalNote',
+        'supportTicket.update',
+      ])}
     />
   );
 }

@@ -208,6 +208,7 @@ export async function findSessionByFingerprint(deviceFingerprint: string) {
 export async function findActiveSessionByContext(params: {
   identityId: string;
   workspaceId?: string;
+  customerId?: string;
   membershipId?: string;
   deviceFingerprint?: string;
 }) {
@@ -219,6 +220,7 @@ export async function findActiveSessionByContext(params: {
     where: {
       identityId: params.identityId,
       workspaceId: params.workspaceId ?? null,
+      customerId: params.customerId ?? null,
       membershipId: params.membershipId ?? null,
       deviceFingerprint: params.deviceFingerprint ?? null,
       isActive: true,

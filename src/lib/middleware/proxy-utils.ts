@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import type { SessionPayload } from '@/lib/auth/auth.schema';
+import type { SessionClaims } from '@/lib/auth/auth.schema';
 import { reservedWorkspaceSlugs } from '@/modules/workspace/constants';
 import {
   buildWorkspaceCanonicalPath,
@@ -8,10 +8,6 @@ import {
   normalizeWorkspaceDomainStrategy,
   WORKSPACE_PUBLIC_HOME_PATH,
 } from '@/modules/workspace/routing';
-import {
-  buildHostTransferPath,
-  issueHostTransferToken,
-} from '@/modules/auth/services/host-transfer.services';
 
 const workspaceAuthRoutes = new Set([
   '/login',
@@ -156,7 +152,7 @@ export async function resolveWorkspaceCanonicalRedirect(params: {
   req: NextRequest;
   workspace: WorkspaceRoutingContext;
   normalizedPathname: string;
-  session: SessionPayload | null;
+  session: SessionClaims | null;
 }) {
   if (params.req.nextUrl.pathname === '/host-transfer' || !params.workspace.slug) {
     return null;
@@ -200,24 +196,7 @@ export async function resolveWorkspaceCanonicalRedirect(params: {
           });
     const authUrl = buildWorkspaceRedirectUrl(params.req, canonicalHost, authPath);
     authUrl.searchParams.set('reason', 'workspace-moved');
-
-    if (!params.session) {
-      return authUrl;
-    }
-
-    const token = await issueHostTransferToken({
-      session: params.session,
-      workspaceId: params.workspace.workspaceId,
-      targetHost: canonicalHost,
-      intent,
-      returnPath,
-    });
-
-    return buildWorkspaceRedirectUrl(
-      params.req,
-      host,
-      buildHostTransferPath(token),
-    );
+    return authUrl;
   }
 
   const canonicalPath = buildWorkspaceCanonicalPath({
@@ -230,22 +209,6 @@ export async function resolveWorkspaceCanonicalRedirect(params: {
 
   if (host === canonicalHost && currentPathWithSearch === canonicalPathWithSearch) {
     return null;
-  }
-
-  if (host !== canonicalHost && params.session) {
-    const token = await issueHostTransferToken({
-      session: params.session,
-      workspaceId: params.workspace.workspaceId,
-      targetHost: canonicalHost,
-      intent,
-      returnPath: canonicalPathWithSearch,
-    });
-
-    return buildWorkspaceRedirectUrl(
-      params.req,
-      host,
-      buildHostTransferPath(token),
-    );
   }
 
   return buildWorkspaceRedirectUrl(

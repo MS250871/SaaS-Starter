@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { getRequestContext } from '@/lib/context/request-context';
+import { resolvePublicRedirectTarget } from '@/lib/http/resolve-public-redirect';
 import {
   clearAuthCookie,
   clearUserSession,
@@ -26,16 +27,19 @@ const logoutActionImpl = createNavAction(async () => {
 
   if (requestContext.workspace?.workspaceId) {
     redirect(
-      buildWorkspaceLoginPath({
-        workspaceId: requestContext.workspace.workspaceId,
-        intent: requestContext.workspace.strategy === 'free_path' ? 'free' : 'paid',
-        strategy: requestContext.workspace.strategy,
-        slug: requestContext.workspace.slug,
-      }),
+      await resolvePublicRedirectTarget(
+        buildWorkspaceLoginPath({
+          workspaceId: requestContext.workspace.workspaceId,
+          intent:
+            requestContext.workspace.strategy === 'free_path' ? 'free' : 'paid',
+          strategy: requestContext.workspace.strategy,
+          slug: requestContext.workspace.slug,
+        }),
+      ),
     );
   }
 
-  redirect('/login');
+  redirect(await resolvePublicRedirectTarget('/login'));
 });
 
 export async function logoutAction() {

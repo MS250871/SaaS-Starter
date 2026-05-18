@@ -9,6 +9,7 @@ import {
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { getActor } from '@/lib/context/actor-context';
 import { getRequestContext } from '@/lib/context/request-context';
+import { resolvePublicRedirectTarget } from '@/lib/http/resolve-public-redirect';
 import {
   setAuthCookies,
   setVerificationSession,
@@ -76,7 +77,7 @@ const signupActionImpl = createNavAction(async (formData: FormData) => {
     path: '/verify-otp',
   });
 
-  redirect(`${verifyPath}?mode=${result.mode}`);
+  redirect(await resolvePublicRedirectTarget(`${verifyPath}?mode=${result.mode}`));
 });
 
 export async function signupAction(formData: FormData) {

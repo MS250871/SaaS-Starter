@@ -1,6 +1,6 @@
 'use server';
 
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { encryptToken, decryptToken } from '../security/crypto';
 import { randomUUID } from './auth-utils';
 import {
@@ -13,18 +13,27 @@ import {
   authCookiesSchema,
   verificationSessionSchema,
   sessionPayloadSchema,
+  resolvedSessionPayloadSchema,
   deviceIdSchema,
   type AuthCookies,
   type VerificationSession,
+  type SessionClaims,
   type SessionPayload,
 } from './auth.schema';
+import {
+  getRequestContext,
+  maybeGetRequestContext,
+  runWithContext,
+} from '@/lib/context/request-context';
+import { buildActorContext } from '@/lib/context/build-actor';
+import { runWithActor } from '@/lib/context/actor-context';
+import { resolveSessionContext } from '@/lib/request/resolve-session-context';
 
 /* -------------------------------------------------------------------------- */
 /*                               CONFIG                                       */
 /* -------------------------------------------------------------------------- */
 
 const IS_PROD = process.env.NODE_ENV === 'production';
-
 /* -------------------------------------------------------------------------- */
 /*                               AUTH FLOW COOKIES                            */
 /* -------------------------------------------------------------------------- */
@@ -153,7 +162,7 @@ export async function updateVerificationSession(
 
 const SESSION_COOKIE = 'user_session';
 
-export async function readUserSessionCookiePayload(): Promise<SessionPayload | null> {
+export async function readUserSessionCookiePayload(): Promise<SessionClaims | null> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;
 
@@ -171,7 +180,7 @@ export async function readUserSessionCookiePayload(): Promise<SessionPayload | n
   return validated.data;
 }
 
-export async function setUserSession(payload: SessionPayload) {
+export async function setUserSession(payload: SessionClaims | SessionPayload) {
   const store = await cookies();
 
   const parsed = sessionPayloadSchema.parse(payload);
@@ -193,19 +202,72 @@ export async function setUserSession(payload: SessionPayload) {
 }
 
 export async function getUserSession(): Promise<SessionPayload | null> {
-  const data = await readUserSessionCookiePayload();
+  const claims = await readUserSessionCookiePayload();
 
-  if (!data) return null;
+  if (!claims) return null;
 
-  if (Date.now() > data.expiresAt) {
+  if (Date.now() > claims.expiresAt) {
     return null;
   }
 
-  if (!data.isActive) {
+  if (!claims.isActive) {
     return null;
   }
 
-  return data;
+  const existingContext = maybeGetRequestContext();
+
+  if (
+    existingContext?.session &&
+    existingContext.session.sessionId === claims.sessionId
+  ) {
+    return existingContext.session;
+  }
+
+  if (existingContext) {
+    const currentActor = buildActorContext({
+      identityId: claims.identityId,
+      customerId: claims.customerId,
+      platformRole: claims.platformRoles?.[0],
+      platformRoleKeys: claims.platformRoleKeys,
+      platformRoleSystemKeys: claims.platformRoleSystemKeys,
+      workspaceId: claims.workspaceId,
+      workspaceRole: claims.workspaceRole,
+      workspaceRoleKey: claims.workspaceRoleKey,
+      workspaceRoleSystemKey: claims.workspaceRoleSystemKey,
+      membershipId: claims.membershipId,
+    });
+
+    const { session } = await runWithActor(currentActor, () =>
+      resolveSessionContext({
+        requestContext: existingContext,
+        sessionClaims: claims,
+      }),
+    );
+
+    return session;
+  }
+
+  const hdrs = await headers();
+  const rawRequestContext = hdrs.get('x-request-context');
+
+  if (!rawRequestContext) {
+    return resolvedSessionPayloadSchema.parse({
+      ...claims,
+      permissions: [],
+      features: [],
+      limits: {},
+    });
+  }
+
+  const requestContext = JSON.parse(rawRequestContext);
+  const { session } = await runWithContext(requestContext, () =>
+    resolveSessionContext({
+      requestContext: getRequestContext(),
+      sessionClaims: claims,
+    }),
+  );
+
+  return session;
 }
 
 export async function clearUserSession() {

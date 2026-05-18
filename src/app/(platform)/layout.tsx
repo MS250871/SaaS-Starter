@@ -1,8 +1,9 @@
 import { cookies } from "next/headers"
 
-import { AdminShell, type AdminNavGroup } from "@/components/admin/admin-shell"
+import { AdminShell } from "@/components/admin/admin-shell"
 import { prisma } from "@/lib/prisma"
 import { readActorContext } from "@/lib/request/read-actor-context"
+import { platformNavGroups } from "@/modules/platform/admin-navigation"
 
 function getDisplayName(params: {
   firstName?: string | null
@@ -55,43 +56,11 @@ export default async function PlatformLayout({
     : null
   const userName = getDisplayName(identity ?? {})
 
-  const navGroups: AdminNavGroup[] = [
-    {
-      label: "Platform",
-      items: [
-        {
-          title: "Overview",
-          href: "/platform",
-          icon: "dashboard",
-          exact: true,
-        },
-        {
-          title: "Governance",
-          href: "/platform#governance",
-          icon: "shield",
-        },
-        {
-          title: "Members",
-          href: "/platform#memberships",
-          icon: "users",
-        },
-        {
-          title: "Signals",
-          href: "/platform#signals",
-          icon: "shield",
-        },
-      ],
-    },
-  ]
-
   return (
     <AdminShell
       areaLabel="Platform"
-      breadcrumbs={[
-        { label: "Platform", href: "/platform" },
-        { label: userName },
-      ]}
-      navGroups={navGroups}
+      breadcrumbs={[{ label: "Platform", href: "/platform" }]}
+      navGroups={platformNavGroups}
       user={{
         name: userName,
         email: identity?.email ?? undefined,

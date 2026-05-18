@@ -11,7 +11,7 @@ import { readActorContext } from "@/lib/request/read-actor-context"
 import { withActionTxContext } from "@/lib/request/withActionContext"
 import { buildWorkspaceAdminPath } from "@/modules/workspace/admin-routes"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
-import { getWorkspaceNotificationInboxData } from "@/modules/workspace/server/workspace-admin-page-data"
+import { getWorkspaceNotificationInboxData } from "@/modules/notifications/server/workspace-notifications-page-data"
 import {
   getRootDomainHost,
   isRootWorkspaceHost,

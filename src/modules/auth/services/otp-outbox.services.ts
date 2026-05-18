@@ -92,14 +92,25 @@ export async function processOtpOutboxEvent(outboxEventId: string) {
       brand: claimed.payload.brand,
     });
 
-    return await withUnitOfWork(() => markOutboxEventDone(claimed.id));
+    try {
+      await withUnitOfWork(() => markOutboxEventDone(claimed.id));
+    } catch (markDoneError) {
+      console.error('Failed to mark OTP outbox event done', markDoneError);
+    }
+
+    return claimed;
   } catch (e) {
-    await withUnitOfWork(() =>
-      scheduleOutboxEventRetry(
-        claimed.id,
-        e instanceof Error ? e.message : 'OTP delivery failed',
-      ),
-    );
+    try {
+      await withUnitOfWork(() =>
+        scheduleOutboxEventRetry(
+          claimed.id,
+          e instanceof Error ? e.message : 'OTP delivery failed',
+        ),
+      );
+    } catch (retryError) {
+      console.error('Failed to schedule OTP outbox retry', retryError);
+    }
+
     throw e;
   }
 }

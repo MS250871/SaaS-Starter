@@ -3,12 +3,15 @@ import {
   createRazorpayOrder,
   createRazorpayPlan,
   createRazorpaySubscription,
+  fetchRazorpaySubscription,
   getPublicRazorpayKeyId,
   toRazorpayAmountSubunits,
+  updateRazorpaySubscription,
 } from '@/lib/payments/razorpay';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import type { BillingInterval, Prisma } from '@/generated/prisma/client';
+import { resolveWorkspaceSurfaceRedirect } from '@/modules/auth/workflows/post-login.workflow';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
 import {
   type PriceCheckoutSnapshot,
@@ -21,16 +24,25 @@ import {
   countPaymentAttempts,
   createPayment,
   createPaymentAttempt,
+  findLatestSuccessfulPaymentBySubscriptionId,
   updatePayment,
 } from '@/modules/billing/services/payment.services';
 import {
+  getWorkspaceActiveSubscriptionPlanSummary,
   createSubscription,
   updateSubscription,
 } from '@/modules/billing/services/subscription.services';
+import {
+  calculateProratedUpgradeDelta,
+  calculateUnusedSubscriptionValue,
+} from '@/modules/billing/services/proration.services';
 import type {
   CreateBillingCheckoutActionInput,
   BillingCheckoutMode,
+  BillingCheckoutSource,
 } from '@/modules/billing/schema';
+import { syncWorkspaceBillingSettings } from '@/modules/workspace/services/setting.services';
+import { syncWorkspaceRoutingState } from '@/modules/workspace/services/workspace-routing.services';
 
 type BillingCheckoutContext = {
   identityId: string;
@@ -38,10 +50,11 @@ type BillingCheckoutContext = {
 };
 
 export type BillingCheckoutStartResult = {
+  kind: 'razorpay_checkout' | 'direct_upgrade';
   mode: BillingCheckoutMode;
   paymentId: string;
   priceId: string;
-  checkout: {
+  checkout?: {
     key: string;
     name: string;
     description: string;
@@ -63,7 +76,37 @@ export type BillingCheckoutStartResult = {
     currency: string;
     interval?: BillingInterval | null;
   };
+  redirectTo?: string;
+  successMessage?: string;
 };
+
+type SubscriptionUpgradeStrategy =
+  | {
+      kind: 'card_proration';
+      providerPaymentMethod: string;
+      currentSubscriptionId: string;
+      currentPriceId: string;
+      currentPlanKey: string | null;
+      providerSubscriptionId: string;
+      proratedChargeAmount: number;
+      ratio: number;
+      currentPeriodStart: Date;
+      currentPeriodEnd: Date;
+    }
+  | {
+      kind: 'restart_with_refund';
+      providerPaymentMethod: string;
+      currentSubscriptionId: string;
+      currentPriceId: string;
+      currentPlanKey: string | null;
+      providerSubscriptionId: string;
+      previousSuccessfulPaymentId: string;
+      previousSuccessfulProviderPaymentId: string;
+      refundAmount: number;
+      ratio: number;
+      currentPeriodStart: Date;
+      currentPeriodEnd: Date;
+    };
 
 function buildCheckoutPrefill(identity: {
   firstName?: string | null;
@@ -100,6 +143,18 @@ function buildCheckoutNotes(params: {
   };
 }
 
+function buildWorkspaceRedirectTarget(source?: BillingCheckoutSource) {
+  if (source === 'workspace-features') {
+    return 'settings/features';
+  }
+
+  if (source === 'workspace-domains') {
+    return 'domains';
+  }
+
+  return 'billing';
+}
+
 function getSubscriptionTotalCount(interval: BillingInterval | null) {
   if (interval === 'YEARLY') {
     return 100;
@@ -121,6 +176,141 @@ function getNextPeriodWindow(interval: BillingInterval | null, start = new Date(
     start,
     end,
   };
+}
+
+async function ensureProviderPlanId(priceSnapshot: PriceCheckoutSnapshot) {
+  if (priceSnapshot.providerPriceId) {
+    return priceSnapshot.providerPriceId;
+  }
+
+  const providerPlan = await createRazorpayPlan({
+    name: priceSnapshot.product.name,
+    description: priceSnapshot.product.description,
+    amountSubunits: toRazorpayAmountSubunits(Number(priceSnapshot.amount)),
+    currency: priceSnapshot.currency,
+    period: priceSnapshot.interval === 'YEARLY' ? 'yearly' : 'monthly',
+    interval: 1,
+    notes: {
+      localPriceId: priceSnapshot.id,
+      planKey: priceSnapshot.product.plan?.key ?? 'unknown',
+    },
+  });
+
+  await withUnitOfWork(() =>
+    updatePriceProviderPriceId(priceSnapshot.id, providerPlan.id),
+  );
+
+  return providerPlan.id;
+}
+
+function normalizeSubscriptionPaymentMethod(value?: string | null) {
+  const method = value?.toLowerCase() ?? null;
+
+  if (
+    method === 'card' ||
+    method === 'upi' ||
+    method === 'emandate' ||
+    method === 'nach'
+  ) {
+    return method;
+  }
+
+  return null;
+}
+
+async function resolveUpgradeStrategy(params: {
+  workspaceId?: string;
+  targetPrice: PriceCheckoutSnapshot;
+}) {
+  if (!params.workspaceId || params.targetPrice.interval == null) {
+    return null;
+  }
+
+  const activeSubscription = await withUnitOfWork(() =>
+    getWorkspaceActiveSubscriptionPlanSummary(params.workspaceId!),
+  );
+
+  if (
+    !activeSubscription ||
+    !activeSubscription.providerSubscriptionId ||
+    activeSubscription.price.interval !== params.targetPrice.interval ||
+    !activeSubscription.price.product.plan?.key ||
+    activeSubscription.price.product.plan.key === 'trial'
+  ) {
+    return null;
+  }
+
+  const currentAmount = Number(activeSubscription.price.amount);
+  const nextAmount = Number(params.targetPrice.amount);
+
+  if (nextAmount <= currentAmount) {
+    return null;
+  }
+
+  const providerSubscription = await fetchRazorpaySubscription(
+    activeSubscription.providerSubscriptionId,
+  );
+  const paymentMethod = normalizeSubscriptionPaymentMethod(
+    providerSubscription.payment_method,
+  );
+
+  if (!paymentMethod) {
+    return null;
+  }
+
+  const currentPeriodStart = activeSubscription.currentPeriodStart;
+  const currentPeriodEnd = activeSubscription.currentPeriodEnd;
+
+  if (paymentMethod === 'card') {
+    const { proratedChargeAmount, ratio } = calculateProratedUpgradeDelta({
+      currentPlanAmount: currentAmount,
+      nextPlanAmount: nextAmount,
+      currentPeriodStart,
+      currentPeriodEnd,
+    });
+
+    return {
+      kind: 'card_proration',
+      providerPaymentMethod: paymentMethod,
+      currentSubscriptionId: activeSubscription.id,
+      currentPriceId: activeSubscription.price.id,
+      currentPlanKey: activeSubscription.price.product.plan.key,
+      providerSubscriptionId: activeSubscription.providerSubscriptionId,
+      proratedChargeAmount,
+      ratio,
+      currentPeriodStart,
+      currentPeriodEnd,
+    } satisfies SubscriptionUpgradeStrategy;
+  }
+
+  const previousSuccessfulPayment = await withUnitOfWork(() =>
+    findLatestSuccessfulPaymentBySubscriptionId(activeSubscription.id),
+  );
+
+  if (!previousSuccessfulPayment?.providerPaymentId) {
+    return null;
+  }
+
+  const { unusedAmount, ratio } = calculateUnusedSubscriptionValue({
+    currentPlanAmount: currentAmount,
+    currentPeriodStart,
+    currentPeriodEnd,
+  });
+
+  return {
+    kind: 'restart_with_refund',
+    providerPaymentMethod: paymentMethod,
+    currentSubscriptionId: activeSubscription.id,
+    currentPriceId: activeSubscription.price.id,
+    currentPlanKey: activeSubscription.price.product.plan.key,
+    providerSubscriptionId: activeSubscription.providerSubscriptionId,
+    previousSuccessfulPaymentId: previousSuccessfulPayment.id,
+    previousSuccessfulProviderPaymentId: previousSuccessfulPayment.providerPaymentId,
+    refundAmount: unusedAmount,
+    ratio,
+    currentPeriodStart,
+    currentPeriodEnd,
+  } satisfies SubscriptionUpgradeStrategy;
 }
 
 async function recordPaymentAttempt(params: {
@@ -191,6 +381,170 @@ async function createSubscriptionCheckout(
   const priceSnapshot: PriceCheckoutSnapshot = await withUnitOfWork(() =>
     getPriceCheckoutSnapshotById(selectedOption.priceId),
   );
+  const upgradeStrategy = await resolveUpgradeStrategy({
+    workspaceId: context.workspaceId,
+    targetPrice: priceSnapshot,
+  });
+
+  if (upgradeStrategy?.kind === 'card_proration') {
+    const providerPlanId = await ensureProviderPlanId(priceSnapshot);
+    const localPayment = await withUnitOfWork(() =>
+      createPayment({
+        workspaceId: context.workspaceId,
+        identityId: context.identityId,
+        priceId: priceSnapshot.id,
+        subscriptionId: upgradeStrategy.currentSubscriptionId,
+        type: 'UPGRADE',
+        paymentProvider: 'RAZORPAY',
+        amount: upgradeStrategy.proratedChargeAmount,
+        currency: priceSnapshot.currency,
+        paymentStatus: 'PENDING',
+        description: `${planCheckout.plan.name} prorated upgrade`,
+        metadata: {
+          mode: 'subscription',
+          source: input.source ?? null,
+          upgrade: input.upgrade ?? null,
+          planKey: planCheckout.plan.key,
+          planName: planCheckout.plan.name,
+          upgradeMode: 'card_proration',
+          providerPaymentMethod: upgradeStrategy.providerPaymentMethod,
+          previousPriceId: upgradeStrategy.currentPriceId,
+          previousPlanKey: upgradeStrategy.currentPlanKey,
+          prorationRatio: upgradeStrategy.ratio,
+          providerSubscriptionId: upgradeStrategy.providerSubscriptionId,
+          periodStart: upgradeStrategy.currentPeriodStart.toISOString(),
+          periodEnd: upgradeStrategy.currentPeriodEnd.toISOString(),
+        },
+      }),
+    );
+
+    try {
+      const updatedProviderSubscription = await updateRazorpaySubscription(
+        upgradeStrategy.providerSubscriptionId,
+        {
+          planId: providerPlanId,
+          quantity: 1,
+          customerNotify: true,
+          scheduleChangeAt: 'now',
+          notes: buildCheckoutNotes({
+            localPaymentId: localPayment.id,
+            localSubscriptionId: upgradeStrategy.currentSubscriptionId,
+            source: input.source,
+            upgrade: input.upgrade,
+            planKey: planCheckout.plan.key,
+            priceId: priceSnapshot.id,
+          }),
+        },
+      );
+
+      const nextPeriodStart =
+        updatedProviderSubscription.current_start != null
+          ? new Date(updatedProviderSubscription.current_start * 1000)
+          : upgradeStrategy.currentPeriodStart;
+      const nextPeriodEnd =
+        updatedProviderSubscription.current_end != null
+          ? new Date(updatedProviderSubscription.current_end * 1000)
+          : upgradeStrategy.currentPeriodEnd;
+
+      await withUnitOfWork(async () => {
+        await updateSubscription(upgradeStrategy.currentSubscriptionId, {
+          priceId: priceSnapshot.id,
+          status:
+            updatedProviderSubscription.status === 'active' ||
+            updatedProviderSubscription.status === 'authenticated'
+              ? 'ACTIVE'
+              : 'PAST_DUE',
+          currentPeriodStart: nextPeriodStart,
+          currentPeriodEnd: nextPeriodEnd,
+          providerSubscriptionId: updatedProviderSubscription.id,
+        });
+
+        await syncWorkspaceBillingSettings({
+          workspaceId: context.workspaceId!,
+          planCode: planCheckout.plan.key,
+          subscriptionStatus:
+            updatedProviderSubscription.status === 'active' ||
+            updatedProviderSubscription.status === 'authenticated'
+              ? 'ACTIVE'
+              : 'PAST_DUE',
+        });
+
+        await updatePayment(localPayment.id, {
+          metadata: {
+            mode: 'subscription',
+            source: input.source ?? null,
+            upgrade: input.upgrade ?? null,
+            planKey: planCheckout.plan.key,
+            planName: planCheckout.plan.name,
+            upgradeMode: 'card_proration',
+            providerPaymentMethod: upgradeStrategy.providerPaymentMethod,
+            previousPriceId: upgradeStrategy.currentPriceId,
+            previousPlanKey: upgradeStrategy.currentPlanKey,
+            prorationRatio: upgradeStrategy.ratio,
+            providerSubscriptionId: updatedProviderSubscription.id,
+            periodStart: nextPeriodStart.toISOString(),
+            periodEnd: nextPeriodEnd.toISOString(),
+          },
+        });
+
+        await syncWorkspaceRoutingState(context.workspaceId!);
+      });
+
+      await recordPaymentAttempt({
+        paymentId: localPayment.id,
+        providerStatus: updatedProviderSubscription.status,
+        requestPayload: {
+          planId: providerPlanId,
+          scheduleChangeAt: 'now',
+        },
+        responsePayload: updatedProviderSubscription,
+      });
+
+      const basePath = await resolveWorkspaceSurfaceRedirect({
+        workspaceId: context.workspaceId!,
+        fallbackPath: '/app',
+      });
+
+      return {
+        kind: 'direct_upgrade',
+        mode: 'subscription',
+        paymentId: localPayment.id,
+        priceId: priceSnapshot.id,
+        summary: {
+          title: planCheckout.plan.name,
+          subtitle: 'Prorated upgrade charge',
+          amount: upgradeStrategy.proratedChargeAmount,
+          currency: priceSnapshot.currency,
+          interval: priceSnapshot.interval,
+        },
+        redirectTo: `${basePath}/${buildWorkspaceRedirectTarget(input.source)}`,
+        successMessage:
+          upgradeStrategy.proratedChargeAmount > 0
+            ? `Prorated upgrade applied. We are syncing the ${priceSnapshot.currency} ${upgradeStrategy.proratedChargeAmount.toFixed(2)} adjustment from Razorpay in the background.`
+            : 'Plan upgrade applied. Your renewal date stays unchanged.',
+      };
+    } catch (error) {
+      await withUnitOfWork(() =>
+        updatePayment(localPayment.id, {
+          paymentStatus: 'FAILED',
+        }),
+      );
+
+      await recordPaymentAttempt({
+        paymentId: localPayment.id,
+        providerStatus: 'failed',
+        errorMessage:
+          error instanceof Error ? error.message : 'Subscription update failed',
+        responsePayload:
+          error instanceof Error
+            ? { message: error.message }
+            : { message: 'Subscription update failed' },
+      });
+
+      throw error;
+    }
+  }
+
   const periodWindow = getNextPeriodWindow(priceSnapshot.interval);
 
   const localSubscription = await withUnitOfWork(() =>
@@ -227,33 +581,31 @@ async function createSubscriptionCheckout(
         upgrade: input.upgrade ?? null,
         planKey: planCheckout.plan.key,
         planName: planCheckout.plan.name,
+        ...(upgradeStrategy?.kind === 'restart_with_refund'
+          ? {
+              upgradeMode: 'restart_with_refund',
+              providerPaymentMethod: upgradeStrategy.providerPaymentMethod,
+              previousSubscriptionId: upgradeStrategy.currentSubscriptionId,
+              previousPriceId: upgradeStrategy.currentPriceId,
+              previousPlanKey: upgradeStrategy.currentPlanKey,
+              previousProviderSubscriptionId:
+                upgradeStrategy.providerSubscriptionId,
+              previousSuccessfulPaymentId:
+                upgradeStrategy.previousSuccessfulPaymentId,
+              previousSuccessfulProviderPaymentId:
+                upgradeStrategy.previousSuccessfulProviderPaymentId,
+              refundAmount: upgradeStrategy.refundAmount,
+              prorationRatio: upgradeStrategy.ratio,
+              periodStart: upgradeStrategy.currentPeriodStart.toISOString(),
+              periodEnd: upgradeStrategy.currentPeriodEnd.toISOString(),
+            }
+          : {}),
       },
     }),
   );
 
   try {
-    let providerPlanId = priceSnapshot.providerPriceId;
-
-    if (!providerPlanId) {
-      const providerPlan = await createRazorpayPlan({
-        name: priceSnapshot.product.name,
-        description: priceSnapshot.product.description,
-        amountSubunits: toRazorpayAmountSubunits(Number(priceSnapshot.amount)),
-        currency: priceSnapshot.currency,
-        period: priceSnapshot.interval === 'YEARLY' ? 'yearly' : 'monthly',
-        interval: 1,
-        notes: {
-          localPriceId: priceSnapshot.id,
-          planKey: priceSnapshot.product.plan?.key ?? 'unknown',
-        },
-      });
-
-      providerPlanId = providerPlan.id;
-
-      await withUnitOfWork(() =>
-        updatePriceProviderPriceId(priceSnapshot.id, providerPlanId!),
-      );
-    }
+    const providerPlanId = await ensureProviderPlanId(priceSnapshot);
 
     const providerSubscription = await createRazorpaySubscription({
       planId: providerPlanId,
@@ -298,6 +650,7 @@ async function createSubscriptionCheckout(
     });
 
     return {
+      kind: 'razorpay_checkout',
       mode: 'subscription',
       paymentId: localPayment.id,
       priceId: priceSnapshot.id,
@@ -417,6 +770,7 @@ async function createOneTimeCheckout(
     });
 
     return {
+      kind: 'razorpay_checkout',
       mode: 'one_time',
       paymentId: localPayment.id,
       priceId: priceSnapshot.id,

@@ -4,7 +4,7 @@ import {
   priceCrud,
   priceQueries,
 } from '@/modules/billing/db';
-import type { CreateInput } from '@/lib/crud/prisma-types';
+import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { listPublicPricingPlans } from '@/modules/entitlements/entitlement.services';
@@ -36,6 +36,23 @@ export type PriceCheckoutSnapshot = Prisma.PriceGetPayload<{
             name: true;
           };
         };
+      };
+    };
+  };
+}>;
+
+export type ProductCatalogSnapshot = Prisma.ProductGetPayload<{
+  include: {
+    plan: true;
+    prices: true;
+  };
+}>;
+
+export type PriceCatalogSnapshot = Prisma.PriceGetPayload<{
+  include: {
+    product: {
+      include: {
+        plan: true;
       };
     };
   };
@@ -83,6 +100,42 @@ export async function listActiveProducts() {
   });
 }
 
+export async function listProductCatalogSnapshots(): Promise<
+  ProductCatalogSnapshot[]
+> {
+  const products = await productQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    include: {
+      plan: true,
+      prices: true,
+    },
+  });
+
+  return products as ProductCatalogSnapshot[];
+}
+
+export async function getProductCatalogSnapshotById(
+  id: string,
+): Promise<ProductCatalogSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Product ID is required');
+  }
+
+  const product = await productQueries.delegate.findUnique({
+    where: { id },
+    include: {
+      plan: true,
+      prices: true,
+    },
+  });
+
+  if (!product) {
+    throwError(ERR.NOT_FOUND, 'Product not found');
+  }
+
+  return product as ProductCatalogSnapshot;
+}
+
 export async function findActiveProductByCode(code: string) {
   if (!code) {
     throwError(ERR.INVALID_INPUT, 'Product code is required');
@@ -105,6 +158,30 @@ export async function createProduct(data: CreateInput<'Product'>) {
     return await productCrud.create(data);
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create product', undefined, e);
+  }
+}
+
+export async function updateProduct(id: string, data: UpdateInput<'Product'>) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Product ID is required');
+  }
+
+  try {
+    return await productCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update product', undefined, e);
+  }
+}
+
+export async function deleteProduct(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Product ID is required');
+  }
+
+  try {
+    return await productCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete product', undefined, e);
   }
 }
 
@@ -149,6 +226,82 @@ export async function listProductPrices(productId: string) {
     },
     orderBy: { createdAt: 'desc' },
   });
+}
+
+export async function listPriceCatalogSnapshots(): Promise<PriceCatalogSnapshot[]> {
+  const prices = await priceQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    include: {
+      product: {
+        include: {
+          plan: true,
+        },
+      },
+    },
+  });
+
+  return prices as PriceCatalogSnapshot[];
+}
+
+export async function getPriceCatalogSnapshotById(
+  id: string,
+): Promise<PriceCatalogSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Price ID is required');
+  }
+
+  const price = await priceQueries.delegate.findUnique({
+    where: { id },
+    include: {
+      product: {
+        include: {
+          plan: true,
+        },
+      },
+    },
+  });
+
+  if (!price) {
+    throwError(ERR.NOT_FOUND, 'Price not found');
+  }
+
+  return price as PriceCatalogSnapshot;
+}
+
+export async function createPrice(data: CreateInput<'Price'>) {
+  if (!data?.productId) {
+    throwError(ERR.INVALID_INPUT, 'Product ID is required');
+  }
+
+  try {
+    return await priceCrud.create(data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create price', undefined, e);
+  }
+}
+
+export async function updatePrice(id: string, data: UpdateInput<'Price'>) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Price ID is required');
+  }
+
+  try {
+    return await priceCrud.update(id, data);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update price', undefined, e);
+  }
+}
+
+export async function deletePrice(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Price ID is required');
+  }
+
+  try {
+    return await priceCrud.delete(id);
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete price', undefined, e);
+  }
 }
 
 export async function findPriceByProductInterval(params: {

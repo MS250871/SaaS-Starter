@@ -1,9 +1,11 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
+  createRazorpayPaymentRefund,
   fetchRazorpayPayment,
   fetchRazorpaySubscription,
   verifyRazorpayOrderPaymentSignature,
   verifyRazorpaySubscriptionPaymentSignature,
+  toRazorpayAmountSubunits,
 } from '@/lib/payments/razorpay';
 import type {
   Currency,
@@ -30,6 +32,11 @@ import {
   getPaymentById,
   updatePayment,
 } from '@/modules/billing/services/payment.services';
+import {
+  createRefund,
+  findLatestRefundByPaymentId,
+  updateRefund,
+} from '@/modules/billing/services/refund.services';
 import {
   cancelOtherWorkspaceSubscriptions,
   getSubscriptionById,
@@ -120,6 +127,61 @@ function toJsonInput(value: unknown) {
   return value as Prisma.InputJsonValue;
 }
 
+function mapRazorpayRefundStatus(status?: string | null) {
+  switch (status) {
+    case 'processed':
+      return 'SUCCESS' as const;
+    case 'failed':
+      return 'FAILED' as const;
+    default:
+      return 'PENDING' as const;
+  }
+}
+
+function readRestartUpgradeMetadata(
+  metadata: Prisma.JsonValue | null | undefined,
+) {
+  if (!metadata || typeof metadata !== 'object') {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+
+  if (record.upgradeMode !== 'restart_with_refund') {
+    return null;
+  }
+
+  const previousPaymentId =
+    typeof record.previousSuccessfulPaymentId === 'string'
+      ? record.previousSuccessfulPaymentId
+      : null;
+  const previousProviderPaymentId =
+    typeof record.previousSuccessfulProviderPaymentId === 'string'
+      ? record.previousSuccessfulProviderPaymentId
+      : null;
+  const refundAmount =
+    typeof record.refundAmount === 'number'
+      ? record.refundAmount
+      : typeof record.refundAmount === 'string'
+        ? Number(record.refundAmount)
+        : 0;
+  const providerPaymentMethod =
+    typeof record.providerPaymentMethod === 'string'
+      ? record.providerPaymentMethod
+      : null;
+
+  if (!previousPaymentId || !previousProviderPaymentId || refundAmount <= 0) {
+    return null;
+  }
+
+  return {
+    previousPaymentId,
+    previousProviderPaymentId,
+    refundAmount,
+    providerPaymentMethod,
+  };
+}
+
 async function createVerificationAttempt(params: {
   paymentId: string;
   providerStatus: string;
@@ -193,6 +255,96 @@ async function ensureInvoiceForPayment(params: {
 
     return invoice;
   });
+}
+
+async function processRestartUpgradeRefund(params: {
+  localPaymentId: string;
+  paymentCurrency: Currency;
+  metadata: Prisma.JsonValue | null | undefined;
+}) {
+  const refundMeta = readRestartUpgradeMetadata(params.metadata);
+
+  if (!refundMeta) {
+    return null;
+  }
+
+  const existingRefund = await withUnitOfWork(() =>
+    findLatestRefundByPaymentId(refundMeta.previousPaymentId),
+  );
+  const existingUpgradePaymentId =
+    existingRefund?.metadata &&
+    typeof existingRefund.metadata === 'object' &&
+    (existingRefund.metadata as Record<string, unknown>).upgradePaymentId ===
+      params.localPaymentId;
+
+  if (existingRefund && existingUpgradePaymentId) {
+    return existingRefund;
+  }
+
+  const localRefund = await withUnitOfWork(() =>
+    createRefund({
+      paymentId: refundMeta.previousPaymentId,
+      amount: refundMeta.refundAmount,
+      currency: params.paymentCurrency,
+      status: 'PENDING',
+      reason: 'UPGRADE_ADJUSTMENT',
+      notes:
+        refundMeta.providerPaymentMethod &&
+        refundMeta.providerPaymentMethod !== 'card'
+          ? `Unused-value refund after ${refundMeta.providerPaymentMethod} plan upgrade`
+          : 'Unused-value refund after plan upgrade',
+      paymentProvider: 'RAZORPAY',
+      metadata: toJsonInput({
+        upgradePaymentId: params.localPaymentId,
+        upgradeMode: 'restart_with_refund',
+      }),
+    }),
+  );
+
+  try {
+    const providerRefund = await createRazorpayPaymentRefund(
+      refundMeta.previousProviderPaymentId,
+      {
+        amountSubunits: toRazorpayAmountSubunits(refundMeta.refundAmount),
+        speed: 'normal',
+        receipt: `refund_${localRefund.id.slice(0, 18)}`,
+        notes: {
+          upgradePaymentId: params.localPaymentId,
+          upgradeMode: 'restart_with_refund',
+        },
+      },
+    );
+
+    await withUnitOfWork(() =>
+      updateRefund(localRefund.id, {
+        providerRefundId: providerRefund.id,
+        status: mapRazorpayRefundStatus(providerRefund.status),
+        processedAt:
+          providerRefund.status === 'processed' ? new Date() : undefined,
+        metadata: toJsonInput({
+          upgradePaymentId: params.localPaymentId,
+          upgradeMode: 'restart_with_refund',
+          providerStatus: providerRefund.status,
+        }),
+      }),
+    );
+
+    return providerRefund;
+  } catch (error) {
+    await withUnitOfWork(() =>
+      updateRefund(localRefund.id, {
+        status: 'FAILED',
+        metadata: toJsonInput({
+          upgradePaymentId: params.localPaymentId,
+          upgradeMode: 'restart_with_refund',
+          error:
+            error instanceof Error ? error.message : 'Refund creation failed',
+        }),
+      }),
+    );
+
+    throw error;
+  }
 }
 
 export async function verifyBillingPaymentWorkflow(
@@ -303,6 +455,11 @@ export async function verifyBillingPaymentWorkflow(
     });
 
     if (context.workspaceId) {
+      const restartUpgradeRefundMeta = readRestartUpgradeMetadata(
+        localPayment.metadata,
+      );
+      let restartUpgradeRefundIssue: string | null = null;
+
       const routing = await withUnitOfWork(async () => {
         await cancelOtherWorkspaceSubscriptions({
           workspaceId: context.workspaceId!,
@@ -320,6 +477,21 @@ export async function verifyBillingPaymentWorkflow(
         return syncWorkspaceRoutingState(context.workspaceId!);
       });
 
+      if (restartUpgradeRefundMeta) {
+        try {
+          await processRestartUpgradeRefund({
+            localPaymentId: localPayment.id,
+            paymentCurrency: localPayment.currency,
+            metadata: localPayment.metadata,
+          });
+        } catch (error) {
+          restartUpgradeRefundIssue =
+            error instanceof Error
+              ? error.message
+              : 'Refund initiation could not be confirmed';
+        }
+      }
+
       const basePath = await resolveWorkspaceSurfaceRedirect({
         workspaceId: context.workspaceId,
         fallbackPath: '/app',
@@ -335,7 +507,13 @@ export async function verifyBillingPaymentWorkflow(
         intent: routing?.intent,
         requiresWorkspaceCreation: false,
         redirectTo: `${basePath}/${buildWorkspaceRedirectTarget(input.source)}`,
-        successMessage: 'Subscription payment verified successfully.',
+        successMessage: restartUpgradeRefundIssue
+          ? `Subscription payment verified successfully. We could not confirm the unused-cycle refund automatically: ${restartUpgradeRefundIssue}.`
+          : restartUpgradeRefundMeta
+          ? `Subscription payment verified successfully. A refund of ${Number(
+              restartUpgradeRefundMeta.refundAmount,
+            ).toFixed(2)} ${localPayment.currency} for the unused portion of your previous cycle has been initiated.`
+          : 'Subscription payment verified successfully.',
       };
     }
 

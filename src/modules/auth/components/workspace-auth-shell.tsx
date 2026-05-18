@@ -8,6 +8,7 @@ import type { WorkspaceAuthPageData } from '@/modules/workspace/server/workspace
 type WorkspaceAuthShellMode =
   | 'login'
   | 'signup'
+  | 'payment'
   | 'verify-email'
   | 'verify-phone';
 
@@ -30,6 +31,12 @@ const shellCopy: Record<
     headline: 'Create your account and join the next level.',
     description:
       'Set up your learner access for classes, assignments, and mentor-led language support without leaving the workspace brand.',
+  },
+  payment: {
+    eyebrow: 'Secure checkout',
+    headline: 'Complete payment without leaving your workspace brand.',
+    description:
+      'Review the amount, complete checkout securely, and return to your language portal with billing and delivery kept in one branded flow.',
   },
   'verify-email': {
     eyebrow: 'Email verification',

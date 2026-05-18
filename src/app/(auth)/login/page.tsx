@@ -37,6 +37,8 @@ export default async function LoginPage({
       intent={intent}
       entry={entry}
       workspaceId={workspaceId}
+      workspaceSlug={workspaceAuth?.workspaceSlug}
+      workspaceStrategy={workspaceAuth?.strategy}
       returnPath={returnPath}
       message={message}
       workspaceSurface={Boolean(workspaceAuth)}

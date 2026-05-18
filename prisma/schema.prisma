@@ -564,6 +564,7 @@ model Customer {
   externalId String? @map("external_id") // for external systems
 
   notifications   Notification[]
+  sessions        Session[]
   subscriptions   Subscription[]
   payments        Payment[]
   invoices        Invoice[]
@@ -645,6 +646,9 @@ model Session {
   workspaceId String?    @map("workspace_id") @db.Uuid
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
+  customerId String?   @map("customer_id") @db.Uuid
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
   membershipId String?     @map("membership_id") @db.Uuid
   membership   Membership? @relation(fields: [membershipId], references: [id])
 
@@ -676,6 +680,7 @@ model Session {
   @@index([isActive, expiresAt])
   @@index([deviceId])
   @@index([deviceFingerprint])
+  @@index([customerId])
   @@index([membershipId])
   @@index([workspaceId])
   @@index([workspaceRoleDefinitionId])
