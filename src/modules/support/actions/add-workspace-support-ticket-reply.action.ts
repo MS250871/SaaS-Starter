@@ -11,7 +11,7 @@ import {
 import {
   addWorkspaceSupportTicketReplyActionSchema,
   type AddWorkspaceSupportTicketReplyActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
 import { addWorkspaceSupportTicketReplyWorkflow } from '@/modules/support/workflows/add-workspace-support-ticket-reply.workflow';
 

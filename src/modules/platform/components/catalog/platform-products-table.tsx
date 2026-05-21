@@ -86,7 +86,6 @@ export function PlatformProductsTable({ rows }: { rows: ProductRow[] }) {
   return (
     <AdminDataTable
       title="Products"
-      description="Manage the commercial offerings attached to plans, including recurring subscription products and one-time offers."
       columns={columns}
       data={rows}
       searchPlaceholder="Search products by name, code, plan, or type"

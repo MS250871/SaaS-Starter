@@ -3,6 +3,7 @@ import {
   webhookEventQueries,
 } from '@/modules/integration/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import type { Prisma } from '@/generated/prisma/client';
 import type { WebhookStatus } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -371,4 +372,147 @@ export async function requeueWebhookEvent(id: string) {
  */
 export async function failWebhookEvent(id: string, error: string) {
   return markWebhookEventDead(id, error);
+}
+
+export type PlatformWebhookEventAdminSnapshot = Prisma.WebhookEventGetPayload<{
+  select: {
+    id: true;
+    provider: true;
+    eventType: true;
+    externalId: true;
+    payload: true;
+    status: true;
+    attempts: true;
+    nextRetryAt: true;
+    processedAt: true;
+    error: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+function buildPlatformWebhookEventAdminSelect() {
+  return {
+    id: true,
+    provider: true,
+    eventType: true,
+    externalId: true,
+    payload: true,
+    status: true,
+    attempts: true,
+    nextRetryAt: true,
+    processedAt: true,
+    error: true,
+    workspaceId: true,
+    identityId: true,
+    customerId: true,
+    createdAt: true,
+    workspace: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+      },
+    },
+    identity: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    customer: {
+      select: {
+        id: true,
+        externalId: true,
+        identity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.WebhookEventSelect;
+}
+
+export async function listPlatformWebhookEventAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformWebhookEventAdminSnapshot[]> {
+  const events = await webhookEventQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformWebhookEventAdminSelect(),
+  });
+
+  return events as PlatformWebhookEventAdminSnapshot[];
+}
+
+export async function getPlatformWebhookEventAdminSnapshot(
+  id: string,
+): Promise<PlatformWebhookEventAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Webhook event ID is required');
+  }
+
+  const event = await webhookEventQueries.delegate.findUnique({
+    where: { id },
+    select: buildPlatformWebhookEventAdminSelect(),
+  });
+
+  if (!event) {
+    throwError(ERR.NOT_FOUND, 'Webhook event not found');
+  }
+
+  return event as PlatformWebhookEventAdminSnapshot;
 }

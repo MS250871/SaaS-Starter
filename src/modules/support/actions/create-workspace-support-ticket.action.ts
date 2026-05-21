@@ -8,7 +8,7 @@ import { assertPermission } from '@/modules/permissions/permissions.services';
 import {
   createWorkspaceSupportTicketActionSchema,
   type CreateWorkspaceSupportTicketActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
 import { createWorkspaceSupportTicketWorkflow } from '@/modules/support/workflows/create-workspace-support-ticket.workflow';
 
@@ -29,6 +29,7 @@ const createWorkspaceSupportTicketActionImpl = createAction(
       workspaceId: session.workspaceId,
       createdById: session.identityId,
       target: parsed.target,
+      customerId: parsed.customerId ?? null,
       title: parsed.title,
       body: parsed.body,
       priority: parsed.priority,
@@ -39,7 +40,7 @@ const createWorkspaceSupportTicketActionImpl = createAction(
       successMessage:
         parsed.target === 'platform'
           ? 'Platform escalation created successfully.'
-          : 'Workspace support ticket created successfully.',
+          : 'Customer support ticket created successfully.',
       ...result,
     };
   },

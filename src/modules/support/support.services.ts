@@ -8,6 +8,10 @@ import { listIdentityDisplayProfilesByIds } from '@/modules/auth/services/identi
 import { listCustomerIdentityProfilesByIds } from '@/modules/customer/services/customer.services';
 import { listFileAttachmentsByEntityIds } from '@/modules/media/media.services';
 import { listActivePlatformMembershipsByIdentityIds } from '@/modules/platform/services/membership.services';
+import {
+  assertPlatformOwnedSupportContext,
+  assertWorkspaceOwnedSupportContext,
+} from '@/modules/support/support-ownership';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { SenderType, SupportContextType } from '@/generated/prisma/client';
@@ -153,6 +157,35 @@ export async function createPlatformSupportTicket(params: {
     });
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to create platform ticket', undefined, e);
+  }
+}
+
+export async function createCustomerSupportTicket(params: {
+  workspaceId: string;
+  customerId: string;
+  title: string;
+  body: string;
+  status?: string;
+  priority?: string | null;
+  assignedToId?: string | null;
+}) {
+  if (!params.workspaceId || !params.customerId || !params.title || !params.body) {
+    throwError(ERR.INVALID_INPUT, 'Invalid customer support ticket params');
+  }
+
+  try {
+    return await supportTicketCrud.create({
+      workspaceId: params.workspaceId,
+      contextType: SupportContextType.CUSTOMER,
+      createdByCustomerId: params.customerId,
+      title: params.title,
+      body: params.body,
+      status: params.status ?? 'open',
+      priority: params.priority ?? undefined,
+      assignedToId: params.assignedToId ?? undefined,
+    });
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to create customer ticket', undefined, e);
   }
 }
 
@@ -330,6 +363,58 @@ export async function getWorkspaceSupportTicketById(
 
   if (!ticket) {
     throwError(ERR.NOT_FOUND, 'Support ticket not found for this workspace');
+  }
+
+  return ticket;
+}
+
+export async function getWorkspaceManagedSupportTicketById(
+  workspaceId: string,
+  ticketId: string,
+) {
+  const ticket = await getWorkspaceSupportTicketById(workspaceId, ticketId);
+  assertWorkspaceOwnedSupportContext(ticket.contextType);
+  return ticket;
+}
+
+export async function getPlatformManagedSupportTicketById(ticketId: string) {
+  const ticket = await getSupportTicketById(ticketId);
+  assertPlatformOwnedSupportContext(ticket.contextType);
+  return ticket;
+}
+
+export async function getCustomerSupportTicketById(params: {
+  workspaceId: string;
+  customerId: string;
+  ticketId: string;
+}) {
+  if (!params.workspaceId || !params.customerId || !params.ticketId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId, customerId, and ticketId are required',
+    );
+  }
+
+  const ticket = await supportTicketQueries.findFirst({
+    where: {
+      id: params.ticketId,
+      workspaceId: params.workspaceId,
+      createdByCustomerId: params.customerId,
+      contextType: SupportContextType.CUSTOMER,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      title: true,
+      status: true,
+      contextType: true,
+      createdByCustomerId: true,
+      assignedToId: true,
+    },
+  });
+
+  if (!ticket) {
+    throwError(ERR.NOT_FOUND, 'Support ticket not found for this customer');
   }
 
   return ticket;
@@ -540,6 +625,42 @@ export async function getWorkspaceSupportSummary(workspaceId: string) {
   };
 }
 
+export async function getCustomerSupportSummary(params: {
+  workspaceId: string;
+  customerId: string;
+}) {
+  if (!params.workspaceId || !params.customerId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and customerId are required');
+  }
+
+  const openStatuses = ['open', 'in_progress'];
+
+  const [totalTickets, openTickets] = await Promise.all([
+    supportTicketQueries.count({
+      where: {
+        workspaceId: params.workspaceId,
+        createdByCustomerId: params.customerId,
+        contextType: SupportContextType.CUSTOMER,
+      },
+    }),
+    supportTicketQueries.count({
+      where: {
+        workspaceId: params.workspaceId,
+        createdByCustomerId: params.customerId,
+        contextType: SupportContextType.CUSTOMER,
+        status: {
+          in: openStatuses,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    totalTickets,
+    openTickets,
+  };
+}
+
 function resolveWorkspaceSupportSenderName(params: {
   identity?: {
     firstName: string | null;
@@ -746,6 +867,99 @@ export async function listWorkspaceSupportQueueTickets(params: {
   };
 }
 
+export async function listWorkspaceSupportQueueTicketSnapshots(params: {
+  workspaceId: string;
+  queue: 'workspace' | 'platform';
+  limit?: number;
+}) {
+  if (!params.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+  }
+
+  const queueWhere =
+    params.queue === 'platform'
+      ? {
+          workspaceId: params.workspaceId,
+          contextType: 'PLATFORM' as const,
+        }
+      : {
+          workspaceId: params.workspaceId,
+          contextType: {
+            not: 'PLATFORM' as const,
+          },
+        };
+
+  return supportTicketQueries.many({
+    where: {
+      ...queueWhere,
+    },
+    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    take: params.limit ?? 500,
+    select: {
+      id: true,
+      contextType: true,
+      title: true,
+      body: true,
+      status: true,
+      priority: true,
+      createdAt: true,
+      updatedAt: true,
+      createdById: true,
+      createdByCustomerId: true,
+      assignedToId: true,
+    },
+  });
+}
+
+export async function listCustomerSupportQueueTickets(params: {
+  workspaceId: string;
+  customerId: string;
+  page: number;
+  pageSize: number;
+}) {
+  if (!params.workspaceId || !params.customerId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and customerId are required');
+  }
+
+  const [totalItems, tickets] = await Promise.all([
+    supportTicketQueries.count({
+      where: {
+        workspaceId: params.workspaceId,
+        createdByCustomerId: params.customerId,
+        contextType: SupportContextType.CUSTOMER,
+      },
+    }),
+    supportTicketQueries.many({
+      where: {
+        workspaceId: params.workspaceId,
+        createdByCustomerId: params.customerId,
+        contextType: SupportContextType.CUSTOMER,
+      },
+      orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+      skip: (params.page - 1) * params.pageSize,
+      take: params.pageSize,
+      select: {
+        id: true,
+        contextType: true,
+        title: true,
+        body: true,
+        status: true,
+        priority: true,
+        createdAt: true,
+        updatedAt: true,
+        createdById: true,
+        createdByCustomerId: true,
+        assignedToId: true,
+      },
+    }),
+  ]);
+
+  return {
+    totalItems,
+    tickets,
+  };
+}
+
 export async function getWorkspaceSupportThreadSnapshot(
   workspaceId: string,
   ticketId: string,
@@ -758,6 +972,265 @@ export async function getWorkspaceSupportThreadSnapshot(
     where: {
       id: ticketId,
       workspaceId,
+    },
+    select: {
+      id: true,
+      contextType: true,
+      title: true,
+      body: true,
+      status: true,
+      priority: true,
+      createdAt: true,
+      updatedAt: true,
+      createdById: true,
+      createdByCustomerId: true,
+      assignedToId: true,
+    },
+  });
+
+  if (!ticket) {
+    return null;
+  }
+
+  const messages: SupportThreadMessage[] = await supportTicketMessageQueries.many({
+    where: {
+      ticketId: ticket.id,
+    },
+    orderBy: [{ createdAt: 'asc' }],
+    select: {
+      id: true,
+      senderType: true,
+      senderIdentityId: true,
+      senderCustomerId: true,
+      message: true,
+      isInternalNote: true,
+      createdAt: true,
+    },
+  });
+
+  const messageIdentityIds = Array.from(
+    new Set(
+      messages
+        .map((message) => message.senderIdentityId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const messageCustomerIds = Array.from(
+    new Set(
+      messages
+        .map((message) => message.senderCustomerId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const [
+    messageIdentities,
+    messageCustomers,
+    platformMemberships,
+    ticketAttachments,
+    messageAttachments,
+  ]: [
+    SupportIdentityProfile[],
+    SupportCustomerProfile[],
+    SupportPlatformMembership[],
+    SupportAttachment[],
+    SupportAttachment[],
+  ] = await Promise.all([
+    messageIdentityIds.length > 0
+      ? listIdentityDisplayProfilesByIds(messageIdentityIds)
+      : Promise.resolve([] as SupportIdentityProfile[]),
+    messageCustomerIds.length > 0
+      ? listCustomerIdentityProfilesByIds(messageCustomerIds)
+      : Promise.resolve([] as SupportCustomerProfile[]),
+    messageIdentityIds.length > 0
+      ? listActivePlatformMembershipsByIdentityIds(messageIdentityIds)
+      : Promise.resolve([] as SupportPlatformMembership[]),
+    listFileAttachmentsByEntityIds({
+      entityType: 'SUPPORT_TICKET',
+      entityIds: [ticket.id],
+      orderByCreatedAt: 'asc',
+    }),
+    messages.length > 0
+      ? listFileAttachmentsByEntityIds({
+          entityType: 'SUPPORT_TICKET_MESSAGE',
+          entityIds: messages.map((message: SupportThreadMessage) => message.id),
+          orderByCreatedAt: 'asc',
+        })
+      : Promise.resolve([] as SupportAttachment[]),
+  ]);
+
+  return {
+    ticket,
+    messages,
+    messageIdentities,
+    messageCustomers,
+    platformMemberships,
+    ticketAttachments,
+    messageAttachments,
+  };
+}
+
+export type PlatformSupportTicketAdminSnapshot = Prisma.SupportTicketGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    createdByCustomerId: true;
+    contextType: true;
+    createdById: true;
+    assignedToId: true;
+    title: true;
+    body: true;
+    status: true;
+    priority: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    createdBy: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    createdByCustomer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+      };
+    };
+    assignedTo: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    _count: {
+      select: {
+        messages: true;
+      };
+    };
+  };
+}>;
+
+function buildPlatformSupportTicketAdminSelect() {
+  return {
+    id: true,
+    workspaceId: true,
+    createdByCustomerId: true,
+    contextType: true,
+    createdById: true,
+    assignedToId: true,
+    title: true,
+    body: true,
+    status: true,
+    priority: true,
+    createdAt: true,
+    updatedAt: true,
+    workspace: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+      },
+    },
+    createdBy: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    createdByCustomer: {
+      select: {
+        id: true,
+        externalId: true,
+        identity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+    },
+    assignedTo: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    _count: {
+      select: {
+        messages: true,
+      },
+    },
+  } satisfies Prisma.SupportTicketSelect;
+}
+
+export async function listPlatformSupportTicketAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformSupportTicketAdminSnapshot[]> {
+  const tickets = await supportTicketQueries.delegate.findMany({
+    orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformSupportTicketAdminSelect(),
+  });
+
+  return tickets as PlatformSupportTicketAdminSnapshot[];
+}
+
+export async function getPlatformSupportTicketAdminSnapshot(
+  ticketId: string,
+): Promise<PlatformSupportTicketAdminSnapshot> {
+  if (!ticketId) {
+    throwError(ERR.INVALID_INPUT, 'Ticket ID is required');
+  }
+
+  const ticket = await supportTicketQueries.delegate.findUnique({
+    where: { id: ticketId },
+    select: buildPlatformSupportTicketAdminSelect(),
+  });
+
+  if (!ticket) {
+    throwError(ERR.NOT_FOUND, 'Support ticket not found');
+  }
+
+  return ticket as PlatformSupportTicketAdminSnapshot;
+}
+
+export async function getPlatformSupportTicketThreadSnapshot(
+  ticketId: string,
+): Promise<WorkspaceSupportThreadSnapshot | null> {
+  if (!ticketId) {
+    throwError(ERR.INVALID_INPUT, 'ticketId is required');
+  }
+
+  const ticket = await supportTicketQueries.findUnique({
+    where: {
+      id: ticketId,
     },
     select: {
       id: true,

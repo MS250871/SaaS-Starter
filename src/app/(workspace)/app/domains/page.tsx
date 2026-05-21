@@ -30,7 +30,6 @@ export default async function WorkspaceDomainsPage() {
 
   return (
     <WorkspaceDomainsPanel
-      workspaceName={workspace.name}
       workspaceSlug={workspace.slug}
       currentMode={currentMode}
       activePlan={activePlan}

@@ -4,7 +4,7 @@ import { ERR } from '@/lib/errors/codes';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
 import {
   assignSupportTicket,
-  getWorkspaceSupportTicketById,
+  getWorkspaceManagedSupportTicketById,
   unassignSupportTicket,
 } from '@/modules/support/support.services';
 import { findActiveWorkspaceMembershipByIdentity } from '@/modules/workspace/services/membership.services';
@@ -15,7 +15,7 @@ export async function updateWorkspaceSupportTicketAssignmentWorkflow(input: {
   assignedToId: string | null;
 }) {
   return withUnitOfWork(async () => {
-    const ticket = await getWorkspaceSupportTicketById(
+    const ticket = await getWorkspaceManagedSupportTicketById(
       input.workspaceId,
       input.ticketId,
     );

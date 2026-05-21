@@ -82,7 +82,6 @@ export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
   return (
     <AdminDataTable
       title="Limits"
-      description="Manage quantitative entitlements like seats, credits, and storage so plans can express their commercial boundaries."
       columns={columns}
       data={rows}
       searchPlaceholder="Search limits by name, key, or unit"

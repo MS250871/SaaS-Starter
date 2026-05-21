@@ -1,22 +1,18 @@
 import { runWithContext } from '@/lib/context/request-context';
 import { runWithActor } from '@/lib/context/actor-context';
-import { throwError } from '@/lib/errors/app-error';
-import { ERR } from '@/lib/errors/codes';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import { readSessionClaimsFromHeaders } from '@/lib/request/session-claims';
+import { buildRequestContextFromRequest } from '@/lib/request/build-request-context';
 import { resolveSessionContext } from '@/lib/request/resolve-session-context';
+import { readSessionClaimsFromHeaders } from '@/lib/request/session-claims';
 
 export async function withRequestContext(
   req: Request,
   handler: () => Promise<Response>,
 ) {
   const raw = req.headers.get('x-request-context');
-
-  if (!raw) {
-    throwError(ERR.TENANT_REQUIRED, 'Missing request context');
-  }
-
-  const requestContext = JSON.parse(raw);
+  const requestContext = raw
+    ? JSON.parse(raw)
+    : await buildRequestContextFromRequest(req);
   const sessionClaims = readSessionClaimsFromHeaders((name) =>
     req.headers.get(name),
   );

@@ -1,29 +1,14 @@
-import { WorkspaceSupportQueuePanel } from '@/modules/workspace/components/workspace-support-queue-panel';
 import { getWorkspaceSupportQueuePageData } from '@/modules/support/server/workspace-support-page-data';
+import { WorkspaceSupportQueuePanel } from '@/modules/workspace/components/workspace-support-queue-panel';
 
-export default async function WorkspaceSupportEscalationsPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const resolvedSearchParams = await searchParams;
-  const pageParam =
-    typeof resolvedSearchParams.page === 'string'
-      ? Number.parseInt(resolvedSearchParams.page, 10)
-      : 1;
-
+export default async function WorkspaceSupportEscalationsPage() {
   const {
     basePath,
     workspaceId,
     tickets,
-    page,
-    totalPages,
-    hasPreviousPage,
-    hasNextPage,
     supportSummary,
   } = await getWorkspaceSupportQueuePageData({
     queue: 'platform',
-    page: pageParam,
   });
 
   if (!workspaceId) {
@@ -41,10 +26,6 @@ export default async function WorkspaceSupportEscalationsPage({
       basePath={basePath}
       queue="platform"
       tickets={tickets}
-      page={page}
-      totalPages={totalPages}
-      hasPreviousPage={hasPreviousPage}
-      hasNextPage={hasNextPage}
       supportSummary={supportSummary}
     />
   );

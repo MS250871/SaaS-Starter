@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -94,10 +93,6 @@ export function WorkspaceCustomerCreatePanel({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>Create Customer</CardTitle>
-              <CardDescription className="mt-2">
-                Create a customer identity, verified auth accounts, and a
-                workspace customer record in one flow.
-              </CardDescription>
             </div>
             <Button asChild variant="outline">
               <Link href={`${basePath}/customers`}>
@@ -126,10 +121,6 @@ export function WorkspaceCustomerCreatePanel({
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <CardTitle>Customer Profile</CardTitle>
-          <CardDescription>
-            Email and phone will be marked as verified because this customer is
-            being created by a trusted workspace admin.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -186,10 +177,7 @@ export function WorkspaceCustomerCreatePanel({
 
               <Field>
                 {isPending ? (
-                  <SpinnerButton
-                    className="w-full sm:w-auto"
-                    message="Creating customer..."
-                  />
+                  <SpinnerButton message="Creating customer..." />
                 ) : (
                   <Button type="submit">
                     <UserPlusIcon className="mr-2 size-4" />

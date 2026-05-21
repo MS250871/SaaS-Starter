@@ -2,9 +2,16 @@ import { WorkspaceSupportCreatePanel } from '@/modules/workspace/components/work
 import { getWorkspaceSupportCreatePageData } from '@/modules/support/server/workspace-support-page-data';
 import { hasPermission } from '@/modules/permissions/permissions.services';
 
-export default async function WorkspaceSupportCreatePage() {
-  const { actor, basePath, workspaceId } =
+export default async function WorkspaceSupportCreatePage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const resolvedSearchParams = await searchParams;
+  const { actor, basePath, workspaceId, customerOptions } =
     await getWorkspaceSupportCreatePageData();
+  const defaultTarget =
+    resolvedSearchParams.target === 'platform' ? 'platform' : 'customer';
 
   if (!workspaceId) {
     return (
@@ -20,6 +27,8 @@ export default async function WorkspaceSupportCreatePage() {
     <WorkspaceSupportCreatePanel
       basePath={basePath}
       canCreateTicket={hasPermission(actor.permissions, 'supportTicket.create')}
+      defaultTarget={defaultTarget}
+      customerOptions={customerOptions}
     />
   );
 }

@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -45,10 +44,6 @@ export function WorkspaceCustomerDetailsPanel({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>{customer.name}</CardTitle>
-              <CardDescription className="mt-2">
-                Customer detail surface for profile, support, notifications,
-                media, and future business-specific modules.
-              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-3">
               {preview && (
@@ -71,9 +66,6 @@ export function WorkspaceCustomerDetailsPanel({
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <CardTitle>Profile</CardTitle>
-            <CardDescription>
-              Core customer identity details for this workspace.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-sm text-muted-foreground">
             <p>
@@ -98,9 +90,6 @@ export function WorkspaceCustomerDetailsPanel({
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <CardTitle>Business-Specific Panel</CardTitle>
-            <CardDescription>
-              This card is the plug-in zone for SaaS-specific customer data.
-            </CardDescription>
           </CardHeader>
           <CardContent className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 text-sm text-muted-foreground">
             Use this space later for courses, learner stats, orders, bookings,
@@ -111,9 +100,6 @@ export function WorkspaceCustomerDetailsPanel({
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <CardTitle>Support</CardTitle>
-            <CardDescription>
-              Customer support activity tied to this record.
-            </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             {customer.supportTicketCount} support ticket(s) currently linked to
@@ -124,9 +110,6 @@ export function WorkspaceCustomerDetailsPanel({
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <CardTitle>Notifications</CardTitle>
-            <CardDescription>
-              Notification activity sent to this customer.
-            </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             {customer.notificationCount} notification record(s) currently linked
@@ -137,9 +120,6 @@ export function WorkspaceCustomerDetailsPanel({
         <Card className="border-border/70 bg-background/85 lg:col-span-2">
           <CardHeader>
             <CardTitle>Media</CardTitle>
-            <CardDescription>
-              Files and media assets associated with this customer.
-            </CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             {customer.mediaCount} media item(s) currently linked to this

@@ -204,10 +204,6 @@ export function WorkspaceCustomerBulkCreatePanel({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>Bulk Create Customers</CardTitle>
-              <CardDescription className="mt-2">
-                Upload a CSV to create identities, auth accounts, and workspace
-                customers in one import pipeline.
-              </CardDescription>
             </div>
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="outline">
@@ -228,11 +224,6 @@ export function WorkspaceCustomerBulkCreatePanel({
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <CardTitle>CSV Contract</CardTitle>
-          <CardDescription>
-            Required columns: <code>firstName</code>, <code>lastName</code>,{' '}
-            <code>email</code>, <code>phone</code>. Optional columns:{' '}
-            <code>externalId</code>, <code>workspaceSlug</code>.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-2xl border border-border/70 bg-muted/10 p-4 text-sm text-muted-foreground">
@@ -309,18 +300,9 @@ export function WorkspaceCustomerBulkCreatePanel({
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <CardTitle>Preview Results</CardTitle>
-                  <CardDescription>
-                    Import will create {preview.summary.willCreateCustomers}{' '}
-                    customer record(s), {preview.summary.willCreateIdentities}{' '}
-                    new identit{preview.summary.willCreateIdentities === 1 ? 'y' : 'ies'},
-                    and {preview.summary.willCreateAuthAccounts} auth account(s).
-                  </CardDescription>
                 </div>
                 {isPending ? (
-                  <SpinnerButton
-                    className="w-full lg:w-auto"
-                    message="Importing customers..."
-                  />
+                  <SpinnerButton message="Importing customers..." />
                 ) : (
                   <Button
                     type="button"

@@ -1,6 +1,6 @@
 import { otpCrud, otpQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { OtpPurpose } from '@/generated/prisma/client';
+import { OtpPurpose, type Prisma } from '@/generated/prisma/client';
 import {
   OTP_MAX_ATTEMPTS,
   OTP_MAX_RESENDS,
@@ -16,6 +16,45 @@ import { sendOtpSms } from '@/lib/sms/sms-service';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { emailSchema } from '../schema';
+
+export type PlatformOtpRequestAdminSnapshot = Prisma.OtpRequestGetPayload<{
+  select: {
+    id: true;
+    authAccountId: true;
+    workspaceId: true;
+    verificationId: true;
+    otpPurpose: true;
+    expiresAt: true;
+    createdAt: true;
+    updatedAt: true;
+    attempts: true;
+    resendCount: true;
+    authAccount: {
+      select: {
+        id: true;
+        type: true;
+        value: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+            phone: true;
+            isActive: true;
+          };
+        };
+      };
+    };
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Get OTP request by ID
@@ -319,4 +358,61 @@ export async function sendOtp({
   } catch (e) {
     throwError(ERR.EXTERNAL_SERVICE_ERROR, 'Failed to send OTP', undefined, e);
   }
+}
+
+export async function listPlatformOtpRequestAdminSnapshots(opts?: {
+  limit?: number;
+  identityId?: string | null;
+}) {
+  const requests = await otpQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          authAccount: {
+            is: {
+              identityId: opts.identityId,
+            },
+          },
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      authAccountId: true,
+      workspaceId: true,
+      verificationId: true,
+      otpPurpose: true,
+      expiresAt: true,
+      createdAt: true,
+      updatedAt: true,
+      attempts: true,
+      resendCount: true,
+      authAccount: {
+        select: {
+          id: true,
+          type: true,
+          value: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              isActive: true,
+            },
+          },
+        },
+      },
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+    },
+  });
+
+  return requests as PlatformOtpRequestAdminSnapshot[];
 }

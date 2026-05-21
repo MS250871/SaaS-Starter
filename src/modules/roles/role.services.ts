@@ -28,6 +28,33 @@ export type RoleDefinitionWithPermissions = Prisma.RoleDefinitionGetPayload<{
   }
 }>
 
+export type GovernanceRoleAdminSnapshot = Prisma.RoleDefinitionGetPayload<{
+  select: {
+    id: true
+    scope: true
+    key: true
+    name: true
+    description: true
+    isSystem: true
+    systemKey: true
+    hierarchyRank: true
+    isDefault: true
+    isAssignable: true
+    isActive: true
+    updatedAt: true
+    _count: {
+      select: {
+        rolePermissions: true
+        workspaceMemberships: true
+        workspaceInvites: true
+        platformMemberships: true
+        platformInvites: true
+        workspaceRolePermissions: true
+      }
+    }
+  }
+}>
+
 export async function getRoleDefinitionById(id: string) {
   if (!id) {
     throwError(ERR.INVALID_INPUT, "Role definition id is required")
@@ -264,4 +291,120 @@ export async function createRoleDefinition(data: {
     isAssignable: data.isAssignable ?? true,
     isActive: data.isActive ?? true,
   } as never)
+}
+
+export async function updateRoleDefinition(
+  id: string,
+  data: Prisma.RoleDefinitionUpdateInput,
+) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Role definition id is required')
+  }
+
+  try {
+    return await roleDefinitionCrud.update(id, data as never)
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to update role definition', undefined, e)
+  }
+}
+
+export async function setRoleDefinitionActive(id: string, isActive: boolean) {
+  return updateRoleDefinition(id, {
+    isActive,
+  })
+}
+
+export async function deleteRoleDefinition(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Role definition id is required')
+  }
+
+  try {
+    return await roleDefinitionCrud.delete(id)
+  } catch (e) {
+    throwError(ERR.DB_ERROR, 'Failed to delete role definition', undefined, e)
+  }
+}
+
+export async function listGovernanceRoleAdminSnapshots(opts?: {
+  limit?: number
+  scope?: RoleScope
+}) {
+  const roles = await roleDefinitionQueries.delegate.findMany({
+    where: opts?.scope
+      ? {
+          scope: opts.scope,
+        }
+      : undefined,
+    orderBy: [{ scope: 'asc' }, { hierarchyRank: 'desc' }, { name: 'asc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      scope: true,
+      key: true,
+      name: true,
+      description: true,
+      isSystem: true,
+      systemKey: true,
+      hierarchyRank: true,
+      isDefault: true,
+      isAssignable: true,
+      isActive: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          rolePermissions: true,
+          workspaceMemberships: true,
+          workspaceInvites: true,
+          platformMemberships: true,
+          platformInvites: true,
+          workspaceRolePermissions: true,
+        },
+      },
+    },
+  })
+
+  return roles as GovernanceRoleAdminSnapshot[]
+}
+
+export async function getGovernanceRoleAdminSnapshot(roleDefinitionId: string) {
+  if (!roleDefinitionId) {
+    throwError(ERR.INVALID_INPUT, 'Role definition id is required')
+  }
+
+  const role = await roleDefinitionQueries.delegate.findUnique({
+    where: {
+      id: roleDefinitionId,
+    },
+    select: {
+      id: true,
+      scope: true,
+      key: true,
+      name: true,
+      description: true,
+      isSystem: true,
+      systemKey: true,
+      hierarchyRank: true,
+      isDefault: true,
+      isAssignable: true,
+      isActive: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          rolePermissions: true,
+          workspaceMemberships: true,
+          workspaceInvites: true,
+          platformMemberships: true,
+          platformInvites: true,
+          workspaceRolePermissions: true,
+        },
+      },
+    },
+  })
+
+  if (!role) {
+    throwError(ERR.NOT_FOUND, 'Role definition not found')
+  }
+
+  return role as GovernanceRoleAdminSnapshot
 }

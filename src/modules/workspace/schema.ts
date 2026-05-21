@@ -243,6 +243,42 @@ export type RefreshWorkspaceCustomDomainVerificationActionInput = z.input<
   typeof refreshWorkspaceCustomDomainVerificationActionSchema
 >;
 
+export const platformWorkspaceRoutingActionSchema = z.object({
+  workspaceId: z.string().uuid('Invalid workspace id'),
+});
+
+export type PlatformWorkspaceRoutingActionInput = z.input<
+  typeof platformWorkspaceRoutingActionSchema
+>;
+
+export const platformWorkspaceDomainActionSchema = z.object({
+  workspaceDomainId: z.string().uuid('Invalid workspace domain id'),
+});
+
+export type PlatformWorkspaceDomainActionInput = z.input<
+  typeof platformWorkspaceDomainActionSchema
+>;
+
+export const createPlatformWorkspaceCustomDomainActionSchema =
+  workspaceCustomDomainFormSchema.extend({
+    workspaceId: z.string().uuid('Invalid workspace id'),
+  });
+
+export type CreatePlatformWorkspaceCustomDomainActionInput = z.input<
+  typeof createPlatformWorkspaceCustomDomainActionSchema
+>;
+
+export const createPlatformWorkspaceCustomDomainSchema =
+  createPlatformWorkspaceCustomDomainActionSchema.transform((data) => ({
+    workspaceId: data.workspaceId,
+    domain: data.domain.trim().toLowerCase(),
+    routingMode: data.routingMode,
+  }));
+
+export type CreatePlatformWorkspaceCustomDomainDomain = z.output<
+  typeof createPlatformWorkspaceCustomDomainSchema
+>;
+
 export const workspaceRedirectAliasFormSchema = z.object({
   domain: z.string().min(1, 'Redirect alias is required'),
   routingMode: z.enum(['CNAME', 'APEX_A']).default('APEX_A'),
@@ -257,6 +293,26 @@ export const createWorkspaceRedirectAliasActionSchema =
 
 export type CreateWorkspaceRedirectAliasActionInput = z.input<
   typeof createWorkspaceRedirectAliasActionSchema
+>;
+
+export const createPlatformWorkspaceRedirectAliasActionSchema =
+  workspaceRedirectAliasFormSchema.extend({
+    workspaceId: z.string().uuid('Invalid workspace id'),
+  });
+
+export type CreatePlatformWorkspaceRedirectAliasActionInput = z.input<
+  typeof createPlatformWorkspaceRedirectAliasActionSchema
+>;
+
+export const createPlatformWorkspaceRedirectAliasSchema =
+  createPlatformWorkspaceRedirectAliasActionSchema.transform((data) => ({
+    workspaceId: data.workspaceId,
+    domain: data.domain.trim().toLowerCase(),
+    routingMode: data.routingMode,
+  }));
+
+export type CreatePlatformWorkspaceRedirectAliasDomain = z.output<
+  typeof createPlatformWorkspaceRedirectAliasSchema
 >;
 
 export const createWorkspaceRedirectAliasSchema =
@@ -295,64 +351,6 @@ export const revokeWorkspaceUserPermissionOverrideActionSchema = z.object({
 
 export type RevokeWorkspaceUserPermissionOverrideActionInput = z.input<
   typeof revokeWorkspaceUserPermissionOverrideActionSchema
->;
-
-export const createWorkspaceSupportTicketActionSchema = z.object({
-  target: z.enum(['workspace', 'platform']),
-  title: z.string().trim().min(3, 'Title is too short').max(160, 'Title is too long'),
-  body: z.string().trim().min(10, 'Add a little more detail').max(5000, 'Message is too long'),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']),
-});
-
-export type CreateWorkspaceSupportTicketActionInput = z.input<
-  typeof createWorkspaceSupportTicketActionSchema
->;
-
-export const updateWorkspaceSupportTicketStatusActionSchema = z.object({
-  ticketId: z.string().uuid('Invalid ticket id'),
-  status: z.enum(['open', 'in_progress', 'resolved', 'closed']),
-});
-
-export type UpdateWorkspaceSupportTicketStatusActionInput = z.input<
-  typeof updateWorkspaceSupportTicketStatusActionSchema
->;
-
-export const updateWorkspaceSupportTicketAssignmentActionSchema = z.object({
-  ticketId: z.string().uuid('Invalid ticket id'),
-  assignedToId: z.union([
-    z.string().uuid('Invalid assignee id'),
-    z.literal('unassigned'),
-  ]),
-});
-
-export type UpdateWorkspaceSupportTicketAssignmentActionInput = z.input<
-  typeof updateWorkspaceSupportTicketAssignmentActionSchema
->;
-
-export const addWorkspaceSupportTicketReplyActionSchema = z.object({
-  ticketId: z.string().uuid('Invalid ticket id'),
-  message: z
-    .string()
-    .trim()
-    .min(2, 'Reply is too short')
-    .max(5000, 'Reply is too long'),
-});
-
-export type AddWorkspaceSupportTicketReplyActionInput = z.input<
-  typeof addWorkspaceSupportTicketReplyActionSchema
->;
-
-export const addWorkspaceSupportTicketInternalNoteActionSchema = z.object({
-  ticketId: z.string().uuid('Invalid ticket id'),
-  message: z
-    .string()
-    .trim()
-    .min(2, 'Internal note is too short')
-    .max(5000, 'Internal note is too long'),
-});
-
-export type AddWorkspaceSupportTicketInternalNoteActionInput = z.input<
-  typeof addWorkspaceSupportTicketInternalNoteActionSchema
 >;
 
 const workspaceApiKeyScopeSchema = z
@@ -416,43 +414,4 @@ export const importWorkspaceCustomerCsvActionSchema =
 
 export type ImportWorkspaceCustomerCsvActionInput = z.input<
   typeof importWorkspaceCustomerCsvActionSchema
->;
-
-export const sendWorkspaceNotificationActionSchema = z
-  .object({
-    audience: z.enum(['workspace', 'customer']),
-    deliveryChannel: z.enum(['IN_APP', 'EMAIL']),
-    recipientMode: z.enum(['all', 'single']),
-    recipientId: z.string().trim().optional().or(z.literal('')),
-    title: z
-      .string()
-      .trim()
-      .min(3, 'Title is too short')
-      .max(160, 'Title is too long'),
-    body: z
-      .string()
-      .trim()
-      .min(10, 'Add a little more detail')
-      .max(5000, 'Message is too long'),
-  })
-  .superRefine((data, ctx) => {
-    if (data.recipientMode === 'single' && !data.recipientId?.trim()) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['recipientId'],
-        message: 'Select a recipient',
-      });
-    }
-  });
-
-export type SendWorkspaceNotificationActionInput = z.input<
-  typeof sendWorkspaceNotificationActionSchema
->;
-
-export const markWorkspaceNotificationReadActionSchema = z.object({
-  notificationId: z.string().uuid('Invalid notification id'),
-});
-
-export type MarkWorkspaceNotificationReadActionInput = z.input<
-  typeof markWorkspaceNotificationReadActionSchema
 >;

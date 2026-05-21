@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { navItems } from '@/lib/nav/navigation.config';
 import { cn } from '@/lib/utils';
 import { AuthButtons } from './auth-buttons';
+import { LinkPendingHint } from './link-pending-hint';
 
 export function MobileMenu({
   open,
@@ -48,9 +49,11 @@ export function MobileMenu({
             <Link
               key={item.name}
               href={item.href}
+              className="inline-flex items-center gap-2"
               onClick={() => setOpen(false)}
             >
-              {item.name}
+              <span>{item.name}</span>
+              <LinkPendingHint />
             </Link>
           ))}
         </nav>

@@ -1,22 +1,21 @@
-import { cookies, headers } from "next/headers"
+import { Suspense } from "react"
+import { cookies } from "next/headers"
 
+import { AdminNotificationLinkButton } from "@/components/admin/admin-notification-link-button"
 import {
   AdminShell,
   type AdminAccountLink,
   type AdminNavChild,
   type AdminNavGroup,
 } from "@/components/admin/admin-shell"
-import { prisma } from "@/lib/prisma"
 import { readActorContext } from "@/lib/request/read-actor-context"
 import { withActionTxContext } from "@/lib/request/withActionContext"
 import { buildWorkspaceAdminPath } from "@/modules/workspace/admin-routes"
+import { WorkspaceNotificationMenuSlot } from "@/modules/notifications/server/workspace-notification-menu-slot"
+import { buildWorkspaceSurfacePath } from "@/modules/workspace/routing"
+import { getWorkspaceThemeSnapshot } from "@/modules/workspace/services/setting.services"
+import { buildWorkspaceSettingsLinks } from "@/modules/workspace/settings-navigation"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
-import { getWorkspaceNotificationInboxData } from "@/modules/notifications/server/workspace-notifications-page-data"
-import {
-  getRootDomainHost,
-  isRootWorkspaceHost,
-  normalizeHostname,
-} from "@/lib/middleware/proxy-utils"
 
 function hasPermissionGroup(permissions: string[], group: string) {
   return permissions.some((permission) => permission.startsWith(`${group}.`))
@@ -61,75 +60,6 @@ function getInitials(name: string) {
     .toUpperCase()
 }
 
-function resolveWorkspaceBasePath(params: {
-  host?: string | null
-  strategy?: string | null
-  slug?: string | null
-}) {
-  const normalizedHost = normalizeHostname(params.host ?? "")
-  const rootHost = getRootDomainHost()
-
-  if (
-    params.slug &&
-    params.strategy === "free_path" &&
-    isRootWorkspaceHost(normalizedHost, rootHost)
-  ) {
-    return `/${params.slug}/app`
-  }
-
-  return "/app"
-}
-
-function buildSettingsChildren(permissions: string[], basePath: string) {
-  const children: AdminNavChild[] = []
-
-  if (hasPermissionGroup(permissions, "workspaceDomain")) {
-    children.push({
-      title: "Domains",
-      href: buildWorkspaceAdminPath(basePath, "domains"),
-    })
-  }
-
-  if (
-    hasAnyPermissionGroup(permissions, ["subscription", "payment", "invoice"])
-  ) {
-    children.push({
-      title: "Billing",
-      href: buildWorkspaceAdminPath(basePath, "billing"),
-    })
-  }
-
-  if (hasPermissionGroup(permissions, "workspaceSettings")) {
-    children.push({
-      title: "Themes",
-      href: buildWorkspaceAdminPath(basePath, "settings/theme"),
-    })
-  }
-
-  if (hasAnyPermissionGroup(permissions, ["permission", "role"])) {
-    children.push({
-      title: "Access",
-      href: buildWorkspaceAdminPath(basePath, "settings/access"),
-    })
-  }
-
-  if (hasAnyPermissionGroup(permissions, ["featureOverride", "limitOverride"])) {
-    children.push({
-      title: "Features & Limits",
-      href: buildWorkspaceAdminPath(basePath, "settings/features"),
-    })
-  }
-
-  if (hasPermissionGroup(permissions, "audit")) {
-    children.push({
-      title: "Audit Log",
-      href: buildWorkspaceAdminPath(basePath, "settings/audit"),
-    })
-  }
-
-  return children
-}
-
 function buildWorkspaceNavGroups(permissions: string[], basePath: string) {
   const navGroups: AdminNavGroup[] = [
     {
@@ -172,14 +102,6 @@ function buildWorkspaceNavGroups(permissions: string[], basePath: string) {
 
   const operationsItems = []
 
-  if (hasPermissionGroup(permissions, "apiKey")) {
-    operationsItems.push({
-      title: "API Keys",
-      href: buildWorkspaceAdminPath(basePath, "api-keys"),
-      icon: "key" as const,
-    })
-  }
-
   if (hasPermissionGroup(permissions, "media")) {
     operationsItems.push({
       title: "Media",
@@ -201,6 +123,7 @@ function buildWorkspaceNavGroups(permissions: string[], basePath: string) {
       title: "Notifications",
       href: buildWorkspaceAdminPath(basePath, "notifications"),
       icon: "bell" as const,
+      hiddenInSidebar: true,
     })
   }
 
@@ -211,7 +134,10 @@ function buildWorkspaceNavGroups(permissions: string[], basePath: string) {
     })
   }
 
-  const settingsChildren = buildSettingsChildren(permissions, basePath)
+  const settingsChildren: AdminNavChild[] = buildWorkspaceSettingsLinks(
+    permissions,
+    basePath,
+  )
   const settingsHref = buildWorkspaceAdminPath(basePath, "settings")
 
   if (settingsChildren.length > 0) {
@@ -222,6 +148,7 @@ function buildWorkspaceNavGroups(permissions: string[], basePath: string) {
           title: "Settings",
           href: settingsHref,
           icon: "settings",
+          hiddenInSidebar: true,
           children: settingsChildren,
         },
       ],
@@ -238,110 +165,46 @@ export default async function WorkspaceLayout({
 }) {
   const cookieStore = await cookies()
   const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
-  const { actor } = await readActorContext()
-  const hdrs = await headers()
+  const { actor, requestContext, session } = await readActorContext()
   const workspaceId = actor.workspaceId
 
   let themes: unknown = undefined
-  let userName = "Workspace User"
-  let workspaceName = "Workspace"
-  let workspaceSlug: string | null = null
-  let workspaceStrategy: string | null = null
-  let notificationMenu:
-    | {
-        unreadCount: number
-        items: Array<{
-          id: string
-          title: string
-          body?: string | null
-          createdAt: string
-          isRead: boolean
-          href?: string | null
-        }>
-      }
-    | undefined
+  const workspaceContext = requestContext?.workspace
 
-  const [workspace, settings, identity] = await Promise.all([
-    workspaceId
-      ? prisma.workspace.findUnique({
-          where: { id: workspaceId },
-          select: {
-            name: true,
-            slug: true,
-          },
-        })
-      : Promise.resolve(null),
-    workspaceId
-      ? prisma.workspaceSettings.findUnique({
-          where: { workspaceId },
-          select: {
-            themes: true,
-            settings: true,
-          },
-        })
-      : Promise.resolve(null),
-    actor.identityId
-      ? prisma.identity.findUnique({
-          where: { id: actor.identityId },
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        })
-      : Promise.resolve(null),
-  ])
-
-  workspaceName = workspace?.name ?? "Workspace"
-  workspaceSlug = workspace?.slug ?? null
-  themes = settings?.themes
-  workspaceStrategy =
-    (
-      settings?.settings as {
-        domain?: { strategy?: string | null }
-      } | null
-    )?.domain?.strategy ?? null
-  userName = getDisplayName(identity ?? {})
-  const userEmail = identity?.email ?? undefined
-  const workspaceBasePath = resolveWorkspaceBasePath({
-    host: hdrs.get("host"),
-    strategy: workspaceStrategy,
-    slug: workspaceSlug,
-  })
-
-  const actorIdentityId = actor.identityId
-
-  if (workspaceId && actorIdentityId) {
-    const inboxData = await withActionTxContext(() =>
-      getWorkspaceNotificationInboxData({
-        workspaceId,
-        identityId: actorIdentityId,
-        limit: 8,
-      }),
+  if (workspaceId) {
+    const themeSnapshot = await withActionTxContext(() =>
+      getWorkspaceThemeSnapshot(workspaceId),
     )
-
-    notificationMenu = {
-      unreadCount: inboxData.unreadCount,
-      items: inboxData.items.map((item: (typeof inboxData.items)[number]) => ({
-        ...item,
-        href: item.href ?? buildWorkspaceAdminPath(workspaceBasePath, "notifications"),
-      })),
-    }
+    themes = themeSnapshot?.themes
   }
 
-  const navGroups = buildWorkspaceNavGroups(actor.permissions, workspaceBasePath)
-  const accountLinks: AdminAccountLink[] = hasPermissionGroup(
-    actor.permissions,
-    "workspaceSettings"
+  const userName = getDisplayName({
+    firstName: session?.identityFirstName,
+    lastName: session?.identityLastName,
+    email: session?.identityEmail,
+  })
+  const userEmail = session?.identityEmail
+  const workspaceName =
+    session?.workspaceName ?? workspaceContext?.slug ?? "Workspace"
+  const workspaceBasePath =
+    workspaceContext?.slug
+      ? buildWorkspaceSurfacePath({
+          strategy: workspaceContext.strategy,
+          slug: workspaceContext.slug,
+          path: "/app",
+        })
+      : "/app"
+  const notificationsHref = buildWorkspaceAdminPath(
+    workspaceBasePath,
+    "notifications",
   )
-    ? [
-        {
-          label: "Themes",
-          href: buildWorkspaceAdminPath(workspaceBasePath, "settings/theme"),
-          icon: "palette",
-        },
-      ]
-    : []
+
+  const navGroups = buildWorkspaceNavGroups(actor.permissions, workspaceBasePath)
+  const accountLinks: AdminAccountLink[] = []
+  const topbarSettingsLinks: AdminNavChild[] = buildWorkspaceSettingsLinks(
+    actor.permissions,
+    workspaceBasePath,
+  )
 
   return (
     <div
@@ -351,11 +214,26 @@ export default async function WorkspaceLayout({
       <AdminShell
         areaLabel="Workspace"
         logoHref={workspaceBasePath}
-        notificationsHref={buildWorkspaceAdminPath(
-          workspaceBasePath,
-          "notifications"
-        )}
-        notifications={notificationMenu}
+        notificationsHref={notificationsHref}
+        notificationsSlot={
+          workspaceId && actor.identityId ? (
+            <Suspense
+              fallback={
+                <AdminNotificationLinkButton
+                  areaLabel="Workspace"
+                  href={notificationsHref}
+                />
+              }
+            >
+              <WorkspaceNotificationMenuSlot
+                areaLabel="Workspace"
+                href={notificationsHref}
+                workspaceId={workspaceId}
+                identityId={actor.identityId}
+              />
+            </Suspense>
+          ) : undefined
+        }
         breadcrumbs={[
           { label: "Workspace", href: workspaceBasePath },
           { label: workspaceName, href: workspaceBasePath },
@@ -367,6 +245,7 @@ export default async function WorkspaceLayout({
           initials: getInitials(userName),
         }}
         accountLinks={accountLinks}
+        topbarSettingsLinks={topbarSettingsLinks}
         defaultSidebarOpen={defaultSidebarOpen}
       >
         {children}

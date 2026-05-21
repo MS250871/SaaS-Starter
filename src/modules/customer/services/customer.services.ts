@@ -59,6 +59,21 @@ export type WorkspaceCustomerPageEntry = Prisma.CustomerGetPayload<{
   };
 }>;
 
+export type WorkspaceCustomerTableSnapshot = Prisma.CustomerGetPayload<{
+  select: {
+    id: true;
+    externalId: true;
+    createdAt: true;
+    identity: {
+      select: {
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+  };
+}>;
+
 export type WorkspaceNotificationRecipientCustomer = Prisma.CustomerGetPayload<{
   select: {
     id: true;
@@ -90,6 +105,34 @@ export type WorkspaceCustomerDetailsSnapshot = Prisma.CustomerGetPayload<{
         supportTickets: true;
         notifications: true;
         media: true;
+      };
+    };
+  };
+}>;
+
+export type PlatformCustomerAdminSnapshot = Prisma.CustomerGetPayload<{
+  select: {
+    id: true;
+    identityId: true;
+    workspaceId: true;
+    externalId: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+        phone: true;
+        isActive: true;
       };
     };
   };
@@ -486,6 +529,35 @@ export async function listWorkspaceCustomersPage(params: {
   };
 }
 
+export async function listWorkspaceCustomerTableSnapshots(
+  workspaceId: string,
+): Promise<WorkspaceCustomerTableSnapshot[]> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  const customers = await customerQueries.many({
+    where: {
+      workspaceId,
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    select: {
+      id: true,
+      externalId: true,
+      createdAt: true,
+      identity: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return customers as unknown as WorkspaceCustomerTableSnapshot[];
+}
+
 export async function getWorkspaceCustomerDetailsSnapshot(
   workspaceId: string,
   customerId: string,
@@ -522,4 +594,80 @@ export async function getWorkspaceCustomerDetailsSnapshot(
   });
 
   return customer as unknown as WorkspaceCustomerDetailsSnapshot | null;
+}
+
+export async function getWorkspaceCustomerById(
+  workspaceId: string,
+  customerId: string,
+) {
+  if (!workspaceId || !customerId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId and customerId are required');
+  }
+
+  const customer = await customerQueries.findFirst({
+    where: {
+      id: customerId,
+      workspaceId,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      externalId: true,
+      identity: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  if (!customer) {
+    throwError(ERR.NOT_FOUND, 'Customer not found for this workspace');
+  }
+
+  return customer;
+}
+
+export async function listPlatformCustomerAdminSnapshots(opts?: {
+  limit?: number;
+  identityId?: string | null;
+}) {
+  const customers = await customerQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          identityId: opts.identityId,
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      identityId: true,
+      workspaceId: true,
+      externalId: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  return customers as PlatformCustomerAdminSnapshot[];
 }

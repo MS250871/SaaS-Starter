@@ -197,3 +197,623 @@ export async function updatePaymentAttempt(
     throwError(ERR.DB_ERROR, 'Failed to update payment attempt', undefined, e);
   }
 }
+
+export type PlatformPaymentAdminSnapshot = Prisma.PaymentGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    priceId: true;
+    subscriptionId: true;
+    type: true;
+    paymentProvider: true;
+    providerOrderId: true;
+    providerPaymentId: true;
+    amount: true;
+    currency: true;
+    paymentStatus: true;
+    description: true;
+    capturedAt: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    price: {
+      select: {
+        id: true;
+        amount: true;
+        currency: true;
+        interval: true;
+        product: {
+          select: {
+            id: true;
+            code: true;
+            name: true;
+            type: true;
+            plan: {
+              select: {
+                id: true;
+                key: true;
+                name: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    subscription: {
+      select: {
+        id: true;
+        status: true;
+        currentPeriodEnd: true;
+        cancelAtPeriodEnd: true;
+      };
+    };
+    invoices: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      take: 1;
+      select: {
+        id: true;
+        invoiceNumber: true;
+        amount: true;
+        currency: true;
+        status: true;
+        issuedAt: true;
+        paidAt: true;
+      };
+    };
+    refunds: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      take: 1;
+      select: {
+        id: true;
+        amount: true;
+        currency: true;
+        status: true;
+        reason: true;
+        processedAt: true;
+        createdAt: true;
+      };
+    };
+    _count: {
+      select: {
+        attempts: true;
+        invoices: true;
+        refunds: true;
+      };
+    };
+  };
+}>;
+
+export type PlatformPaymentDetailAdminSnapshot = Prisma.PaymentGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    priceId: true;
+    subscriptionId: true;
+    type: true;
+    paymentProvider: true;
+    providerOrderId: true;
+    providerPaymentId: true;
+    providerSignature: true;
+    amount: true;
+    currency: true;
+    paymentStatus: true;
+    description: true;
+    metadata: true;
+    capturedAt: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    price: {
+      select: {
+        id: true;
+        amount: true;
+        currency: true;
+        interval: true;
+        product: {
+          select: {
+            id: true;
+            code: true;
+            name: true;
+            type: true;
+            plan: {
+              select: {
+                id: true;
+                key: true;
+                name: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    subscription: {
+      select: {
+        id: true;
+        status: true;
+        currentPeriodStart: true;
+        currentPeriodEnd: true;
+        cancelAtPeriodEnd: true;
+        providerSubscriptionId: true;
+      };
+    };
+    attempts: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        attemptNumber: true;
+        provider: true;
+        status: true;
+        errorCode: true;
+        errorMessage: true;
+        createdAt: true;
+      };
+    };
+    invoices: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        invoiceNumber: true;
+        providerInvoiceId: true;
+        amount: true;
+        currency: true;
+        status: true;
+        issuedAt: true;
+        paidAt: true;
+        items: {
+          select: {
+            id: true;
+            quantity: true;
+            unitPrice: true;
+            total: true;
+            currency: true;
+            product: {
+              select: {
+                id: true;
+                name: true;
+                code: true;
+              };
+            };
+            price: {
+              select: {
+                id: true;
+                interval: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    refunds: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        amount: true;
+        currency: true;
+        status: true;
+        reason: true;
+        notes: true;
+        paymentProvider: true;
+        providerRefundId: true;
+        metadata: true;
+        processedAt: true;
+        createdAt: true;
+        updatedAt: true;
+      };
+    };
+  };
+}>;
+
+export async function listPaymentsBySubscriptionId(subscriptionId: string) {
+  if (!subscriptionId) {
+    throwError(ERR.INVALID_INPUT, 'Subscription id is required');
+  }
+
+  return paymentQueries.many({
+    where: {
+      subscriptionId,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+}
+
+export async function listPlatformPaymentAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformPaymentAdminSnapshot[]> {
+  const payments = await paymentQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      priceId: true,
+      subscriptionId: true,
+      type: true,
+      paymentProvider: true,
+      providerOrderId: true,
+      providerPaymentId: true,
+      amount: true,
+      currency: true,
+      paymentStatus: true,
+      description: true,
+      capturedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              type: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      subscription: {
+        select: {
+          id: true,
+          status: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+        },
+      },
+      invoices: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 1,
+        select: {
+          id: true,
+          invoiceNumber: true,
+          amount: true,
+          currency: true,
+          status: true,
+          issuedAt: true,
+          paidAt: true,
+        },
+      },
+      refunds: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 1,
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          status: true,
+          reason: true,
+          processedAt: true,
+          createdAt: true,
+        },
+      },
+      _count: {
+        select: {
+          attempts: true,
+          invoices: true,
+          refunds: true,
+        },
+      },
+    },
+  });
+
+  return payments as PlatformPaymentAdminSnapshot[];
+}
+
+export async function getPlatformPaymentAdminSnapshot(
+  id: string,
+): Promise<PlatformPaymentDetailAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Payment ID is required');
+  }
+
+  const payment = await paymentQueries.delegate.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      priceId: true,
+      subscriptionId: true,
+      type: true,
+      paymentProvider: true,
+      providerOrderId: true,
+      providerPaymentId: true,
+      providerSignature: true,
+      amount: true,
+      currency: true,
+      paymentStatus: true,
+      description: true,
+      metadata: true,
+      capturedAt: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              type: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      subscription: {
+        select: {
+          id: true,
+          status: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          cancelAtPeriodEnd: true,
+          providerSubscriptionId: true,
+        },
+      },
+      attempts: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          attemptNumber: true,
+          provider: true,
+          status: true,
+          errorCode: true,
+          errorMessage: true,
+          createdAt: true,
+        },
+      },
+      invoices: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          providerInvoiceId: true,
+          amount: true,
+          currency: true,
+          status: true,
+          issuedAt: true,
+          paidAt: true,
+          items: {
+            select: {
+              id: true,
+              quantity: true,
+              unitPrice: true,
+              total: true,
+              currency: true,
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  code: true,
+                },
+              },
+              price: {
+                select: {
+                  id: true,
+                  interval: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      refunds: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          status: true,
+          reason: true,
+          notes: true,
+          paymentProvider: true,
+          providerRefundId: true,
+          metadata: true,
+          processedAt: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!payment) {
+    throwError(ERR.NOT_FOUND, 'Payment not found');
+  }
+
+  return payment as PlatformPaymentDetailAdminSnapshot;
+}

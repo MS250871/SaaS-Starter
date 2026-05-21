@@ -2,14 +2,15 @@ import { NotificationChannel, NotificationTargetType } from '@/generated/prisma/
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createNotificationWorkflow } from '@/modules/notifications/workflows/create-notification.workflow';
+import type { SendWorkspaceNotificationActionInput } from '@/modules/notifications/schema';
 import { listWorkspaceNotificationRecipientCustomers } from '@/modules/customer/services/customer.services';
-import type { SendWorkspaceNotificationActionInput } from '@/modules/workspace/schema';
 import { listWorkspaceNotificationRecipientMembers } from '@/modules/workspace/services/membership.services';
 
 type ResolvedRecipient = {
   label: string;
   recipientIdentityId?: string;
   recipientCustomerId?: string;
+  deliveryRecipient?: string;
 };
 
 function getNotificationTargetType(
@@ -25,6 +26,8 @@ export async function sendWorkspaceNotificationWorkflow(params: {
   senderIdentityId: string;
   senderName: string;
   input: SendWorkspaceNotificationActionInput;
+  payloadSource?: string;
+  senderScope?: 'workspace' | 'platform';
 }) {
   if (!params.workspaceId || !params.senderIdentityId) {
     throwError(ERR.UNAUTHORIZED, 'Workspace notification context missing');
@@ -49,6 +52,10 @@ export async function sendWorkspaceNotificationWorkflow(params: {
           `${member.identity.firstName ?? ''} ${member.identity.lastName ?? ''}`.trim() ||
           member.identity.email ||
           'Workspace member',
+        deliveryRecipient:
+          params.input.deliveryChannel === NotificationChannel.IN_APP
+            ? member.identityId
+            : member.identity.email?.trim().toLowerCase(),
       });
     }
   } else {
@@ -66,6 +73,10 @@ export async function sendWorkspaceNotificationWorkflow(params: {
           `${customer.identity.firstName ?? ''} ${customer.identity.lastName ?? ''}`.trim() ||
           customer.identity.email ||
           'Customer',
+        deliveryRecipient:
+          params.input.deliveryChannel === NotificationChannel.IN_APP
+            ? customer.id
+            : customer.identity.email?.trim().toLowerCase(),
       });
     }
   }
@@ -105,14 +116,18 @@ export async function sendWorkspaceNotificationWorkflow(params: {
         title: params.input.title,
         body: params.input.body,
         payload: {
-          source: 'workspace_notification_send',
+          source: params.payloadSource ?? 'workspace_notification_send',
           audience: params.input.audience,
           recipientLabel: recipient.label,
           deliveryChannel: params.input.deliveryChannel,
           sentById: params.senderIdentityId,
           sentByName: params.senderName,
+          senderScope: params.senderScope ?? 'workspace',
         },
-        deliveries,
+        deliveries: deliveries.map((delivery) => ({
+          ...delivery,
+          recipient: recipient.deliveryRecipient,
+        })),
       }),
     );
   }

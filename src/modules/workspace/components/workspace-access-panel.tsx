@@ -104,11 +104,9 @@ type PendingUserConfirmation = {
 function StatCard({
   label,
   value,
-  detail,
 }: {
   label: string;
   value: string | number;
-  detail: string;
 }) {
   return (
     <Card className="workspace-info-card border bg-background/85">
@@ -117,7 +115,6 @@ function StatCard({
         <CardTitle className="workspace-info-value text-2xl font-semibold">
           {value}
         </CardTitle>
-        <CardDescription>{detail}</CardDescription>
       </CardHeader>
     </Card>
   );
@@ -346,22 +343,18 @@ export function WorkspaceAccessPanel({
         <StatCard
           label="Workspace Roles"
           value={accessSummary.roleCount}
-          detail="Active workspace role definitions available in this workspace."
         />
         <StatCard
           label="Permission Catalog"
           value={accessSummary.permissionCount}
-          detail="Global permissions currently available for workspace access rules."
         />
         <StatCard
           label="Role Overrides"
           value={accessSummary.roleOverrideCount}
-          detail="Workspace-specific allow and deny adjustments on top of base roles."
         />
         <StatCard
           label="Direct Overrides"
           value={userOverrides.length}
-          detail="Active member-specific grants and denies in this workspace."
         />
       </div>
 
@@ -371,10 +364,6 @@ export function WorkspaceAccessPanel({
             <ShieldIcon className="size-4 text-accent" />
             <CardTitle>Role Policies</CardTitle>
           </div>
-          <CardDescription>
-            Review workspace roles, then adjust permission behavior for this
-            workspace with allow, deny, or inherit modes.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid gap-4 xl:grid-cols-[18rem_1fr]">
@@ -429,21 +418,21 @@ export function WorkspaceAccessPanel({
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   Choose module
                 </p>
-                <div className="mt-3 space-y-2">
-                  {permissionsByEntity.map((group) => (
-                    <Button
-                      key={group.entity}
-                      type="button"
-                      variant={
-                        group.entity === selectedRoleEntity ? 'secondary' : 'ghost'
-                      }
-                      className="w-full justify-start"
-                      onClick={() => setSelectedRoleEntity(group.entity)}
-                    >
-                      {group.entity}
-                    </Button>
-                  ))}
-                </div>
+                <Select
+                  value={selectedRoleEntity}
+                  onValueChange={setSelectedRoleEntity}
+                >
+                  <SelectTrigger className="mt-3 w-full">
+                    <SelectValue placeholder="Select a module" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {permissionsByEntity.map((group) => (
+                      <SelectItem key={group.entity} value={group.entity}>
+                        {group.entity}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
@@ -609,10 +598,6 @@ export function WorkspaceAccessPanel({
             <UserCogIcon className="size-4 text-accent" />
             <CardTitle>Member Overrides</CardTitle>
           </div>
-          <CardDescription>
-            Apply direct allow or deny overrides for individual workspace
-            members when role policy alone is not enough.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           {userMessage && (
@@ -652,23 +637,22 @@ export function WorkspaceAccessPanel({
                 <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                   Choose module
                 </p>
-                <div className="mt-3 space-y-2">
-                  {permissionsByEntity.map((group) => (
-                    <Button
-                      key={group.entity}
-                      type="button"
-                      variant={
-                        group.entity === selectedMemberEntity
-                          ? 'secondary'
-                          : 'ghost'
-                      }
-                      className="w-full justify-start"
-                      onClick={() => setSelectedMemberEntity(group.entity)}
-                    >
-                      {group.entity}
-                    </Button>
-                  ))}
-                </div>
+                <Select
+                  value={selectedMemberEntity}
+                  onValueChange={setSelectedMemberEntity}
+                  disabled={!canManageAccess || isUserUpdatePending}
+                >
+                  <SelectTrigger className="mt-3 w-full">
+                    <SelectValue placeholder="Select a module" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {permissionsByEntity.map((group) => (
+                      <SelectItem key={group.entity} value={group.entity}>
+                        {group.entity}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

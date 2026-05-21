@@ -11,7 +11,7 @@ import {
 import {
   updateWorkspaceSupportTicketStatusActionSchema,
   type UpdateWorkspaceSupportTicketStatusActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 import { updateWorkspaceSupportTicketStatusWorkflow } from '@/modules/support/workflows/update-workspace-support-ticket-status.workflow';
 
 function assertCanUpdateSupportStatus(

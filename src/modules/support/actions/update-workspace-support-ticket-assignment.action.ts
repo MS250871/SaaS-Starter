@@ -11,7 +11,7 @@ import {
 import {
   updateWorkspaceSupportTicketAssignmentActionSchema,
   type UpdateWorkspaceSupportTicketAssignmentActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 import { updateWorkspaceSupportTicketAssignmentWorkflow } from '@/modules/support/workflows/update-workspace-support-ticket-assignment.workflow';
 
 function assertCanAssignSupportTicket(permissions: string[]) {

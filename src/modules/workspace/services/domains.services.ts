@@ -46,6 +46,84 @@ export type WorkspaceDomainDetailed = Prisma.WorkspaceDomainGetPayload<{
   };
 }>;
 
+export type PlatformWorkspaceDomainAdminSnapshot = Prisma.WorkspaceDomainGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    domain: true;
+    type: true;
+    routingMode: true;
+    status: true;
+    target: true;
+    isPrimary: true;
+    isVerified: true;
+    verifiedAt: true;
+    lastCheckedAt: true;
+    lastVerificationError: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    dnsRecords: {
+      select: {
+        id: true;
+        purpose: true;
+        type: true;
+        isRequired: true;
+        isMatched: true;
+      };
+    };
+  };
+}>;
+
+export type PlatformWorkspaceDomainAdminDetailSnapshot = Prisma.WorkspaceDomainGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    domain: true;
+    type: true;
+    routingMode: true;
+    status: true;
+    target: true;
+    isPrimary: true;
+    isVerified: true;
+    verifiedAt: true;
+    lastCheckedAt: true;
+    lastVerificationError: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+        defaultDomain: true;
+        primaryEmail: true;
+      };
+    };
+    dnsRecords: {
+      orderBy: [{ purpose: 'asc' }, { type: 'asc' }, { createdAt: 'asc' }];
+      select: {
+        id: true;
+        type: true;
+        purpose: true;
+        host: true;
+        expectedValue: true;
+        isRequired: true;
+        isMatched: true;
+        matchedValue: true;
+        lastCheckedAt: true;
+        lastError: true;
+      };
+    };
+  };
+}>;
+
 /**
  * Get domain by ID
  */
@@ -304,6 +382,107 @@ export async function listWorkspaceDomainsDetailed(
   });
 
   return domains as unknown as WorkspaceDomainDetailed[];
+}
+
+export async function listPlatformWorkspaceDomainAdminSnapshots(opts?: {
+  limit?: number;
+}) {
+  const domains = await workspaceDomainQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 250,
+    select: {
+      id: true,
+      workspaceId: true,
+      domain: true,
+      type: true,
+      routingMode: true,
+      status: true,
+      target: true,
+      isPrimary: true,
+      isVerified: true,
+      verifiedAt: true,
+      lastCheckedAt: true,
+      lastVerificationError: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      dnsRecords: {
+        select: {
+          id: true,
+          purpose: true,
+          type: true,
+          isRequired: true,
+          isMatched: true,
+        },
+      },
+    },
+  });
+
+  return domains as PlatformWorkspaceDomainAdminSnapshot[];
+}
+
+export async function getPlatformWorkspaceDomainAdminSnapshot(id: string) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Domain ID is required');
+  }
+
+  const domain = await workspaceDomainQueries.delegate.findUnique({
+    where: {
+      id,
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      domain: true,
+      type: true,
+      routingMode: true,
+      status: true,
+      target: true,
+      isPrimary: true,
+      isVerified: true,
+      verifiedAt: true,
+      lastCheckedAt: true,
+      lastVerificationError: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+          defaultDomain: true,
+          primaryEmail: true,
+        },
+      },
+      dnsRecords: {
+        orderBy: [{ purpose: 'asc' }, { type: 'asc' }, { createdAt: 'asc' }],
+        select: {
+          id: true,
+          type: true,
+          purpose: true,
+          host: true,
+          expectedValue: true,
+          isRequired: true,
+          isMatched: true,
+          matchedValue: true,
+          lastCheckedAt: true,
+          lastError: true,
+        },
+      },
+    },
+  });
+
+  if (!domain) {
+    throwError(ERR.NOT_FOUND, 'Workspace domain not found');
+  }
+
+  return domain as PlatformWorkspaceDomainAdminDetailSnapshot;
 }
 
 /**

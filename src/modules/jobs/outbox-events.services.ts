@@ -1,5 +1,6 @@
 import { outboxEventCrud, outboxEventQueries } from '@/modules/jobs/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import type { Prisma } from '@/generated/prisma/client';
 import type { OutboxStatus } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -422,4 +423,151 @@ export async function setOutboxJobId(id: string, jobId: string) {
   return updateOutboxEvent(id, {
     jobId,
   } as UpdateInput<'OutboxEvent'>);
+}
+
+export type PlatformOutboxEventAdminSnapshot = Prisma.OutboxEventGetPayload<{
+  select: {
+    id: true;
+    eventType: true;
+    payload: true;
+    status: true;
+    attempts: true;
+    nextRetryAt: true;
+    scheduledAt: true;
+    lockedAt: true;
+    jobId: true;
+    processingKey: true;
+    processedAt: true;
+    lastError: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+function buildPlatformOutboxEventAdminSelect() {
+  return {
+    id: true,
+    eventType: true,
+    payload: true,
+    status: true,
+    attempts: true,
+    nextRetryAt: true,
+    scheduledAt: true,
+    lockedAt: true,
+    jobId: true,
+    processingKey: true,
+    processedAt: true,
+    lastError: true,
+    workspaceId: true,
+    identityId: true,
+    customerId: true,
+    createdAt: true,
+    workspace: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+      },
+    },
+    identity: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    customer: {
+      select: {
+        id: true,
+        externalId: true,
+        identity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.OutboxEventSelect;
+}
+
+export async function listPlatformOutboxEventAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformOutboxEventAdminSnapshot[]> {
+  const events = await outboxEventQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformOutboxEventAdminSelect(),
+  });
+
+  return events as PlatformOutboxEventAdminSnapshot[];
+}
+
+export async function getPlatformOutboxEventAdminSnapshot(
+  id: string,
+): Promise<PlatformOutboxEventAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Outbox event ID is required');
+  }
+
+  const event = await outboxEventQueries.delegate.findUnique({
+    where: { id },
+    select: buildPlatformOutboxEventAdminSelect(),
+  });
+
+  if (!event) {
+    throwError(ERR.NOT_FOUND, 'Outbox event not found');
+  }
+
+  return event as PlatformOutboxEventAdminSnapshot;
 }

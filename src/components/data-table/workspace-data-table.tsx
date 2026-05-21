@@ -96,7 +96,7 @@ export function WorkspaceDataTable<T>({
   query = {},
 }: {
   title: string;
-  description: string;
+  description?: string;
   basePath: string;
   filters?: WorkspaceTableFilterDefinition[];
   actions?: WorkspaceTableAction[];
@@ -130,7 +130,9 @@ export function WorkspaceDataTable<T>({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>{title}</CardTitle>
-              <CardDescription className="mt-2">{description}</CardDescription>
+              {description ? (
+                <CardDescription className="mt-2">{description}</CardDescription>
+              ) : null}
             </div>
             {actions.length > 0 && (
               <div className="flex flex-wrap gap-3">

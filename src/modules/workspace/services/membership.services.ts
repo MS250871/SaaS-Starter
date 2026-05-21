@@ -48,6 +48,42 @@ export type WorkspaceMemberWithRole = Prisma.MembershipGetPayload<{
   }
 }>
 
+export type PlatformWorkspaceMembershipAdminSnapshot = Prisma.MembershipGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    identityId: true;
+    roleKey: true;
+    roleSystemKey: true;
+    isActive: true;
+    expiresAt: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    roleDefinition: {
+      select: {
+        id: true;
+        name: true;
+        key: true;
+        hierarchyRank: true;
+      };
+    };
+    identity: {
+      select: {
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+  };
+}>
+
 export type WorkspaceNotificationRecipientMember = Prisma.MembershipGetPayload<{
   select: {
     identityId: true
@@ -456,4 +492,48 @@ export async function listActiveWorkspaceMembersWithRoles(
   })
 
   return memberships as unknown as WorkspaceMemberWithRole[]
+}
+
+export async function listPlatformWorkspaceMembershipAdminSnapshots(opts?: {
+  limit?: number;
+}) {
+  const memberships = await membershipQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 250,
+    select: {
+      id: true,
+      workspaceId: true,
+      identityId: true,
+      roleKey: true,
+      roleSystemKey: true,
+      isActive: true,
+      expiresAt: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      roleDefinition: {
+        select: {
+          id: true,
+          name: true,
+          key: true,
+          hierarchyRank: true,
+        },
+      },
+      identity: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+    },
+  });
+
+  return memberships as PlatformWorkspaceMembershipAdminSnapshot[];
 }

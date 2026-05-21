@@ -1,16 +1,16 @@
 'use server';
 
-import { createAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { createTxAction } from '@/lib/http/create-action';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
 import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
 import {
   sendWorkspaceNotificationActionSchema,
   type SendWorkspaceNotificationActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/notifications/schema';
 import { sendWorkspaceNotificationWorkflow } from '@/modules/notifications/workflows/send-workspace-notification.workflow';
 
 function getSenderName(params: {
@@ -27,7 +27,7 @@ function getSenderName(params: {
   return params.email ?? 'Workspace user';
 }
 
-const sendWorkspaceNotificationActionImpl = createAction(
+const sendWorkspaceNotificationActionImpl = createTxAction(
   async (formData: FormData) => {
     const raw = Object.fromEntries(formData.entries());
     const parsed: SendWorkspaceNotificationActionInput =
@@ -48,6 +48,8 @@ const sendWorkspaceNotificationActionImpl = createAction(
       senderIdentityId: session.identityId,
       senderName: getSenderName(sender ?? {}),
       input: parsed,
+      payloadSource: 'workspace_notification_send',
+      senderScope: 'workspace',
     });
 
     let deliveryFailures = 0;

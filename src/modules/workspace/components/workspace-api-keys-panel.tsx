@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
   CopyIcon,
-  KeyRoundIcon,
   RefreshCcwIcon,
   ShieldCheckIcon,
   Trash2Icon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import {
   Alert,
   AlertDescription,
@@ -111,11 +112,9 @@ function CopyButton({
 function StatCard({
   label,
   value,
-  detail,
 }: {
   label: string;
   value: string | number;
-  detail: string;
 }) {
   return (
     <Card className="workspace-info-card border bg-background/85">
@@ -124,7 +123,6 @@ function StatCard({
         <CardTitle className="workspace-info-value text-2xl font-semibold">
           {value}
         </CardTitle>
-        <CardDescription>{detail}</CardDescription>
       </CardHeader>
     </Card>
   );
@@ -247,42 +245,167 @@ export function WorkspaceApiKeysPanel({
     });
   };
 
+  const columns: ColumnDef<ApiKeyListItem>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Key',
+      cell: ({ row }) => (
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate font-medium">{row.original.name}</p>
+            {row.original.keyPrefix ? (
+              <Badge variant="outline">{row.original.keyPrefix}...</Badge>
+            ) : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-2">
+          <Badge
+            variant={
+              row.original.isActive && !row.original.isExpired
+                ? 'default'
+                : row.original.isActive
+                  ? 'secondary'
+                  : 'outline'
+            }
+          >
+            {row.original.isActive
+              ? row.original.isExpired
+                ? 'Expired'
+                : 'Active'
+              : 'Revoked'}
+          </Badge>
+          {row.original.revokedAt ? (
+            <Badge variant="outline">Revoked</Badge>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'scopes',
+      header: 'Scopes',
+      cell: ({ row }) => (
+        <div className="flex flex-wrap gap-2">
+          {row.original.scopes.length > 0 ? (
+            row.original.scopes.slice(0, 2).map((scope) => (
+              <Badge key={scope} variant="secondary">
+                {scope}
+              </Badge>
+            ))
+          ) : (
+            <span className="text-sm text-muted-foreground">Default</span>
+          )}
+          {row.original.scopes.length > 2 ? (
+            <Badge variant="outline">+{row.original.scopes.length - 2}</Badge>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'createdByName',
+      header: 'Created By',
+    },
+    {
+      accessorKey: 'createdAt',
+      header: 'Created',
+      cell: ({ row }) => formatDateTime(row.original.createdAt),
+    },
+    {
+      accessorKey: 'lastUsedAt',
+      header: 'Last Used',
+      cell: ({ row }) =>
+        row.original.lastUsedAt
+          ? formatDateTime(row.original.lastUsedAt)
+          : 'Not used yet',
+    },
+    {
+      accessorKey: 'expiresAt',
+      header: 'Expires',
+      cell: ({ row }) =>
+        row.original.expiresAt
+          ? formatDateTime(row.original.expiresAt)
+          : 'Does not expire',
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canRotate || isPending}
+              >
+                <RefreshCcwIcon className="mr-2 size-4" />
+                Rotate
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Rotate API key?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will invalidate the current secret for{' '}
+                  {row.original.name}. Make sure the integration is ready to
+                  receive the replacement key immediately.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => runRotate(row.original.id)}>
+                  Rotate Key
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canRevoke || isPending || !row.original.isActive}
+              >
+                <Trash2Icon className="mr-2 size-4" />
+                Revoke
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will disable {row.original.name} immediately and stop any
+                  integration using it from authenticating.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => runRevoke(row.original.id)}>
+                  Revoke Key
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <section className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Total Keys"
-          value={apiKeySummary.totalKeys}
-          detail="All integration keys issued for this workspace."
-        />
-        <StatCard
-          label="Active Keys"
-          value={apiKeySummary.activeKeys}
-          detail="Keys currently available for integration use."
-        />
-        <StatCard
-          label="Revoked Keys"
-          value={apiKeySummary.revokedKeys}
-          detail="Keys that have been manually disabled."
-        />
-        <StatCard
-          label="Expired Keys"
-          value={apiKeySummary.expiredKeys}
-          detail="Keys that have passed their expiry date."
-        />
+        <StatCard label="Total Keys" value={apiKeySummary.totalKeys} />
+        <StatCard label="Active Keys" value={apiKeySummary.activeKeys} />
+        <StatCard label="Revoked Keys" value={apiKeySummary.revokedKeys} />
+        <StatCard label="Expired Keys" value={apiKeySummary.expiredKeys} />
       </div>
-
-      <Card className="border-border/70 bg-background/85">
-        <CardHeader>
-          <div className="flex items-center gap-2">
-            <KeyRoundIcon className="size-4 text-accent" />
-            <CardTitle>API Integrations</CardTitle>
-          </div>
-          <CardDescription>
-            Create and manage bearer-token keys for your workspace integrations.
-          </CardDescription>
-        </CardHeader>
-      </Card>
 
       {revealedSecret && (
         <Alert>
@@ -321,10 +444,6 @@ export function WorkspaceApiKeysPanel({
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <CardTitle>Create API Key</CardTitle>
-            <CardDescription>
-              Issue a workspace integration key with a clear name and an
-              optional expiry date.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <form onSubmit={form.handleSubmit(onCreateApiKey)}>
@@ -380,154 +499,32 @@ export function WorkspaceApiKeysPanel({
                 )}
 
                 <Field>
-                  {isPending ? (
-                    <SpinnerButton
-                      className="w-full sm:w-auto"
-                      message="Issuing API key..."
-                    />
-                  ) : (
-                    <Button type="submit" disabled={!canCreate}>
-                      Issue API Key
-                    </Button>
-                  )}
+                  <div className="flex items-center">
+                    {isPending ? (
+                      <SpinnerButton message="Issuing API key..." />
+                    ) : (
+                      <Button type="submit" disabled={!canCreate}>
+                        Issue API Key
+                      </Button>
+                    )}
+                  </div>
                 </Field>
               </FieldGroup>
             </form>
           </CardContent>
         </Card>
 
-        <Card className="border-border/70 bg-background/85">
-          <CardHeader>
-            <CardTitle>Issued Keys</CardTitle>
-            <CardDescription>
-              Safe metadata only. Full secrets are never shown again after
-              creation or rotation.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {apiKeys.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-8 text-sm text-muted-foreground">
-                No API keys issued yet.
-              </div>
-            ) : (
-              apiKeys.map((apiKey) => (
-                <div
-                  key={apiKey.id}
-                  className="rounded-2xl border border-border/70 bg-muted/10 p-4"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium">{apiKey.name}</p>
-                        <Badge
-                          variant={
-                            apiKey.isActive && !apiKey.isExpired
-                              ? 'default'
-                              : 'secondary'
-                          }
-                        >
-                          {apiKey.isActive
-                            ? apiKey.isExpired
-                              ? 'Expired'
-                              : 'Active'
-                            : 'Revoked'}
-                        </Badge>
-                        {apiKey.keyPrefix && (
-                          <Badge variant="outline">{apiKey.keyPrefix}...</Badge>
-                        )}
-                      </div>
-                      {apiKey.description && (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {apiKey.description}
-                        </p>
-                      )}
-                      <div className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground">
-                        <p>Created by: {apiKey.createdByName}</p>
-                        <p>Created: {formatDateTime(apiKey.createdAt)}</p>
-                        <p>
-                          Last used:{' '}
-                          {apiKey.lastUsedAt
-                            ? formatDateTime(apiKey.lastUsedAt)
-                            : 'Not used yet'}
-                        </p>
-                        <p>
-                          Expires:{' '}
-                          {apiKey.expiresAt
-                            ? formatDateTime(apiKey.expiresAt)
-                            : 'Does not expire'}
-                        </p>
-                        {apiKey.revokedAt && (
-                          <p>Revoked: {formatDateTime(apiKey.revokedAt)}</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            disabled={!canRotate || isPending}
-                          >
-                            <RefreshCcwIcon className="mr-2 size-4" />
-                            Rotate
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Rotate API key?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will invalidate the current secret for{' '}
-                              {apiKey.name}. Make sure the integration is ready
-                              to receive the replacement key immediately.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => runRotate(apiKey.id)}
-                            >
-                              Rotate Key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="outline"
-                            disabled={!canRevoke || isPending || !apiKey.isActive}
-                          >
-                            <Trash2Icon className="mr-2 size-4" />
-                            Revoke
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will disable {apiKey.name} immediately and
-                              stop any integration using it from authenticating.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => runRevoke(apiKey.id)}
-                            >
-                              Revoke Key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+        <AdminDataTable
+          title="Issued Keys"
+          columns={columns}
+          data={apiKeys}
+          searchPlaceholder="Search keys by name, prefix, creator, scope, or status"
+          emptyStateTitle="No API keys issued yet"
+          emptyStateDescription="Issue the first workspace API key to manage integrations from this table."
+          defaultPageSize={10}
+          headerTextClassName="lg:max-w-[32rem] xl:max-w-[36rem]"
+          actionsClassName="lg:flex-nowrap"
+        />
       </section>
 
       <Card className="border-border/70 bg-background/85">

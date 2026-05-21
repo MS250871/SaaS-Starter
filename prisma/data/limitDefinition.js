@@ -93,12 +93,14 @@ export const LIMITDEFINITIONS_SEED = [
     key: 'max_custom_domains',
     name: 'Maximum custom domains',
     unit: 'domains',
+    overridePolicy: 'PLATFORM_ONLY',
     sortOrder: 60,
   },
   {
     key: 'max_subdomains',
     name: 'Maximum subdomains',
     unit: 'subdomains',
+    overridePolicy: 'PLATFORM_ONLY',
     sortOrder: 61,
   },
   {

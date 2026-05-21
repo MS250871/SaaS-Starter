@@ -1,9 +1,13 @@
 import { cookies } from "next/headers"
 
 import { AdminShell } from "@/components/admin/admin-shell"
-import { prisma } from "@/lib/prisma"
 import { readActorContext } from "@/lib/request/read-actor-context"
-import { platformNavGroups } from "@/modules/platform/admin-navigation"
+import {
+  filterPlatformNavGroupsByPermissions,
+  platformBreadcrumbOverrides,
+  platformNavGroups,
+} from "@/modules/platform/admin-navigation"
+import { requirePlatformAccess } from '@/modules/platform/server/require-platform-admin'
 
 function getDisplayName(params: {
   firstName?: string | null
@@ -43,27 +47,27 @@ export default async function PlatformLayout({
 }) {
   const cookieStore = await cookies()
   const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
-  const { actor } = await readActorContext()
-  const identity = actor.identityId
-    ? await prisma.identity.findUnique({
-        where: { id: actor.identityId },
-        select: {
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
-      })
-    : null
-  const userName = getDisplayName(identity ?? {})
+  await requirePlatformAccess()
+  const { actor, session } = await readActorContext()
+  const userName = getDisplayName({
+    firstName: session?.identityFirstName,
+    lastName: session?.identityLastName,
+    email: session?.identityEmail,
+  })
+  const navGroups = filterPlatformNavGroupsByPermissions(
+    platformNavGroups,
+    actor.permissions ?? [],
+  )
 
   return (
     <AdminShell
       areaLabel="Platform"
       breadcrumbs={[{ label: "Platform", href: "/platform" }]}
-      navGroups={platformNavGroups}
+      breadcrumbOverrides={platformBreadcrumbOverrides}
+      navGroups={navGroups}
       user={{
         name: userName,
-        email: identity?.email ?? undefined,
+        email: session?.identityEmail ?? undefined,
         initials: getInitials(userName),
       }}
       defaultSidebarOpen={defaultSidebarOpen}

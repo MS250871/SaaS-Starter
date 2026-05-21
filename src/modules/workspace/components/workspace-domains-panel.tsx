@@ -3,6 +3,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import type { ColumnDef } from "@tanstack/react-table"
 import {
   AlertCircleIcon,
   ArrowUpRightIcon,
@@ -18,6 +19,7 @@ import { createWorkspaceRedirectAliasAction } from "@/modules/workspace/actions/
 import { refreshWorkspaceCustomDomainVerificationAction } from "@/modules/workspace/actions/refresh-workspace-custom-domain-verification.action"
 import { changeWorkspacePlanAction } from "@/modules/billing/actions/change-workspace-plan.action"
 import { navigateClientRedirect } from "@/lib/navigation/client-redirect"
+import { AdminDataTable } from "@/components/data-table/admin-data-table"
 import {
   Alert,
   AlertDescription,
@@ -28,14 +30,12 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
 import {
   Field,
   FieldContent,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -58,12 +58,11 @@ type WorkspaceDomainDnsRecordItem = {
 
 type DnsTableRow = {
   id: string
-  name: string
+  host: string
   type: string
   value: string
   ttl: string
   priority: string
-  comment: string
 }
 
 type WorkspaceDomainItem = {
@@ -172,14 +171,6 @@ function formatRoutingModeLabel(mode: string) {
   return "CNAME"
 }
 
-function formatRecordPurpose(purpose: string) {
-  if (purpose === "OWNERSHIP") {
-    return "Ownership verification"
-  }
-
-  return "Routing"
-}
-
 function formatDomainBehaviorLabel(
   behavior: WorkspaceDomainItem["behavior"]
 ) {
@@ -238,14 +229,14 @@ function UpgradeButton({
 }) {
   if (!canUpgrade) {
     return (
-      <Button type="button" className="w-full sm:w-auto" disabled>
+      <Button type="button" disabled>
         {label}
       </Button>
     )
   }
 
   return (
-    <Button asChild className="w-full sm:w-auto">
+    <Button asChild>
       <Link href={href}>
         {label}
         <ArrowUpRightIcon className="size-4" />
@@ -276,29 +267,51 @@ function DnsCell({
   )
 }
 
-function getDnsRowDisplay(record: WorkspaceDomainDnsRecordItem) {
+function toDnsHostLabel(host: string, zoneRoot: string) {
+  const normalizedHost = normalizeDomainInput(host)
+  const normalizedZoneRoot = normalizeDomainInput(zoneRoot)
+
+  if (!normalizedHost || !normalizedZoneRoot) {
+    return host
+  }
+
+  if (normalizedHost === normalizedZoneRoot) {
+    return "@"
+  }
+
+  const suffix = `.${normalizedZoneRoot}`
+
+  if (normalizedHost.endsWith(suffix)) {
+    return normalizedHost.slice(0, -suffix.length)
+  }
+
+  return normalizedHost
+}
+
+function getDnsRowDisplay(record: WorkspaceDomainDnsRecordItem, zoneRoot: string) {
   return {
-    name: record.host,
+    host: toDnsHostLabel(record.host, zoneRoot),
     type: record.type,
     value: record.expectedValue,
     ttl: "Auto",
     priority: record.type === "MX" ? "10" : "Leave blank",
-    comment: formatRecordPurpose(record.purpose),
   }
 }
 
-function mapDnsRecordsToRows(records: WorkspaceDomainDnsRecordItem[]): DnsTableRow[] {
+function mapDnsRecordsToRows(
+  records: WorkspaceDomainDnsRecordItem[],
+  zoneRoot: string
+): DnsTableRow[] {
   return records.map((record) => {
-    const row = getDnsRowDisplay(record)
+    const row = getDnsRowDisplay(record, zoneRoot)
 
     return {
       id: record.id,
-      name: row.name,
+      host: row.host,
       type: row.type,
       value: row.value,
       ttl: row.ttl,
       priority: row.priority,
-      comment: row.comment,
     }
   })
 }
@@ -307,44 +320,42 @@ function buildSampleRedirectRows(domain: string): DnsTableRow[] {
   return [
     {
       id: `${domain}-redirect-a`,
-      name: domain,
+      host: "@",
       type: "A",
       value: "76.76.21.21",
       ttl: "Auto",
       priority: "Leave blank",
-      comment: "Routes the apex redirect host to Vercel",
     },
     {
       id: `${domain}-redirect-txt`,
-      name: `_vercel.${domain}`,
+      host: "_vercel",
       type: "TXT",
       value: `vc-domain-verify=${domain},sample-redirect-token`,
       ttl: "Auto",
       priority: "Leave blank",
-      comment: "Ownership verification for the redirect host",
     },
   ]
 }
 
 function buildSampleRoutedRows(domain: string): DnsTableRow[] {
+  const zoneRoot = domain.startsWith("www.") ? domain.slice(4) : domain
+
   return [
     {
       id: `${domain}-route-cname`,
-      name: domain,
+      host: toDnsHostLabel(domain, zoneRoot),
       type: "CNAME",
       value: "cname.vercel-dns.com",
       ttl: "Auto",
       priority: "Leave blank",
-      comment: "Routes the branded www host to Vercel",
     },
     {
       id: `${domain}-route-txt`,
-      name: `_vercel.${domain}`,
+      host: toDnsHostLabel(`_vercel.${domain}`, zoneRoot),
       type: "TXT",
       value: `vc-domain-verify=${domain},sample-route-token`,
       ttl: "Auto",
       priority: "Leave blank",
-      comment: "Ownership verification for the routed host",
     },
   ]
 }
@@ -354,62 +365,46 @@ function DnsRecordsTable({
 }: {
   rows: DnsTableRow[]
 }) {
+  const columns: ColumnDef<DnsTableRow>[] = [
+    {
+      accessorKey: "host",
+      header: "Host",
+      cell: ({ row }) => <DnsCell value={row.original.host} />,
+    },
+    {
+      accessorKey: "type",
+      header: "Type",
+      cell: ({ row }) => <DnsCell value={row.original.type} />,
+    },
+    {
+      accessorKey: "value",
+      header: "Value",
+      cell: ({ row }) => <DnsCell value={row.original.value} />,
+    },
+    {
+      accessorKey: "ttl",
+      header: "TTL",
+      cell: ({ row }) => <DnsCell value={row.original.ttl} />,
+    },
+    {
+      accessorKey: "priority",
+      header: "Priority",
+      cell: ({ row }) => <DnsCell value={row.original.priority} />,
+    },
+  ]
+
   return (
-    <div className="overflow-x-auto rounded-2xl border border-border/70">
-      <table className="min-w-[980px] w-full text-left">
-        <thead className="bg-muted/20">
-          <tr className="border-b border-border/70">
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Name
-            </th>
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Type
-            </th>
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Value
-            </th>
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              TTL
-            </th>
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Priority
-            </th>
-            <th className="px-4 py-3 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Comment
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => {
-            return (
-              <tr
-                key={row.id}
-                className="border-b border-border/60 align-top last:border-b-0"
-              >
-                <td className="px-4 py-3">
-                  <DnsCell value={row.name} />
-                </td>
-                <td className="px-4 py-3">
-                  <DnsCell value={row.type} />
-                </td>
-                <td className="px-4 py-3">
-                  <DnsCell value={row.value} />
-                </td>
-                <td className="px-4 py-3">
-                  <DnsCell value={row.ttl} />
-                </td>
-                <td className="px-4 py-3">
-                  <DnsCell value={row.priority} />
-                </td>
-                <td className="px-4 py-3">
-                  <DnsCell value={row.comment} />
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <AdminDataTable
+      title="DNS Records"
+      columns={columns}
+      data={rows}
+      searchPlaceholder="Search DNS records"
+      emptyStateTitle="No DNS records found"
+      emptyStateDescription="DNS records will appear here once the domain setup is prepared."
+      defaultPageSize={10}
+      cardClassName="workspace-info-card border bg-background/70"
+      headerTextClassName="lg:max-w-[20rem]"
+    />
   )
 }
 
@@ -504,26 +499,20 @@ function CurrentDomainRow({
 
 function DnsStepSection({
   title,
-  description,
   rows,
 }: {
   title: string
-  description: string
   rows: DnsTableRow[]
 }) {
   return (
-    <div className="space-y-3 rounded-2xl border border-border/70 bg-background/70 p-4">
-      <div className="space-y-1">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+    <div className="space-y-3">
+      <p className="text-sm font-medium">{title}</p>
       <DnsRecordsTable rows={rows} />
     </div>
   )
 }
 
 export function WorkspaceDomainsPanel({
-  workspaceName,
   workspaceSlug,
   currentMode,
   activePlan,
@@ -535,7 +524,6 @@ export function WorkspaceDomainsPanel({
   canManageDomains,
   canVerifyDomains,
 }: {
-  workspaceName: string
   workspaceSlug: string
   currentMode: "free_path" | "subdomain" | "custom_domain"
   activePlan: WorkspaceDomainPlan
@@ -876,17 +864,11 @@ export function WorkspaceDomainsPanel({
       : currentMode === "subdomain"
         ? domainConfig.primaryHost ?? subdomainPreview
         : pathPreview
-  const hasSubdomainFeature =
-    entitlements.features.includes("domain_subdomain") ||
-    (entitlements.limits.max_subdomains ?? 0) > 0
   const hasCustomDomainFeature = whiteLabelConfig.isEnabled
   const customDomainSlots = entitlements.limits.max_custom_domains ?? 0
   const customDomainLimitReached =
     customDomainSlots > 0 &&
     whiteLabelConfig.currentCustomDomainCount >= customDomainSlots
-  const showSubdomainUpgradeCard = currentMode === "free_path"
-  const showSubdomainDowngradeCard = currentMode === "subdomain"
-  const showCustomDowngradeCard = currentMode === "custom_domain"
   const hasVerificationStarted = verificationTargets.some(
     (domain) => domain.isVerified || Boolean(domain.lastCheckedAt)
   )
@@ -903,13 +885,20 @@ export function WorkspaceDomainsPanel({
   const routedStepDomain =
     primaryRouteDomain?.domain ||
     (whiteLabelDomainInput ? buildWhiteLabelHosts(whiteLabelDomainInput).routedDomain : null)
+  const dnsZoneRoot =
+    redirectStepDomain ||
+    configuredBaseDomain ||
+    (routedStepDomain?.startsWith("www.")
+      ? routedStepDomain.slice(4)
+      : routedStepDomain) ||
+    "domain.com"
   const redirectDnsRows =
     redirectAliasDomain?.dnsRecords.length
-      ? mapDnsRecordsToRows(redirectAliasDomain.dnsRecords)
+      ? mapDnsRecordsToRows(redirectAliasDomain.dnsRecords, dnsZoneRoot)
       : buildSampleRedirectRows(redirectStepDomain ?? "domain.com")
   const routedDnsRows =
     primaryRouteDomain?.dnsRecords.length
-      ? mapDnsRecordsToRows(primaryRouteDomain.dnsRecords)
+      ? mapDnsRecordsToRows(primaryRouteDomain.dnsRecords, dnsZoneRoot)
       : buildSampleRoutedRows(routedStepDomain ?? "www.domain.com")
 
   const handleMoveToTrial = () => {
@@ -940,10 +929,6 @@ export function WorkspaceDomainsPanel({
             <Globe2Icon className="size-4 text-accent" />
           <CardTitle>Current Domain Setup</CardTitle>
           </div>
-          <CardDescription>
-            One view of the routing mode, current access URL, and any branded
-            domains already attached to {workspaceName}.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -987,10 +972,6 @@ export function WorkspaceDomainsPanel({
                 {" / "}
                 {customDomainSlots > 0 ? customDomainSlots : "Not enabled"}
               </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                One setup includes both <code>domain.com</code> and{" "}
-                <code>www.domain.com</code>.
-              </p>
             </div>
           </div>
 
@@ -1015,12 +996,7 @@ export function WorkspaceDomainsPanel({
             </Alert>
           )}
 
-          {customDomains.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/15 p-5 text-sm text-muted-foreground">
-              No branded domains are connected yet. The workspace is currently
-              running in {formatModeLabel(currentMode).toLowerCase()} mode.
-            </div>
-          ) : (
+          {customDomains.length > 0 && (
             <div className="space-y-4">
               {customDomains.map((domain) => (
                 <CurrentDomainRow
@@ -1046,191 +1022,81 @@ export function WorkspaceDomainsPanel({
         </CardContent>
       </Card>
 
-      {showSubdomainUpgradeCard && (
+      {(planChangeMessage || planChangeError) && (
+        <div className="space-y-4">
+          {planChangeMessage && (
+            <Alert>
+              <AlertTitle>Plan change started</AlertTitle>
+              <AlertDescription>{planChangeMessage}</AlertDescription>
+            </Alert>
+          )}
+
+          {planChangeError && (
+            <Alert variant="destructive">
+              <AlertCircleIcon className="size-4" />
+              <AlertTitle>Unable to change the plan</AlertTitle>
+              <AlertDescription>{planChangeError}</AlertDescription>
+            </Alert>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-6 xl:grid-cols-2">
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <div className="flex items-center gap-2">
               <Layers3Icon className="size-4 text-accent" />
-              <CardTitle>Upgrade to Subdomain Routing</CardTitle>
+              <CardTitle>Move to Path-based Routing</CardTitle>
             </div>
-            <CardDescription>
-              Move from the shared path URL to a dedicated branded subdomain on
-              the Pro plan.
-            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-              <Badge variant="outline">Pro</Badge>
-              <Badge variant="secondary">1 branded subdomain</Badge>
-              <Badge variant="secondary">Reduced platform branding</Badge>
+          <CardContent>
+            {isPlanChangePending ? (
+              <SpinnerButton message="Moving to Trial..." />
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!canUpgrade || currentMode === "free_path"}
+                onClick={handleMoveToTrial}
+              >
+                Move to Trial
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/70 bg-background/85">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <SparklesIcon className="size-4 text-accent" />
+              <CardTitle>Upgrade to Custom Domain</CardTitle>
             </div>
-
-            <p className="text-sm text-muted-foreground">
-              Today your learners use <code>{pathPreview}</code>. After this
-              upgrade they can use a branded host like <code>{subdomainPreview}</code>.
-            </p>
-
+          </CardHeader>
+          <CardContent>
             <UpgradeButton
               href={buildPaymentHref({
-                plan: "pro",
-                planName: "Pro",
-                upgrade: "subdomain",
+                plan: "business",
+                planName: "Business",
+                upgrade: "custom-domain",
               })}
-              canUpgrade={canUpgrade}
-              label="Upgrade to Pro"
+              canUpgrade={canUpgrade && currentMode !== "custom_domain"}
+              label="Move to Business"
             />
-
-            {!canUpgrade && (
-              <p className="text-xs text-muted-foreground">
-                Only the workspace owner can continue to payment for this upgrade.
-              </p>
-            )}
-
-            {hasSubdomainFeature && (
-              <p className="text-xs text-muted-foreground">
-                The workspace already has subdomain entitlement available. Once
-                payment finishes, the domain routing should update automatically
-                on the next session refresh.
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Billing note: card mandates keep the current renewal date with a
-              prorated upgrade charge. UPI or eMandate upgrades restart the
-              subscription today and refund the unused part of the current
-              cycle.
-            </p>
           </CardContent>
         </Card>
-      )}
-
-      {(showSubdomainDowngradeCard || showCustomDowngradeCard) && (
-        <Card className="border-border/70 bg-background/85">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Layers3Icon className="size-4 text-accent" />
-              <CardTitle>Routing Downgrade Options</CardTitle>
-            </div>
-            <CardDescription>
-              Move this workspace to a lower routing tier when you no longer need the
-              current domain setup.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {planChangeMessage && (
-              <Alert>
-                <AlertTitle>Plan change started</AlertTitle>
-                <AlertDescription>{planChangeMessage}</AlertDescription>
-              </Alert>
-            )}
-
-            {planChangeError && (
-              <Alert variant="destructive">
-                <AlertCircleIcon className="size-4" />
-                <AlertTitle>Unable to change the plan</AlertTitle>
-                <AlertDescription>{planChangeError}</AlertDescription>
-              </Alert>
-            )}
-
-            {showCustomDowngradeCard && (
-              <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <p className="text-sm font-medium">Move from custom domain to subdomain</p>
-                <p className="text-sm text-muted-foreground">
-                  Switching to Pro will disable the current white-label custom domain
-                  and fall back to the managed workspace subdomain.
-                </p>
-                <UpgradeButton
-                  href={buildPaymentHref({
-                    plan: "pro",
-                    planName: "Pro",
-                    upgrade: "subdomain",
-                  })}
-                  canUpgrade={canUpgrade}
-                  label="Change to Pro"
-                />
-              </div>
-            )}
-
-            {(showSubdomainDowngradeCard || showCustomDowngradeCard) && (
-              <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/15 p-4">
-                <p className="text-sm font-medium">Move back to path-based routing</p>
-                <p className="text-sm text-muted-foreground">
-                  This will disable managed subdomain and custom-domain routing and
-                  return the workspace to <code>{pathPreview}</code>.
-                </p>
-                {isPlanChangePending ? (
-                  <SpinnerButton message="Moving to Trial..." />
-                ) : (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={!canUpgrade}
-                    onClick={handleMoveToTrial}
-                  >
-                    Move to Trial
-                  </Button>
-                )}
-                {!canUpgrade && (
-                  <p className="text-xs text-muted-foreground">
-                    Only the workspace owner can change the billing plan.
-                  </p>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      </div>
 
       {showWhiteLabelCard && (
         <Card className="border-border/70 bg-background/85">
           <CardHeader>
             <div className="flex items-center gap-2">
               <SparklesIcon className="size-4 text-accent" />
-              <CardTitle>White-label Upgrade</CardTitle>
+              <CardTitle>Custom Domain Setup</CardTitle>
             </div>
-            <CardDescription>
-              Upgrade first, then add your apex domain once, and finally publish
-              the DNS records for both the redirect and routed hosts.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium">Step 1. Upgrade to White-label</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Upgrade to Business. After payment, you will return to this
-                    page and can continue with domain setup.
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Card mandates keep the current billing date with a prorated
-                    charge. UPI or eMandate upgrades restart billing today and
-                    refund the unused value of the current cycle.
-                  </p>
-                </div>
-                {hasCustomDomainFeature ? (
-                  <Badge variant="default">Upgrade complete</Badge>
-                ) : (
-                  <UpgradeButton
-                    href={buildPaymentHref({
-                      plan: "business",
-                      planName: "Business",
-                      upgrade: "custom-domain",
-                    })}
-                    canUpgrade={canUpgrade}
-                    label="Upgrade to Business"
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Step 2. Add Domain</p>
-                <p className="text-sm text-muted-foreground">
-                  Enter the apex domain in the format <code>domain.com</code>. We
-                  will prepare both <code>domain.com</code> and <code>www.domain.com</code>.
-                </p>
-              </div>
+              <p className="text-sm font-medium">Step 1. Add Domain</p>
 
               <FieldGroup className="gap-4">
                 <Field>
@@ -1248,10 +1114,6 @@ export function WorkspaceDomainsPanel({
                       }
                     />
                   </FieldContent>
-                  <FieldDescription>
-                    Use the apex domain only. We will route <code>www.domain.com</code> and
-                    redirect <code>domain.com</code> to it.
-                  </FieldDescription>
                   <FieldError>{setupFieldError}</FieldError>
                 </Field>
 
@@ -1323,25 +1185,16 @@ export function WorkspaceDomainsPanel({
             </div>
 
             <div className="space-y-4 rounded-2xl border border-border/70 bg-muted/15 p-4">
-              <div className="space-y-1">
-                <p className="text-sm font-medium">Step 3. Publish DNS Records</p>
-                <p className="text-sm text-muted-foreground">
-                  Add these DNS records in your domain provider panel. Once both
-                  record sets are saved, confirm below and we will start
-                  verification.
-                </p>
-              </div>
+              <p className="text-sm font-medium">Step 2. DNS Records</p>
 
               <div className="space-y-4">
                 <DnsStepSection
                   title={`Redirect ${redirectStepDomain ?? "domain.com"} -> ${redirectAliasDomain?.redirectTo ?? routedStepDomain ?? "www.domain.com"}`}
-                  description="Add the following DNS records in your domain provider panel for the apex redirect host."
                   rows={redirectDnsRows}
                 />
 
                 <DnsStepSection
                   title={`Route ${routedStepDomain ?? "www.domain.com"}`}
-                  description="Add these DNS records in your domain provider panel for the branded www host."
                   rows={routedDnsRows}
                 />
 
@@ -1364,8 +1217,7 @@ export function WorkspaceDomainsPanel({
                   )}
                   {!canVerifyDomains && (
                     <p className="self-center text-xs text-muted-foreground">
-                      Verification requires the <code>workspaceDomain.verify</code>{" "}
-                      permission.
+                      <code>workspaceDomain.verify</code> required.
                     </p>
                   )}
                 </div>

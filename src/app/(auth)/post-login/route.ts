@@ -8,7 +8,15 @@ import {
   setVerificationSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
-import { postLoginWorkflow } from '@/modules/auth/workflows/post-login.workflow';
+import { normalizeHostname } from '@/lib/middleware/proxy-utils';
+import {
+  postLoginWorkflow,
+  resolveWorkspaceCanonicalSurfaceHost,
+} from '@/modules/auth/workflows/post-login.workflow';
+import {
+  buildHostTransferPath,
+  issueHostTransferToken,
+} from '@/modules/auth/services/host-transfer.services';
 import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import { withRequestContext } from '@/lib/request/withRequestContext';
 import { getRequestContext } from '@/lib/context/request-context';
@@ -84,6 +92,31 @@ export async function GET(req: NextRequest) {
     }
 
     if ('finalSession' in result && result.finalSession) {
+      if (result.finalSession.workspaceId && result.redirectTo) {
+        const currentHost = normalizeHostname(
+          req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '',
+        );
+        const canonicalHost = await resolveWorkspaceCanonicalSurfaceHost(
+          result.finalSession.workspaceId,
+        );
+
+        if (canonicalHost && currentHost !== canonicalHost) {
+          const token = await issueHostTransferToken({
+            session: result.finalSession,
+            workspaceId: result.finalSession.workspaceId,
+            targetHost: canonicalHost,
+            intent: auth.intent,
+            returnPath: result.redirectTo,
+          });
+
+          await clearAuthCookie();
+
+          return NextResponse.redirect(
+            new URL(buildHostTransferPath(token), req.url),
+          );
+        }
+      }
+
       await setUserSession(result.finalSession);
       await clearAuthCookie();
 

@@ -54,7 +54,7 @@ type AdminDataTableAction = {
 
 type AdminDataTableProps<TData, TValue> = {
   title: string
-  description: string
+  description?: string
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
   emptyStateTitle: string
@@ -63,6 +63,10 @@ type AdminDataTableProps<TData, TValue> = {
   primaryAction?: AdminDataTableAction
   secondaryActions?: AdminDataTableAction[]
   defaultPageSize?: number
+  headerTextClassName?: string
+  descriptionClassName?: string
+  actionsClassName?: string
+  cardClassName?: string
 }
 
 function includesSearchValue(value: unknown, query: string): boolean {
@@ -94,6 +98,10 @@ export function AdminDataTable<TData, TValue>({
   primaryAction,
   secondaryActions = [],
   defaultPageSize = 10,
+  headerTextClassName,
+  descriptionClassName,
+  actionsClassName,
+  cardClassName,
 }: AdminDataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = React.useState("")
@@ -146,14 +154,20 @@ export function AdminDataTable<TData, TValue>({
   )
 
   return (
-    <Card className="border-border/70 bg-background/85">
+    <Card className={cn("border-border/70 bg-background/85", cardClassName)}>
       <CardHeader className="gap-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
+          <div className={cn("space-y-2", headerTextClassName)}>
             <CardTitle>{title}</CardTitle>
-            <CardDescription className="max-w-3xl">{description}</CardDescription>
+            {description ? (
+              <CardDescription
+                className={cn("max-w-3xl", descriptionClassName)}
+              >
+                {description}
+              </CardDescription>
+            ) : null}
           </div>
-          <div className="flex flex-wrap gap-3">
+          <div className={cn("flex flex-wrap gap-3", actionsClassName)}>
             {secondaryActions.map((action) => (
               <Button
                 key={`${action.label}-${action.href}`}

@@ -5,6 +5,39 @@ import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
+export type PlatformAdminAuditSnapshot = Prisma.AdminAuditLogGetPayload<{
+  select: {
+    id: true
+    adminIdentityId: true
+    adminEmail: true
+    adminRole: true
+    action: true
+    entityType: true
+    entityId: true
+    description: true
+    source: true
+    severity: true
+    createdAt: true
+    requestId: true
+    adminIdentity: {
+      select: {
+        id: true
+        firstName: true
+        lastName: true
+        email: true
+        phone: true
+      }
+    }
+    workspace: {
+      select: {
+        id: true
+        name: true
+        slug: true
+      }
+    }
+  }
+}>;
+
 /**
  * Get audit log by ID
  */
@@ -171,5 +204,50 @@ export async function listAuditLogsPaginated(opts?: {
     };
   } catch {
     throwError(ERR.DB_ERROR, 'Failed to list audit logs');
+  }
+}
+
+export async function listPlatformAdminAuditSnapshots(opts?: {
+  limit?: number;
+}) {
+  try {
+    const logs = await adminAuditLogQueries.delegate.findMany({
+      orderBy: [{ createdAt: 'desc' }],
+      take: opts?.limit ?? 500,
+      select: {
+        id: true,
+        adminIdentityId: true,
+        adminEmail: true,
+        adminRole: true,
+        action: true,
+        entityType: true,
+        entityId: true,
+        description: true,
+        source: true,
+        severity: true,
+        createdAt: true,
+        requestId: true,
+        adminIdentity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    });
+
+    return logs as PlatformAdminAuditSnapshot[];
+  } catch {
+    throwError(ERR.DB_ERROR, 'Failed to list platform audit logs');
   }
 }

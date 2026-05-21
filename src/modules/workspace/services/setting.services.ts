@@ -19,6 +19,17 @@ export async function getWorkspaceSettings(workspaceId: string) {
   });
 }
 
+export async function getWorkspaceThemeSnapshot(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
+
+  return workspaceSettingsQueries.findFirst({
+    where: { workspaceId },
+    select: {
+      themes: true,
+    },
+  });
+}
+
 /**
  * Create settings
  */

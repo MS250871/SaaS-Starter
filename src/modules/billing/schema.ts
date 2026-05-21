@@ -100,3 +100,40 @@ export const changeWorkspacePlanActionSchema = z.object({
 export type ChangeWorkspacePlanActionInput = z.infer<
   typeof changeWorkspacePlanActionSchema
 >;
+
+export const platformBillingCancelSubscriptionActionSchema = z.object({
+  subscriptionId: z.string().uuid('Invalid subscription id'),
+});
+
+export type PlatformBillingCancelSubscriptionActionInput = z.infer<
+  typeof platformBillingCancelSubscriptionActionSchema
+>;
+
+const refundReasonSchema = z.enum([
+  'USER_REQUEST',
+  'DUPLICATE',
+  'FRAUD',
+  'PAYMENT_ERROR',
+  'UPGRADE_ADJUSTMENT',
+  'DOWNGRADE_ADJUSTMENT',
+  'OTHER',
+]);
+
+export const platformBillingRefundPaymentActionSchema = z.object({
+  paymentId: z.string().uuid('Invalid payment id'),
+  amount: z.coerce
+    .number()
+    .positive('Refund amount must be greater than zero')
+    .optional(),
+  reason: refundReasonSchema.default('USER_REQUEST'),
+  notes: z
+    .string()
+    .trim()
+    .max(500, 'Notes are too long')
+    .optional()
+    .or(z.literal('')),
+});
+
+export type PlatformBillingRefundPaymentActionInput = z.infer<
+  typeof platformBillingRefundPaymentActionSchema
+>;

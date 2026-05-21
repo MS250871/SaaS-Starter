@@ -20,12 +20,28 @@ export function injectActorHeaders(
     res.headers.set('x-identity-id', session.identityId);
   }
 
+  if (session.identityFirstName) {
+    res.headers.set('x-identity-first-name', session.identityFirstName);
+  }
+
+  if (session.identityLastName) {
+    res.headers.set('x-identity-last-name', session.identityLastName);
+  }
+
+  if (session.identityEmail) {
+    res.headers.set('x-identity-email', session.identityEmail);
+  }
+
   if (session.customerId) {
     res.headers.set('x-customer-id', session.customerId);
   }
 
   if (session.workspaceId) {
     res.headers.set('x-workspace-id', session.workspaceId);
+  }
+
+  if (session.workspaceName) {
+    res.headers.set('x-workspace-name', session.workspaceName);
   }
 
   if (session.membershipId) {

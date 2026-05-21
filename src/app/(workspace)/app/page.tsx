@@ -1,11 +1,11 @@
-import { WorkspaceOverviewPanel } from "@/modules/workspace/components/workspace-admin-dashboard"
+import { WorkspaceOverviewDashboard } from "@/modules/workspace/components/workspace-overview-dashboard"
 import { getWorkspaceOverviewPageData } from "@/modules/workspace/server/workspace-admin-page-data"
 
 export default async function WorkspaceAppPage() {
-  const { actor, requestContext, workspaceSummary, workspaceId } =
+  const { workspaceSummary, workspaceId, workspaceOverview } =
     await getWorkspaceOverviewPageData()
 
-  if (!workspaceId || !workspaceSummary) {
+  if (!workspaceId || !workspaceSummary || !workspaceOverview) {
     return (
       <div className="flex min-h-svh items-center justify-center p-6">
         <div className="rounded-xl border bg-background p-8 text-sm text-muted-foreground shadow-sm">
@@ -15,11 +15,5 @@ export default async function WorkspaceAppPage() {
     )
   }
 
-  return (
-    <WorkspaceOverviewPanel
-      workspace={workspaceSummary}
-      actor={actor}
-      requestContext={requestContext}
-    />
-  )
+  return <WorkspaceOverviewDashboard data={workspaceOverview} />
 }

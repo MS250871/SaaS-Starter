@@ -1,7 +1,30 @@
 import { identityCrud, identityQueries } from '@/modules/auth/db';
+import type { Prisma } from '@/generated/prisma/client';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type PlatformIdentityAdminSnapshot = Prisma.IdentityGetPayload<{
+  select: {
+    id: true;
+    firstName: true;
+    lastName: true;
+    email: true;
+    phone: true;
+    isActive: true;
+    createdAt: true;
+    updatedAt: true;
+    _count: {
+      select: {
+        authAccounts: true;
+        sessions: true;
+        customers: true;
+        memberships: true;
+        platformMemberships: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Get identity by ID
@@ -282,4 +305,79 @@ export async function getIdentityDisplayProfile(identityId: string) {
   }
 
   return identity;
+}
+
+export async function listPlatformIdentityAdminSnapshots(opts?: {
+  limit?: number;
+  identityId?: string | null;
+}) {
+  const identities = await identityQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          id: opts.identityId,
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          authAccounts: true,
+          sessions: true,
+          customers: true,
+          memberships: true,
+          platformMemberships: true,
+        },
+      },
+    },
+  });
+
+  return identities as PlatformIdentityAdminSnapshot[];
+}
+
+export async function getPlatformIdentityAdminSnapshot(
+  identityId: string,
+): Promise<PlatformIdentityAdminSnapshot> {
+  if (!identityId) {
+    throwError(ERR.INVALID_INPUT, 'Identity ID is required');
+  }
+
+  const identity = await identityQueries.delegate.findUnique({
+    where: {
+      id: identityId,
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          authAccounts: true,
+          sessions: true,
+          customers: true,
+          memberships: true,
+          platformMemberships: true,
+        },
+      },
+    },
+  });
+
+  if (!identity) {
+    throwError(ERR.NOT_FOUND, 'Identity not found');
+  }
+
+  return identity as PlatformIdentityAdminSnapshot;
 }

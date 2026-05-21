@@ -8,6 +8,7 @@ import {
   listWorkspaceLimitOverrides,
   resolveEntitlements,
 } from '@/modules/entitlements/entitlement.services';
+import { canOverrideEntitlement } from '@/modules/entitlements/override-policy';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
@@ -122,7 +123,9 @@ export async function getWorkspaceFeaturesPageData() {
             description: feature.description ?? null,
             enabled: entitlements.features.includes(feature.key),
             baseEnabled: baseFeatureMap.get(feature.id) ?? false,
-            isOverridden: featureOverrideMap.has(feature.id),
+            isOverridden:
+              canOverrideEntitlement(feature.overridePolicy) &&
+              featureOverrideMap.has(feature.id),
           });
 
           return acc;
@@ -173,7 +176,9 @@ export async function getWorkspaceFeaturesPageData() {
             unit: limit.unit ?? null,
             value: entitlements.limits[limit.key] ?? 0,
             baseValue: baseLimitMap.get(limit.id) ?? 0,
-            isOverridden: limitOverrideMap.has(limit.id),
+            isOverridden:
+              canOverrideEntitlement(limit.overridePolicy) &&
+              limitOverrideMap.has(limit.id),
           });
 
           return acc;
@@ -199,8 +204,12 @@ export async function getWorkspaceFeaturesPageData() {
       featuresByCategory: featureGroups,
       limitsByCategory: limitGroups,
       overridesSummary: {
-        featureOverrideCount: featureOverrides.length,
-        limitOverrideCount: limitOverrides.length,
+        featureOverrideCount: featureOverrides.filter((entry) =>
+          canOverrideEntitlement(entry.feature.overridePolicy),
+        ).length,
+        limitOverrideCount: limitOverrides.filter((entry) =>
+          canOverrideEntitlement(entry.limitDefinition.overridePolicy),
+        ).length,
       },
     };
   });

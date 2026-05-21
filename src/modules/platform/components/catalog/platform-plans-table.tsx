@@ -100,7 +100,6 @@ export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
   return (
     <AdminDataTable
       title="Plans"
-      description="Create, edit, activate, deactivate, and retire plans while keeping visibility, entitlements, and linked billing products aligned."
       columns={columns}
       data={rows}
       searchPlaceholder="Search plans by name, key, pricing, or status"

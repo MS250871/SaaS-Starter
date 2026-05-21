@@ -1,7 +1,43 @@
 import { workspaceCrud, workspaceQueries } from '@/modules/workspace/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type PlatformWorkspaceAdminSnapshot = Prisma.WorkspaceGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    slug: true;
+    defaultDomain: true;
+    primaryEmail: true;
+    isActive: true;
+    createdAt: true;
+    settings: {
+      select: {
+        settings: true;
+      };
+    };
+    _count: {
+      select: {
+        domains: true;
+        memberships: true;
+        customers: true;
+        invites: true;
+        apiKeys: true;
+      };
+    };
+  };
+}>;
+
+export type PlatformWorkspaceSelectOption = Prisma.WorkspaceGetPayload<{
+  select: {
+    id: true;
+    name: true;
+    slug: true;
+    isActive: true;
+  };
+}>;
 
 /**
  * Get workspace
@@ -114,6 +150,133 @@ export async function listWorkspaces(opts?: {
     totalItems,
     totalPages: Math.ceil(totalItems / pageSize),
   };
+}
+
+export async function listPlatformWorkspaceAdminSnapshots(opts?: {
+  page?: number;
+  pageSize?: number;
+  query?: string | null;
+}) {
+  const page = opts?.page ?? 1;
+  const pageSize = opts?.pageSize ?? 20;
+  const query = opts?.query?.trim() ?? '';
+  const where = query
+    ? {
+        OR: [
+          { name: { contains: query, mode: 'insensitive' as const } },
+          { slug: { contains: query, mode: 'insensitive' as const } },
+          {
+            primaryEmail: {
+              contains: query,
+              mode: 'insensitive' as const,
+            },
+          },
+          {
+            defaultDomain: {
+              contains: query,
+              mode: 'insensitive' as const,
+            },
+          },
+        ],
+      }
+    : undefined;
+
+  const [totalItems, items] = await Promise.all([
+    workspaceQueries.delegate.count({ where }),
+    workspaceQueries.delegate.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        defaultDomain: true,
+        primaryEmail: true,
+        isActive: true,
+        createdAt: true,
+        settings: {
+          select: {
+            settings: true,
+          },
+        },
+        _count: {
+          select: {
+            domains: true,
+            memberships: true,
+            customers: true,
+            invites: true,
+            apiKeys: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return {
+    items: items as PlatformWorkspaceAdminSnapshot[],
+    page,
+    pageSize,
+    query,
+    totalItems,
+    totalPages: Math.max(1, Math.ceil(totalItems / pageSize)),
+  };
+}
+
+export async function getPlatformWorkspaceAdminSnapshot(
+  workspaceId: string,
+): Promise<PlatformWorkspaceAdminSnapshot> {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
+
+  const workspace = await workspaceQueries.delegate.findUnique({
+    where: { id: workspaceId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      defaultDomain: true,
+      primaryEmail: true,
+      isActive: true,
+      createdAt: true,
+      settings: {
+        select: {
+          settings: true,
+        },
+      },
+      _count: {
+        select: {
+          domains: true,
+          memberships: true,
+          customers: true,
+          invites: true,
+          apiKeys: true,
+        },
+      },
+    },
+  });
+
+  if (!workspace) {
+    throwError(ERR.NOT_FOUND, 'Workspace not found');
+  }
+
+  return workspace as PlatformWorkspaceAdminSnapshot;
+}
+
+export async function listPlatformWorkspaceSelectOptions(): Promise<
+  PlatformWorkspaceSelectOption[]
+> {
+  const workspaces = await workspaceQueries.delegate.findMany({
+    orderBy: [{ name: 'asc' }, { slug: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      isActive: true,
+    },
+  });
+
+  return workspaces as PlatformWorkspaceSelectOption[];
 }
 
 export async function workspaceExistsBySlug(slug: string) {

@@ -1,7 +1,7 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
   addSupportTicketInternalNote,
-  getWorkspaceSupportTicketById,
+  getWorkspaceManagedSupportTicketById,
 } from '@/modules/support/support.services';
 import {
   createSupportAttachments,
@@ -16,7 +16,7 @@ export async function addWorkspaceSupportTicketInternalNoteWorkflow(input: {
   attachmentFiles?: File[];
 }) {
   return withUnitOfWork(async () => {
-    const ticket = await getWorkspaceSupportTicketById(
+    const ticket = await getWorkspaceManagedSupportTicketById(
       input.workspaceId,
       input.ticketId,
     );

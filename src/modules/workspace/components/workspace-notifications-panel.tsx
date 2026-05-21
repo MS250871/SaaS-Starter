@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -41,7 +40,7 @@ import { sendWorkspaceNotificationAction } from '@/modules/notifications/actions
 import {
   sendWorkspaceNotificationActionSchema,
   type SendWorkspaceNotificationActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/notifications/schema';
 
 type WorkspaceNotificationRecipient = {
   id: string;
@@ -81,11 +80,9 @@ function formatDateTime(value: string) {
 function InfoCard({
   label,
   value,
-  detail,
 }: {
   label: string;
   value: string | number;
-  detail: string;
 }) {
   return (
     <Card className="workspace-info-card border bg-background/85">
@@ -94,7 +91,6 @@ function InfoCard({
         <CardTitle className="workspace-info-value text-2xl font-semibold">
           {value}
         </CardTitle>
-        <CardDescription>{detail}</CardDescription>
       </CardHeader>
     </Card>
   );
@@ -223,31 +219,24 @@ export function WorkspaceNotificationsPanel({
         <InfoCard
           label="My Inbox"
           value={inboxSummary.totalCount}
-          detail="Notifications recorded for your workspace session."
         />
         <InfoCard
           label="Unread"
           value={inboxSummary.unreadCount}
-          detail="Items still waiting for you to review."
         />
         <InfoCard
           label="Workspace Members"
           value={workspaceRecipients.length}
-          detail="Available internal recipients for team notifications."
         />
         <InfoCard
           label="Customers"
           value={customerRecipients.length}
-          detail="Available recipients for customer notifications."
         />
       </section>
 
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <CardTitle>Send Notification</CardTitle>
-          <CardDescription>
-            Send a workspace or customer notification from the admin surface.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {message ? (
@@ -440,12 +429,7 @@ export function WorkspaceNotificationsPanel({
 
       <Card className="border-border/70 bg-background/85">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1">
-            <CardTitle>My Inbox</CardTitle>
-            <CardDescription>
-              Your recent workspace notifications with quick read controls.
-            </CardDescription>
-          </div>
+          <CardTitle>My Inbox</CardTitle>
           {inboxSummary.unreadCount > 0 ? (
             <Button
               type="button"

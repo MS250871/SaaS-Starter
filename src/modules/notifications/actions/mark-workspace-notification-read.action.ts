@@ -1,18 +1,18 @@
 'use server';
 
-import { createAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { createTxAction } from '@/lib/http/create-action';
 import { assertPermission } from '@/modules/permissions/permissions.services';
 import { getWorkspaceIdentityNotification } from '@/modules/notifications/notification.services';
 import {
   markWorkspaceNotificationReadActionSchema,
   type MarkWorkspaceNotificationReadActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/notifications/schema';
 import { markNotificationReadWorkflow } from '@/modules/notifications/workflows/mark-notification-read.workflow';
 
-const markWorkspaceNotificationReadActionImpl = createAction(
+const markWorkspaceNotificationReadActionImpl = createTxAction(
   async (formData: FormData) => {
     const raw = Object.fromEntries(formData.entries());
     const parsed: MarkWorkspaceNotificationReadActionInput =

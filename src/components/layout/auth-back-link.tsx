@@ -3,6 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { readActorContext } from '@/lib/request/read-actor-context';
 import { buildWorkspaceSurfacePath } from '@/modules/workspace/routing';
 import { cn } from '@/lib/utils';
+import { LinkPendingHint } from './link-pending-hint';
 
 type WorkspaceRequestContext = {
   workspace?: {
@@ -38,7 +39,8 @@ export default async function AuthBackLink({
       )}
     >
       <ArrowLeft className="h-4 w-4" />
-      Home
+      <span>Home</span>
+      <LinkPendingHint />
     </Link>
   );
 }

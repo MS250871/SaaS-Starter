@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useActionToast } from '@/hooks/use-action-toast';
 import type { ApiResponse } from '@/lib/http/create-action';
 
 type ActionResult = {
@@ -40,6 +41,7 @@ export function CatalogRowActions({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const { showActionError, showActionSuccess } = useActionToast();
 
   const runToggle = () => {
     startTransition(async () => {
@@ -50,10 +52,11 @@ export function CatalogRowActions({
       const response = await toggleAction(formData);
 
       if (!response.success) {
-        window.alert(response.error.message);
+        showActionError(response.error);
         return;
       }
 
+      showActionSuccess(response.data.successMessage, `${entityLabel} updated.`);
       router.refresh();
     });
   };
@@ -74,10 +77,11 @@ export function CatalogRowActions({
       const response = await deleteAction(formData);
 
       if (!response.success) {
-        window.alert(response.error.message);
+        showActionError(response.error);
         return;
       }
 
+      showActionSuccess(response.data.successMessage, `${entityLabel} deleted.`);
       router.refresh();
     });
   };

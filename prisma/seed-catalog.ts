@@ -36,6 +36,7 @@ type FeatureSeed = {
   description?: string;
   category?: string;
   isActive?: boolean;
+  overridePolicy?: 'NEVER' | 'PLATFORM_ONLY';
   sortOrder?: number;
 };
 
@@ -45,6 +46,7 @@ type LimitSeed = {
   description?: string;
   unit?: string;
   isActive?: boolean;
+  overridePolicy?: 'NEVER' | 'PLATFORM_ONLY';
   sortOrder?: number;
 };
 
@@ -142,23 +144,28 @@ async function seedFeatures() {
   let upserted = 0;
 
   for (const feature of FEATURES_SEED as FeatureSeed[]) {
+    const createPayload = {
+      key: feature.key,
+      name: feature.name,
+      description: feature.description,
+      category: feature.category,
+      isActive: feature.isActive ?? true,
+      overridePolicy: feature.overridePolicy ?? 'PLATFORM_ONLY',
+      sortOrder: feature.sortOrder ?? 0,
+    } as any;
+    const updatePayload = {
+      name: feature.name,
+      description: feature.description,
+      category: feature.category,
+      isActive: feature.isActive ?? true,
+      overridePolicy: feature.overridePolicy ?? 'PLATFORM_ONLY',
+      sortOrder: feature.sortOrder ?? 0,
+    } as any;
+
     await prisma.feature.upsert({
       where: { key: feature.key },
-      create: {
-        key: feature.key,
-        name: feature.name,
-        description: feature.description,
-        category: feature.category,
-        isActive: feature.isActive ?? true,
-        sortOrder: feature.sortOrder ?? 0,
-      },
-      update: {
-        name: feature.name,
-        description: feature.description,
-        category: feature.category,
-        isActive: feature.isActive ?? true,
-        sortOrder: feature.sortOrder ?? 0,
-      },
+      create: createPayload,
+      update: updatePayload,
     });
 
     upserted += 1;
@@ -171,23 +178,28 @@ async function seedLimitDefinitions() {
   let upserted = 0;
 
   for (const limit of LIMITDEFINITIONS_SEED as LimitSeed[]) {
+    const createPayload = {
+      key: limit.key,
+      name: limit.name,
+      description: limit.description,
+      unit: limit.unit,
+      isActive: limit.isActive ?? true,
+      overridePolicy: limit.overridePolicy ?? 'PLATFORM_ONLY',
+      sortOrder: limit.sortOrder ?? 0,
+    } as any;
+    const updatePayload = {
+      name: limit.name,
+      description: limit.description,
+      unit: limit.unit,
+      isActive: limit.isActive ?? true,
+      overridePolicy: limit.overridePolicy ?? 'PLATFORM_ONLY',
+      sortOrder: limit.sortOrder ?? 0,
+    } as any;
+
     await prisma.limitDefinition.upsert({
       where: { key: limit.key },
-      create: {
-        key: limit.key,
-        name: limit.name,
-        description: limit.description,
-        unit: limit.unit,
-        isActive: limit.isActive ?? true,
-        sortOrder: limit.sortOrder ?? 0,
-      },
-      update: {
-        name: limit.name,
-        description: limit.description,
-        unit: limit.unit,
-        isActive: limit.isActive ?? true,
-        sortOrder: limit.sortOrder ?? 0,
-      },
+      create: createPayload,
+      update: updatePayload,
     });
 
     upserted += 1;

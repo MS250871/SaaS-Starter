@@ -3,6 +3,7 @@ import {
   platformInviteCrud,
   platformInviteQueries,
 } from "@/modules/platform/db"
+import type { Prisma } from "@/generated/prisma/client"
 import {
   getPlatformDefaultRoleDefinition,
   resolveRoleAssignment,
@@ -108,6 +109,29 @@ export async function updatePlatformInvite(
   }
 }
 
+export async function updatePlatformInviteRole(
+  id: string,
+  roleInput: PlatformInviteRoleInput,
+) {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Invite ID is required')
+  }
+
+  const role = await resolveRoleAssignment({
+    scope: 'PLATFORM',
+    roleDefinitionId: roleInput.roleDefinitionId,
+    roleKey: roleInput.roleKey,
+    roleSystemKey: roleInput.roleSystemKey ?? undefined,
+    fallbackToDefault: false,
+  })
+
+  return updatePlatformInvite(id, {
+    roleDefinitionId: role.roleDefinitionId,
+    roleKey: role.roleKey,
+    roleSystemKey: role.roleSystemKey ?? undefined,
+  })
+}
+
 export async function acceptPlatformInvite(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Invite ID is required")
 
@@ -160,6 +184,22 @@ export async function listPlatformInvites() {
   })
 }
 
+export async function findPendingPlatformInviteByEmail(email: string) {
+  if (!email) {
+    throwError(ERR.INVALID_INPUT, 'Email is required')
+  }
+
+  return platformInviteQueries.findFirst({
+    where: {
+      email: email.toLowerCase(),
+      status: 'PENDING',
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  })
+}
+
 export function isPlatformInviteExpired(invite: { expiresAt?: Date | null }) {
   if (!invite.expiresAt) return false
   return new Date() > invite.expiresAt
@@ -181,4 +221,84 @@ export async function validatePlatformInviteToken(token: string) {
   }
 
   return invite
+}
+
+export type PlatformInviteAdminSnapshot = Prisma.PlatformInviteGetPayload<{
+  select: {
+    id: true
+    email: true
+    token: true
+    roleDefinitionId: true
+    roleKey: true
+    roleSystemKey: true
+    status: true
+    expiresAt: true
+    createdAt: true
+    invitedById: true
+    invitedBy: {
+      select: {
+        id: true
+        firstName: true
+        lastName: true
+        email: true
+      }
+    }
+    roleDefinition: {
+      select: {
+        id: true
+        scope: true
+        key: true
+        name: true
+        systemKey: true
+        isSystem: true
+        isDefault: true
+        isAssignable: true
+        isActive: true
+      }
+    }
+  }
+}>
+
+export async function listPlatformInviteAdminSnapshots(opts?: {
+  limit?: number
+}) {
+  const invites = await platformInviteQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      email: true,
+      token: true,
+      roleDefinitionId: true,
+      roleKey: true,
+      roleSystemKey: true,
+      status: true,
+      expiresAt: true,
+      createdAt: true,
+      invitedById: true,
+      invitedBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      roleDefinition: {
+        select: {
+          id: true,
+          scope: true,
+          key: true,
+          name: true,
+          systemKey: true,
+          isSystem: true,
+          isDefault: true,
+          isAssignable: true,
+          isActive: true,
+        },
+      },
+    },
+  })
+
+  return invites as PlatformInviteAdminSnapshot[]
 }

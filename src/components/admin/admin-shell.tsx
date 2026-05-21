@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { useLinkStatus } from "next/link"
+import { usePathname } from "next/navigation"
 import {
   BadgeDollarSignIcon,
   BellIcon,
@@ -21,13 +22,16 @@ import {
   UsersIcon,
 } from "lucide-react"
 
+import { AdminContentSheetProvider } from "@/components/admin/admin-content-sheet"
+import { AdminNotificationLinkButton } from "@/components/admin/admin-notification-link-button"
+import {
+  AdminNotificationMenu,
+  type AdminNotificationSnapshot,
+} from "@/components/admin/admin-notification-menu"
 import { Logo } from "@/components/layout/logo"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { logoutAction } from "@/modules/auth/actions/logout.action"
-import { markAllWorkspaceNotificationsReadAction } from "@/modules/notifications/actions/mark-all-workspace-notifications-read.action"
-import { markWorkspaceNotificationReadAction } from "@/modules/notifications/actions/mark-workspace-notification-read.action"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Badge } from "@/components/ui/badge"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -36,7 +40,6 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
-import { Button } from "@/components/ui/button"
 import {
   Collapsible,
   CollapsibleContent,
@@ -72,12 +75,18 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { SessionHeartbeat } from "@/components/auth/session-heartbeat"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { normalizeWorkspaceAdminPath } from "@/modules/workspace/admin-routes"
 
 export type AdminBreadcrumb = {
   label: string
   href?: string
+}
+
+export type AdminBreadcrumbOverride = {
+  pattern: string
+  breadcrumbs: AdminBreadcrumb[]
 }
 
 export type AdminIconName =
@@ -97,6 +106,7 @@ export type AdminIconName =
 export type AdminNavChild = {
   title: string
   href: string
+  requiredPermissions?: string[]
 }
 
 export type AdminNavItem = {
@@ -104,6 +114,8 @@ export type AdminNavItem = {
   href: string
   icon: AdminIconName
   exact?: boolean
+  hiddenInSidebar?: boolean
+  requiredPermissions?: string[]
   children?: AdminNavChild[]
 }
 
@@ -127,24 +139,36 @@ export type AdminShellUser = {
 type AdminShellProps = {
   areaLabel: string
   breadcrumbs: AdminBreadcrumb[]
+  breadcrumbOverrides?: AdminBreadcrumbOverride[]
   navGroups: AdminNavGroup[]
   user: AdminShellUser
   accountLinks?: AdminAccountLink[]
+  topbarSettingsLinks?: AdminNavChild[]
   notificationsHref?: string
-  notifications?: {
-    unreadCount: number
-    items: Array<{
-      id: string
-      title: string
-      body?: string | null
-      createdAt: string
-      isRead: boolean
-      href?: string | null
-    }>
-  }
+  notifications?: AdminNotificationSnapshot
+  notificationsSlot?: React.ReactNode
   logoHref?: string
   defaultSidebarOpen: boolean
   children: React.ReactNode
+}
+
+function doesBreadcrumbPatternMatch(pathname: string, pattern: string) {
+  const normalizedPathname = normalizeWorkspaceAdminPath(pathname)
+  const normalizedPattern = normalizeWorkspaceAdminPath(pattern)
+  const pathnameSegments = normalizedPathname.split("/").filter(Boolean)
+  const patternSegments = normalizedPattern.split("/").filter(Boolean)
+
+  if (pathnameSegments.length !== patternSegments.length) {
+    return false
+  }
+
+  return patternSegments.every((segment, index) => {
+    if (/^\[[^\]]+\]$/.test(segment)) {
+      return true
+    }
+
+    return segment === pathnameSegments[index]
+  })
 }
 
 const navIcons = {
@@ -279,6 +303,23 @@ function findActiveTrail(pathname: string, navGroups: AdminNavGroup[]) {
   return [] satisfies AdminBreadcrumb[]
 }
 
+function AdminLinkPendingHint({ className }: { className?: string }) {
+  const { pending } = useLinkStatus()
+
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "inline-block size-2 shrink-0 rounded-full bg-current opacity-0 transition-opacity duration-150 ease-out group-data-[collapsible=icon]:hidden",
+        pending
+          ? "visible opacity-35 motion-safe:animate-pulse"
+          : "invisible",
+        className
+      )}
+    />
+  )
+}
+
 function AdminSidebar({
   navGroups,
   user,
@@ -318,11 +359,18 @@ function AdminSidebar({
       </SidebarHeader>
 
       <SidebarContent className="px-1 py-2">
-        {navGroups.map((group) => (
+        {navGroups.map((group) => {
+          const visibleItems = group.items.filter((item) => !item.hiddenInSidebar)
+
+          if (visibleItems.length === 0) {
+            return null
+          }
+
+          return (
           <SidebarGroup key={group.label}>
             <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
             <SidebarMenu>
-              {group.items.map((item) => {
+              {visibleItems.map((item) => {
                 const ItemIcon = navIcons[item.icon]
                 const itemIsActive =
                   isActivePath(pathname, item.href, item.exact) ||
@@ -341,6 +389,7 @@ function AdminSidebar({
                         <Link href={item.href}>
                           <ItemIcon />
                           <span>{item.title}</span>
+                          <AdminLinkPendingHint className="ml-auto" />
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -370,6 +419,7 @@ function AdminSidebar({
                         >
                           <ItemIcon />
                           <span>{item.title}</span>
+                          <AdminLinkPendingHint className="ml-auto" />
                         </Link>
                       </SidebarMenuButton>
                       <CollapsibleTrigger asChild>
@@ -388,6 +438,7 @@ function AdminSidebar({
                               >
                                 <Link href={child.href}>
                                   <span>{child.title}</span>
+                                  <AdminLinkPendingHint className="ml-auto" />
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -400,7 +451,8 @@ function AdminSidebar({
               })}
             </SidebarMenu>
           </SidebarGroup>
-        ))}
+          )
+        })}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border/70 p-3">
@@ -454,6 +506,7 @@ function AdminSidebar({
                             <Link href={link.href}>
                               <ItemIcon />
                               <span>{link.label}</span>
+                              <AdminLinkPendingHint className="ml-auto" />
                             </Link>
                           </DropdownMenuItem>
                         )
@@ -483,202 +536,48 @@ function AdminSidebar({
   )
 }
 
-function formatNotificationDate(value: string) {
-  return new Intl.DateTimeFormat("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Calcutta",
-  }).format(new Date(value))
-}
-
-function AdminNotificationMenu({
+function AdminTopbarSettingsMenu({
   areaLabel,
-  href,
-  notifications,
+  links,
 }: {
   areaLabel: string
-  href: string
-  notifications: NonNullable<AdminShellProps["notifications"]>
+  links: AdminNavChild[]
 }) {
-  const router = useRouter()
-  const [open, setOpen] = React.useState(false)
-  const [isPending, startTransition] = React.useTransition()
-  const [items, setItems] = React.useState(notifications.items)
-  const [unreadCount, setUnreadCount] = React.useState(notifications.unreadCount)
-
-  React.useEffect(() => {
-    setItems(notifications.items)
-    setUnreadCount(notifications.unreadCount)
-  }, [notifications.items, notifications.unreadCount])
-
-  const handleMarkRead = React.useCallback((notificationId: string) => {
-    startTransition(async () => {
-      const formData = new FormData()
-      formData.set("notificationId", notificationId)
-
-      const response = await markWorkspaceNotificationReadAction(formData)
-
-      if (!response.success) {
-        return
-      }
-
-      setItems((current) =>
-        current.map((item) =>
-          item.id === notificationId ? { ...item, isRead: true } : item
-        )
-      )
-      setUnreadCount((current) => Math.max(current - 1, 0))
-      setOpen(false)
-      router.refresh()
-    })
-  }, [router])
-
-  const handleMarkAllRead = React.useCallback(() => {
-    startTransition(async () => {
-      const response = await markAllWorkspaceNotificationsReadAction()
-
-      if (!response.success) {
-        return
-      }
-
-      setItems((current) => current.map((item) => ({ ...item, isRead: true })))
-      setUnreadCount(0)
-      setOpen(false)
-      router.refresh()
-    })
-  }, [router])
+  if (links.length === 0) {
+    return null
+  }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
-          className="relative rounded-full text-accent hover:bg-accent/10 hover:text-accent"
-          aria-label={`Open ${areaLabel.toLowerCase()} notifications`}
+          variant="outline"
+          size="icon-sm"
+          className="border-border/70 bg-background text-foreground hover:bg-accent hover:text-accent-foreground"
+          aria-label={`Open ${areaLabel.toLowerCase()} settings`}
         >
-          <BellIcon className="size-5" />
-          {unreadCount > 0 ? (
-            <span className="absolute -right-0.5 -top-0.5 flex min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-              {unreadCount > 9 ? "9+" : unreadCount}
-            </span>
-          ) : null}
+          <Settings2Icon className="size-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
         sideOffset={10}
-        className="w-96 rounded-2xl border-border/70 p-0"
+        className="w-60 rounded-2xl border-border/70"
       >
-        <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-          <div className="space-y-1">
-            <p className="text-sm font-semibold">Notifications</p>
-            <p className="text-xs text-muted-foreground">
-              {unreadCount > 0
-                ? `${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}`
-                : "All caught up"}
-            </p>
-          </div>
-          {unreadCount > 0 ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 rounded-full px-3 text-xs"
-              disabled={isPending}
-              onClick={handleMarkAllRead}
-            >
-              Mark all read
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="max-h-96 space-y-2 overflow-y-auto p-3">
-          {items.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/70 px-4 py-6 text-center text-sm text-muted-foreground">
-              No notifications yet.
-            </div>
-          ) : (
-            items.map((item) => {
-              const content = (
-                <>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium leading-5">{item.title}</p>
-                      {item.body ? (
-                        <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                          {item.body}
-                        </p>
-                      ) : null}
-                    </div>
-                    {!item.isRead ? (
-                      <Badge variant="secondary" className="shrink-0">
-                        New
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3">
-                    <p className="text-[11px] text-muted-foreground">
-                      {formatNotificationDate(item.createdAt)}
-                    </p>
-                    {!item.isRead ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 rounded-full px-3 text-[11px]"
-                        disabled={isPending}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          event.stopPropagation()
-                          handleMarkRead(item.id)
-                        }}
-                      >
-                        Mark read
-                      </Button>
-                    ) : null}
-                  </div>
-                </>
-              )
-
-              return item.href ? (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  className={cn(
-                    "block rounded-2xl border px-3 py-3 transition-colors hover:bg-muted/40",
-                    item.isRead ? "border-border/60 bg-background" : "border-accent/40 bg-background"
-                  )}
-                >
-                  {content}
-                </Link>
-              ) : (
-                <div
-                  key={item.id}
-                  className={cn(
-                    "rounded-2xl border px-3 py-3",
-                    item.isRead ? "border-border/60 bg-background" : "border-accent/40 bg-background"
-                  )}
-                >
-                  {content}
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        <div className="border-t border-border/70 p-3">
-          <Button asChild variant="outline" className="w-full rounded-xl">
-            <Link
-              href={href}
-              onClick={() => {
-                setOpen(false)
-              }}
-            >
-              Open notifications
-            </Link>
-          </Button>
-        </div>
+        <DropdownMenuLabel className="px-2 py-2">
+          {areaLabel} settings
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          {links.map((link) => (
+            <DropdownMenuItem key={link.href} asChild>
+              <Link href={link.href}>
+                <span>{link.title}</span>
+                <AdminLinkPendingHint className="ml-auto" />
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -687,11 +586,14 @@ function AdminNotificationMenu({
 export function AdminShell({
   areaLabel,
   breadcrumbs,
+  breadcrumbOverrides = [],
   navGroups,
   user,
   accountLinks,
+  topbarSettingsLinks = [],
   notificationsHref = "/app/notifications",
   notifications,
+  notificationsSlot,
   logoHref = "/",
   defaultSidebarOpen,
   children,
@@ -701,7 +603,18 @@ export function AdminShell({
     () => findActiveTrail(pathname, navGroups),
     [navGroups, pathname]
   )
+  const breadcrumbOverrideTrail = React.useMemo(() => {
+    const match = breadcrumbOverrides.find((override) =>
+      doesBreadcrumbPatternMatch(pathname, override.pattern)
+    )
+
+    return match?.breadcrumbs ?? null
+  }, [breadcrumbOverrides, pathname])
   const computedBreadcrumbs = React.useMemo(() => {
+    if (breadcrumbOverrideTrail) {
+      return [...breadcrumbs, ...breadcrumbOverrideTrail]
+    }
+
     if (activeTrail.length === 0) {
       return breadcrumbs.map((crumb, index) =>
         index === breadcrumbs.length - 1 ? { ...crumb, href: undefined } : crumb
@@ -709,90 +622,92 @@ export function AdminShell({
     }
 
     return [...breadcrumbs, ...activeTrail]
-  }, [activeTrail, breadcrumbs])
+  }, [activeTrail, breadcrumbOverrideTrail, breadcrumbs])
 
   return (
-    <SidebarProvider
-      defaultOpen={defaultSidebarOpen}
-      style={
-        {
-          "--sidebar-width": "17.5rem",
-        } as React.CSSProperties
-      }
-    >
-      <SessionHeartbeat />
-      <AdminSidebar
-        navGroups={navGroups}
-        user={user}
-        accountLinks={accountLinks}
-        logoHref={logoHref}
-      />
-      <SidebarInset className="overflow-hidden bg-background">
-        <header className="sticky top-0 z-20 border-b border-border/70 bg-background">
-          <div className="flex min-h-16 items-center gap-3 px-4 md:px-6">
-            <SidebarTrigger className="-ml-1 text-accent hover:text-accent" />
-            <div
-              aria-hidden="true"
-              className="hidden h-4 w-px self-center bg-border/70 md:block"
-            />
-            <div className="min-w-0 flex-1">
-              <Breadcrumb>
-                <BreadcrumbList>
-                  {computedBreadcrumbs.map((crumb, index) => (
-                    <React.Fragment key={`${crumb.label}-${index}`}>
-                      <BreadcrumbItem
-                        className={cn(
-                          index < computedBreadcrumbs.length - 1 &&
-                            "hidden md:inline-flex"
-                        )}
-                      >
-                        {crumb.href ? (
-                          <BreadcrumbLink asChild>
-                            <Link href={crumb.href}>{crumb.label}</Link>
-                          </BreadcrumbLink>
-                        ) : (
-                          <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                        )}
-                      </BreadcrumbItem>
-                      {index < computedBreadcrumbs.length - 1 && (
-                        <BreadcrumbSeparator className="hidden md:block" />
-                      )}
-                    </React.Fragment>
-                  ))}
-                </BreadcrumbList>
-              </Breadcrumb>
-            </div>
-            <ThemeToggle />
-            {notifications ? (
-              <AdminNotificationMenu
-                areaLabel={areaLabel}
-                href={notificationsHref}
-                notifications={notifications}
+    <AdminContentSheetProvider>
+      <SidebarProvider
+        defaultOpen={defaultSidebarOpen}
+        style={
+          {
+            "--sidebar-width": "17.5rem",
+          } as React.CSSProperties
+        }
+      >
+        <SessionHeartbeat />
+        <AdminSidebar
+          navGroups={navGroups}
+          user={user}
+          accountLinks={accountLinks}
+          logoHref={logoHref}
+        />
+        <SidebarInset className="overflow-hidden bg-background ring-1 ring-border/70">
+          <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+            <div className="flex min-h-16 items-center gap-3 px-4 md:px-6">
+              <SidebarTrigger className="-ml-1 text-accent hover:text-accent" />
+              <div
+                aria-hidden="true"
+                className="hidden h-4 w-px self-center bg-border/70 md:block"
               />
-            ) : (
-              <Button
-                asChild
-                variant="ghost"
-                size="icon"
-                className="rounded-full text-accent hover:bg-accent/10 hover:text-accent"
-              >
-                <Link
+              <div className="min-w-0 flex-1">
+                <Breadcrumb>
+                  <BreadcrumbList>
+                    {computedBreadcrumbs.map((crumb, index) => (
+                      <React.Fragment key={`${crumb.label}-${index}`}>
+                        <BreadcrumbItem
+                          className={cn(
+                            index < computedBreadcrumbs.length - 1 &&
+                              "hidden md:inline-flex"
+                          )}
+                        >
+                          {crumb.href ? (
+                            <BreadcrumbLink asChild>
+                              <Link href={crumb.href}>
+                                <span>{crumb.label}</span>
+                                <AdminLinkPendingHint className="ml-2" />
+                              </Link>
+                            </BreadcrumbLink>
+                          ) : (
+                            <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                          )}
+                        </BreadcrumbItem>
+                        {index < computedBreadcrumbs.length - 1 && (
+                          <BreadcrumbSeparator className="hidden md:block" />
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </BreadcrumbList>
+                </Breadcrumb>
+              </div>
+              <ThemeToggle />
+              {notificationsSlot ? (
+                notificationsSlot
+              ) : notifications ? (
+                <AdminNotificationMenu
+                  areaLabel={areaLabel}
                   href={notificationsHref}
-                  aria-label={`Open ${areaLabel.toLowerCase()} notifications`}
-                >
-                  <BellIcon className="size-5" />
-                </Link>
-              </Button>
-            )}
-          </div>
-        </header>
+                  notifications={notifications}
+                />
+              ) : (
+                <AdminNotificationLinkButton
+                  areaLabel={areaLabel}
+                  href={notificationsHref}
+                />
+              )}
+              <AdminTopbarSettingsMenu
+                areaLabel={areaLabel}
+                links={topbarSettingsLinks}
+              />
+            </div>
+          </header>
 
-        <div className="flex flex-1 flex-col bg-background">
-          <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
-            {children}
+          <div className="flex flex-1 flex-col bg-background">
+            <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
+              {children}
+            </div>
           </div>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        </SidebarInset>
+      </SidebarProvider>
+    </AdminContentSheetProvider>
   )
 }

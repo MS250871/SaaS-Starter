@@ -13,6 +13,7 @@ import { getManagedWorkspaceDomainProviderLabel } from '@/modules/workspace/serv
 import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
 import { workspaceApiKeyScopes } from '@/modules/workspace/api-key-scopes';
 import { countWorkspaceCustomers } from '@/modules/customer/services/customer.services';
+import { listWorkspaceCustomers } from '@/modules/customer/services/customer.services';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 import {
   countPendingWorkspaceInvites,
@@ -29,10 +30,72 @@ import {
 import {
   countWorkspaceDomains,
   listWorkspaceDomainsDetailed,
+  type WorkspaceDomainDetailed,
 } from '@/modules/workspace/services/domains.services';
 import { listAssignableRoleDefinitions } from '@/modules/roles/role.services';
 import { normalizeWorkspaceTheme } from '@/modules/workspace/theme';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
+import { getWorkspaceSupportSummary } from '@/modules/support/support.services';
+
+export type WorkspaceOverviewMetrics = {
+  hero: {
+    workspaceName: string;
+    slug: string;
+    planName: string;
+    planStatus: string;
+    primaryDomain: string;
+    dataSourceLabel: string;
+    memberCount: number;
+    customerCount: number;
+    domainCount: number;
+    apiKeyCount: number;
+    pendingInviteCount: number;
+    unreadNotificationCount: number;
+    verifiedCustomDomainCount: number;
+    redirectAliasCount: number;
+    openWorkspaceTickets: number;
+    openPlatformEscalations: number;
+    totalRevenue: number;
+    monthlyRecurringRevenue: number;
+    activeLearners: number;
+    completionRate: number;
+  };
+  cards: Array<{
+    title: string;
+    value: string;
+    trend: string;
+    detail: string;
+  }>;
+  commerceSeries: Array<{
+    month: string;
+    revenue: number;
+    refunds: number;
+    revenueLakh: number;
+    refundsLakh: number;
+  }>;
+  learnerSeries: Array<{
+    month: string;
+    activeLearners: number;
+    enrollments: number;
+    completions: number;
+  }>;
+  catalogMix: Array<{
+    key: 'certification' | 'cohort' | 'microCourse' | 'coaching';
+    label: string;
+    value: number;
+    fill: string;
+  }>;
+  queueHealth: Array<{
+    key:
+      | 'openWorkspaceTickets'
+      | 'openPlatformEscalations'
+      | 'unreadNotifications'
+      | 'pendingInvites';
+    label: string;
+    value: number;
+    fill: string;
+  }>;
+};
 
 type WorkspaceRedirectAliasConfig = {
   domain: string;
@@ -138,6 +201,49 @@ function resolveWorkspaceDomainMode(params: {
   return 'free_path' as const;
 }
 
+type MonthBucket = {
+  key: string;
+  label: string;
+};
+
+function toMonthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function buildRecentMonthBuckets(count: number) {
+  const now = new Date();
+  const buckets: MonthBucket[] = [];
+
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    buckets.push({
+      key: toMonthKey(monthDate),
+      label: monthDate.toLocaleString('en-IN', { month: 'short' }),
+    });
+  }
+
+  return buckets;
+}
+
+function safeDate(value: Date | null | undefined) {
+  return value instanceof Date && !Number.isNaN(value.getTime()) ? value : null;
+}
+
+function formatCurrency(amount: number, currency = 'INR') {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+function formatCompact(amount: number) {
+  return new Intl.NumberFormat('en-IN', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(amount);
+}
+
 export async function getWorkspaceOverviewPageData() {
   return withActionTxContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
@@ -146,6 +252,7 @@ export async function getWorkspaceOverviewPageData() {
       return {
         ...context,
         workspaceSummary: null,
+        workspaceOverview: null,
       };
     }
 
@@ -156,6 +263,11 @@ export async function getWorkspaceOverviewPageData() {
       domainCount,
       apiKeyCount,
       unreadNotificationCount,
+      members,
+      customersPage,
+      domains,
+      activeSubscription,
+      supportSummary,
     ] = await Promise.all([
       countActiveWorkspaceMemberships(context.workspaceId),
       countPendingWorkspaceInvites(context.workspaceId),
@@ -169,7 +281,192 @@ export async function getWorkspaceOverviewPageData() {
             unreadOnly: true,
           })
         : Promise.resolve(0),
+      listActiveWorkspaceMembersWithRoles(context.workspaceId),
+      listWorkspaceCustomers(context.workspaceId, {
+        page: 1,
+        pageSize: 500,
+      }),
+      listWorkspaceDomainsDetailed(context.workspaceId),
+      getWorkspaceActiveSubscriptionPlanSummary(context.workspaceId),
+      getWorkspaceSupportSummary(context.workspaceId),
     ]);
+
+    const domainSettings =
+      (
+        context.settings?.settings as {
+          domain?: {
+            strategy?: string | null;
+            rootDomain?: string | null;
+            primaryHost?: string | null;
+            customDomain?: string | null;
+            customDomainVerified?: boolean | null;
+          };
+        } | null
+      )?.domain ?? null;
+
+    const verifiedCustomDomainCount = domains.filter(
+      (domain: WorkspaceDomainDetailed) =>
+        domain.type === WorkspaceDomainType.CUSTOM &&
+        domain.isPrimary &&
+        domain.isVerified,
+    ).length;
+    const redirectAliasCount = domains.filter(
+      (domain: WorkspaceDomainDetailed) =>
+        domain.type === WorkspaceDomainType.CUSTOM && !domain.isPrimary,
+    ).length;
+
+    const recentBuckets = buildRecentMonthBuckets(6);
+    const planName = activeSubscription?.price?.product?.plan?.name ?? 'Free';
+    const planStatus =
+      activeSubscription?.status
+        ?.toLowerCase()
+        .replace(/_/g, ' ') ?? 'No paid subscription';
+
+    const queueHealth: WorkspaceOverviewMetrics['queueHealth'] = [
+      {
+        key: 'openWorkspaceTickets',
+        label: 'Workspace support',
+        value: supportSummary.openWorkspaceTickets,
+        fill: 'var(--color-openWorkspaceTickets)',
+      },
+      {
+        key: 'openPlatformEscalations',
+        label: 'Platform escalations',
+        value: supportSummary.openPlatformEscalations,
+        fill: 'var(--color-openPlatformEscalations)',
+      },
+      {
+        key: 'unreadNotifications',
+        label: 'Unread notifications',
+        value: unreadNotificationCount,
+        fill: 'var(--color-unreadNotifications)',
+      },
+      {
+        key: 'pendingInvites',
+        label: 'Pending invites',
+        value: pendingInviteCount,
+        fill: 'var(--color-pendingInvites)',
+      },
+    ];
+
+    const workspaceScale = Math.max(customerCount, memberCount * 12, 180);
+    const recentMemberAdds = members.filter((member) => {
+      const createdAt = safeDate(member.createdAt);
+      if (!createdAt) return false;
+      return createdAt >= new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
+    }).length;
+    const recentCustomerAdds = customersPage.items.filter((customer) => {
+      const createdAt = safeDate(customer.createdAt);
+      if (!createdAt) return false;
+      return createdAt >= new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
+    }).length;
+    const seriesSeed =
+      memberCount * 17 +
+      customerCount * 11 +
+      pendingInviteCount * 7 +
+      apiKeyCount * 5 +
+      domainCount * 3;
+
+    const commerceSeries = recentBuckets.map((bucket, index) => {
+      const periodWeight = index + 1;
+      const enrollments =
+        Math.round(workspaceScale * (0.16 + periodWeight * 0.012)) +
+        recentCustomerAdds * 3 +
+        (seriesSeed % 19);
+      const revenue =
+        enrollments * (2600 + periodWeight * 140) + memberCount * 3200;
+      const refunds = Math.round(revenue * (0.028 + (index % 3) * 0.004));
+
+      return {
+        month: bucket.label,
+        revenue,
+        refunds,
+        revenueLakh: Number((revenue / 100000).toFixed(2)),
+        refundsLakh: Number((refunds / 100000).toFixed(2)),
+      };
+    });
+
+    const learnerSeries = recentBuckets.map((bucket, index) => {
+      const periodWeight = index + 1;
+      const activeLearners =
+        Math.round(workspaceScale * (0.58 + periodWeight * 0.028)) +
+        recentCustomerAdds * 4;
+      const enrollments =
+        Math.round(workspaceScale * (0.18 + periodWeight * 0.015)) +
+        recentMemberAdds * 5 +
+        (seriesSeed % 13);
+      const completions = Math.round(enrollments * (0.62 + periodWeight * 0.018));
+
+      return {
+        month: bucket.label,
+        activeLearners,
+        enrollments,
+        completions,
+      };
+    });
+
+    const latestCommerce =
+      commerceSeries[commerceSeries.length - 1] ??
+      ({
+        revenue: 0,
+        refunds: 0,
+      } as const);
+    const previousCommerce =
+      commerceSeries[commerceSeries.length - 2] ??
+      ({
+        revenue: 0,
+        refunds: 0,
+      } as const);
+    const latestLearnerSeries =
+      learnerSeries[learnerSeries.length - 1] ??
+      ({
+        activeLearners: 0,
+        enrollments: 0,
+        completions: 0,
+      } as const);
+    const totalRevenue = commerceSeries.reduce(
+      (sum, bucket) => sum + bucket.revenue,
+      0,
+    );
+    const completionRate =
+      latestLearnerSeries.enrollments > 0
+        ? Math.round(
+            (latestLearnerSeries.completions /
+              latestLearnerSeries.enrollments) *
+              100,
+          )
+        : 0;
+    const monthlyRevenueDelta =
+      latestCommerce.revenue - previousCommerce.revenue;
+    const activeLearnerDelta =
+      latestLearnerSeries.activeLearners -
+      (learnerSeries[learnerSeries.length - 2]?.activeLearners ?? 0);
+    const catalogMix: WorkspaceOverviewMetrics['catalogMix'] = [
+      {
+        key: 'certification',
+        label: 'Certification bootcamps',
+        value: Math.max(3, Math.round(memberCount * 0.8) + 6),
+        fill: 'var(--color-certification)',
+      },
+      {
+        key: 'cohort',
+        label: 'Live cohorts',
+        value: Math.max(2, Math.round(memberCount * 0.5) + 4),
+        fill: 'var(--color-cohort)',
+      },
+      {
+        key: 'microCourse',
+        label: 'Micro-courses',
+        value: Math.max(6, Math.round(customerCount * 0.04) + 8),
+        fill: 'var(--color-microCourse)',
+      },
+      {
+        key: 'coaching',
+        label: 'Coaching programs',
+        value: Math.max(1, Math.round(memberCount * 0.35) + 2),
+        fill: 'var(--color-coaching)',
+      },
+    ];
 
     return {
       ...context,
@@ -184,6 +481,77 @@ export async function getWorkspaceOverviewPageData() {
         apiKeyCount,
         unreadNotificationCount,
       },
+      workspaceOverview: {
+        hero: {
+          workspaceName: context.workspace.name,
+          slug: context.workspace.slug,
+          planName,
+          planStatus:
+            planStatus.charAt(0).toUpperCase() + planStatus.slice(1),
+          primaryDomain:
+            domainSettings?.primaryHost ??
+            context.workspace.defaultDomain ??
+            getRootDomainHost() ??
+            'No primary host',
+          dataSourceLabel:
+            'Sample LMS commerce data derived from workspace footprint',
+          memberCount,
+          customerCount,
+          domainCount,
+          apiKeyCount,
+          pendingInviteCount,
+          unreadNotificationCount,
+          verifiedCustomDomainCount,
+          redirectAliasCount,
+          openWorkspaceTickets: supportSummary.openWorkspaceTickets,
+          openPlatformEscalations: supportSummary.openPlatformEscalations,
+          totalRevenue,
+          monthlyRecurringRevenue: latestCommerce.revenue,
+          activeLearners: latestLearnerSeries.activeLearners,
+          completionRate,
+        },
+        cards: [
+          {
+            title: 'Monthly learner revenue',
+            value: formatCurrency(latestCommerce.revenue),
+            trend:
+              monthlyRevenueDelta >= 0
+                ? `+${formatCompact(monthlyRevenueDelta)} vs last month`
+                : `${formatCompact(monthlyRevenueDelta)} vs last month`,
+            detail: `${formatCurrency(latestCommerce.refunds)} in projected refunds for the same period`,
+          },
+          {
+            title: 'Active learners',
+            value: latestLearnerSeries.activeLearners.toLocaleString('en-IN'),
+            trend:
+              activeLearnerDelta >= 0
+                ? `+${activeLearnerDelta.toLocaleString('en-IN')} vs last month`
+                : `${activeLearnerDelta.toLocaleString('en-IN')} vs last month`,
+            detail: `${latestLearnerSeries.enrollments.toLocaleString('en-IN')} new enrollments are forecast this month`,
+          },
+          {
+            title: 'Completion rate',
+            value: `${completionRate}%`,
+            trend: `${latestLearnerSeries.completions.toLocaleString('en-IN')} projected completions`,
+            detail: `${memberCount.toLocaleString('en-IN')} instructors and operators supporting learner delivery`,
+          },
+          {
+            title: 'Attention Queue',
+            value: (
+              supportSummary.openWorkspaceTickets +
+              supportSummary.openPlatformEscalations +
+              unreadNotificationCount +
+              pendingInviteCount
+            ).toLocaleString('en-IN'),
+            trend: `${supportSummary.openWorkspaceTickets} open workspace tickets`,
+            detail: `${supportSummary.openPlatformEscalations} platform escalations - ${unreadNotificationCount} unread notifications`,
+          },
+        ],
+        commerceSeries,
+        learnerSeries,
+        catalogMix,
+        queueHealth,
+      } satisfies WorkspaceOverviewMetrics,
     };
   });
 }

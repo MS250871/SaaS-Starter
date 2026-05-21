@@ -39,6 +39,123 @@ export type BillingWorkspaceActiveSubscriptionPlanSummary =
     };
   }>;
 
+export type PlatformWorkspaceActiveSubscriptionAdminSnapshot =
+  Prisma.SubscriptionGetPayload<{
+    select: {
+      id: true;
+      workspaceId: true;
+      status: true;
+      currentPeriodStart: true;
+      currentPeriodEnd: true;
+      providerSubscriptionId: true;
+      price: {
+        select: {
+          id: true;
+          amount: true;
+          currency: true;
+          interval: true;
+          product: {
+            select: {
+              id: true;
+              code: true;
+              name: true;
+              plan: {
+                select: {
+                  id: true;
+                  key: true;
+                  name: true;
+                  description: true;
+                  sortOrder: true;
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+  }>;
+
+export type PlatformSubscriptionAdminSnapshot = Prisma.SubscriptionGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    status: true;
+    currentPeriodStart: true;
+    currentPeriodEnd: true;
+    cancelAtPeriodEnd: true;
+    provider: true;
+    providerSubscriptionId: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    price: {
+      select: {
+        id: true;
+        amount: true;
+        currency: true;
+        interval: true;
+        product: {
+          select: {
+            id: true;
+            code: true;
+            name: true;
+            plan: {
+              select: {
+                id: true;
+                key: true;
+                name: true;
+              };
+            };
+          };
+        };
+      };
+    };
+    _count: {
+      select: {
+        payments: true;
+      };
+    };
+  };
+}>;
+
 export async function getSubscriptionById(id: string) {
   if (!id) {
     throwError(ERR.INVALID_INPUT, 'Subscription ID is required');
@@ -270,4 +387,264 @@ export async function getWorkspaceActiveSubscriptionPlanSummary(
       },
     },
   });
+}
+
+export async function listPlatformWorkspaceActiveSubscriptionAdminSnapshots(
+  workspaceIds?: string[],
+): Promise<PlatformWorkspaceActiveSubscriptionAdminSnapshot[]> {
+  const normalizedWorkspaceIds = Array.from(
+    new Set((workspaceIds ?? []).filter(Boolean)),
+  );
+
+  const subscriptions = await subscriptionQueries.delegate.findMany({
+    where: {
+      workspaceId:
+        normalizedWorkspaceIds.length > 0
+          ? {
+              in: normalizedWorkspaceIds,
+            }
+          : {
+              not: null,
+            },
+      status: {
+        in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
+      },
+    },
+    orderBy: [{ createdAt: 'desc' }],
+    select: {
+      id: true,
+      workspaceId: true,
+      status: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+      providerSubscriptionId: true,
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                  description: true,
+                  sortOrder: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const latestByWorkspace = new Map<
+    string,
+    PlatformWorkspaceActiveSubscriptionAdminSnapshot
+  >();
+
+  for (const subscription of subscriptions) {
+    if (!subscription.workspaceId || latestByWorkspace.has(subscription.workspaceId)) {
+      continue;
+    }
+
+    latestByWorkspace.set(
+      subscription.workspaceId,
+      subscription as PlatformWorkspaceActiveSubscriptionAdminSnapshot,
+    );
+  }
+
+  return Array.from(latestByWorkspace.values());
+}
+
+export async function listPlatformSubscriptionAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformSubscriptionAdminSnapshot[]> {
+  const subscriptions = await subscriptionQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      status: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+      cancelAtPeriodEnd: true,
+      provider: true,
+      providerSubscriptionId: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          payments: true,
+        },
+      },
+    },
+  });
+
+  return subscriptions as PlatformSubscriptionAdminSnapshot[];
+}
+
+export async function getPlatformSubscriptionAdminSnapshot(
+  id: string,
+): Promise<PlatformSubscriptionAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Subscription ID is required');
+  }
+
+  const subscription = await subscriptionQueries.delegate.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      status: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+      cancelAtPeriodEnd: true,
+      provider: true,
+      providerSubscriptionId: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              id: true,
+              code: true,
+              name: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      _count: {
+        select: {
+          payments: true,
+        },
+      },
+    },
+  });
+
+  if (!subscription) {
+    throwError(ERR.NOT_FOUND, 'Subscription not found');
+  }
+
+  return subscription as PlatformSubscriptionAdminSnapshot;
 }

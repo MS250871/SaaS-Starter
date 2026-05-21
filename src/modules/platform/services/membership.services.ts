@@ -2,6 +2,7 @@ import {
   platformMembershipCrud,
   platformMembershipQueries,
 } from "@/modules/platform/db"
+import type { Prisma } from "@/generated/prisma/client"
 import {
   getPlatformDefaultRoleDefinition,
   resolveRoleAssignment,
@@ -316,4 +317,88 @@ export async function getPlatformAccessContext(identityId: string): Promise<{
     memberships: active,
     hasAccess: active.length > 0,
   }
+}
+
+export type PlatformMembershipAdminSnapshot = Prisma.PlatformMembershipGetPayload<{
+  select: {
+    id: true
+    identityId: true
+    roleDefinitionId: true
+    roleKey: true
+    roleSystemKey: true
+    isActive: true
+    createdAt: true
+    identity: {
+      select: {
+        id: true
+        firstName: true
+        lastName: true
+        email: true
+        phone: true
+        isActive: true
+      }
+    }
+    roleDefinition: {
+      select: {
+        id: true
+        scope: true
+        key: true
+        name: true
+        systemKey: true
+        isSystem: true
+        isDefault: true
+        isAssignable: true
+        isActive: true
+      }
+    }
+  }
+}>
+
+export async function listPlatformMembershipAdminSnapshots(opts?: {
+  limit?: number
+  identityId?: string | null
+}) {
+  const memberships = await platformMembershipQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          identityId: opts.identityId,
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      identityId: true,
+      roleDefinitionId: true,
+      roleKey: true,
+      roleSystemKey: true,
+      isActive: true,
+      createdAt: true,
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          isActive: true,
+        },
+      },
+      roleDefinition: {
+        select: {
+          id: true,
+          scope: true,
+          key: true,
+          name: true,
+          systemKey: true,
+          isSystem: true,
+          isDefault: true,
+          isAssignable: true,
+          isActive: true,
+        },
+      },
+    },
+  })
+
+  return memberships as PlatformMembershipAdminSnapshot[]
 }

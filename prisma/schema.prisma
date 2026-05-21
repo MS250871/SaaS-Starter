@@ -147,6 +147,11 @@ enum EntitlementSource {
   SYSTEM
 }
 
+enum EntitlementOverridePolicy {
+  NEVER
+  PLATFORM_ONLY
+}
+
 enum PaymentProvider {
   STRIPE
   RAZORPAY
@@ -1008,6 +1013,7 @@ model Feature {
   description String?
   category    String?
   isActive    Boolean @default(true) @map("is_active")
+  overridePolicy EntitlementOverridePolicy @default(PLATFORM_ONLY) @map("override_policy")
   sortOrder   Int     @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -1028,6 +1034,7 @@ model LimitDefinition {
   unit        String? // e.g. users, projects, GB, seats
 
   isActive  Boolean @default(true) @map("is_active")
+  overridePolicy EntitlementOverridePolicy @default(PLATFORM_ONLY) @map("override_policy")
   sortOrder Int     @default(0) @map("sort_order")
 
   createdAt DateTime @default(now()) @map("created_at")

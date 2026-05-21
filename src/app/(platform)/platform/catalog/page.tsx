@@ -1,6 +1,6 @@
 import Link from 'next/link';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { requirePlatformAdmin } from '@/modules/platform/server/require-platform-admin';
 import { getPlatformCatalogOverviewData } from '@/modules/platform/server/platform-catalog-overview-data';
 
@@ -15,7 +15,6 @@ export default async function PlatformCatalogPage() {
           <Card className="h-full border-border/70 bg-background/85 transition-colors hover:border-accent/50">
             <CardHeader>
               <CardTitle>{resource.title}</CardTitle>
-              <CardDescription>{resource.description}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>

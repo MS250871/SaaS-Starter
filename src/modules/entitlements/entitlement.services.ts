@@ -20,6 +20,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { canOverrideEntitlement } from '@/modules/entitlements/override-policy';
 
 export type PlanFeatureWithFeature = Prisma.PlanFeatureGetPayload<{
   include: { feature: true };
@@ -79,6 +80,115 @@ export type WorkspaceFeatureOverrideWithFeature =
 export type WorkspaceLimitOverrideWithDefinition =
   Prisma.WorkspaceLimitOverrideGetPayload<{
     include: { limitDefinition: true };
+  }>;
+
+export type PlatformWorkspaceFeatureOverrideAdminSnapshot =
+  Prisma.WorkspaceFeatureOverrideGetPayload<{
+    select: {
+      id: true;
+      workspaceId: true;
+      featureId: true;
+      isEnabled: true;
+      createdAt: true;
+      workspace: {
+        select: {
+          id: true;
+          name: true;
+          slug: true;
+          isActive: true;
+        };
+      };
+      feature: {
+        select: {
+          id: true;
+          key: true;
+          name: true;
+          category: true;
+          overridePolicy: true;
+        };
+      };
+    };
+  }>;
+
+export type PlatformWorkspaceLimitOverrideAdminSnapshot =
+  Prisma.WorkspaceLimitOverrideGetPayload<{
+    select: {
+      id: true;
+      workspaceId: true;
+      limitDefinitionId: true;
+      valueInt: true;
+      createdAt: true;
+      workspace: {
+        select: {
+          id: true;
+          name: true;
+          slug: true;
+          isActive: true;
+        };
+      };
+      limitDefinition: {
+        select: {
+          id: true;
+          key: true;
+          name: true;
+          unit: true;
+          overridePolicy: true;
+        };
+      };
+    };
+  }>;
+
+export type WorkspaceFeatureOverrideEditorSnapshot =
+  Prisma.WorkspaceFeatureOverrideGetPayload<{
+    select: {
+      id: true;
+      workspaceId: true;
+      featureId: true;
+      isEnabled: true;
+      workspace: {
+        select: {
+          id: true;
+          name: true;
+          slug: true;
+          isActive: true;
+        };
+      };
+      feature: {
+        select: {
+          id: true;
+          key: true;
+          name: true;
+          isActive: true;
+        };
+      };
+    };
+  }>;
+
+export type WorkspaceLimitOverrideEditorSnapshot =
+  Prisma.WorkspaceLimitOverrideGetPayload<{
+    select: {
+      id: true;
+      workspaceId: true;
+      limitDefinitionId: true;
+      valueInt: true;
+      workspace: {
+        select: {
+          id: true;
+          name: true;
+          slug: true;
+          isActive: true;
+        };
+      };
+      limitDefinition: {
+        select: {
+          id: true;
+          key: true;
+          name: true;
+          unit: true;
+          isActive: true;
+        };
+      };
+    };
   }>;
 
 /* -------------------------------------------------------------------------- */
@@ -625,6 +735,77 @@ export async function listWorkspaceFeatureOverrides(
   return overrides as unknown as WorkspaceFeatureOverrideWithFeature[];
 }
 
+export async function getWorkspaceFeatureOverrideById(
+  id: string,
+): Promise<WorkspaceFeatureOverrideEditorSnapshot> {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Feature override ID is required');
+
+  const override = await workspaceFeatureOverrideQueries.delegate.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      workspaceId: true,
+      featureId: true,
+      isEnabled: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      feature: {
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (!override) {
+    throwError(ERR.NOT_FOUND, 'Workspace feature override not found');
+  }
+
+  return override as WorkspaceFeatureOverrideEditorSnapshot;
+}
+
+export async function deleteWorkspaceFeatureOverride(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Feature override ID is required');
+
+  try {
+    return await workspaceFeatureOverrideCrud.delete(id);
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to delete workspace feature override',
+      undefined,
+      e,
+    );
+  }
+}
+
+export async function listWorkspaceFeatureOverrideOptions() {
+  const features = await featureQueries.delegate.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      category: true,
+      sortOrder: true,
+      isActive: true,
+      overridePolicy: true,
+    },
+  });
+
+  return features;
+}
+
 /* -------------------------------------------------------------------------- */
 /*                       WORKSPACE LIMIT OVERRIDES                            */
 /* -------------------------------------------------------------------------- */
@@ -681,6 +862,147 @@ export async function listWorkspaceLimitOverrides(
   return overrides as unknown as WorkspaceLimitOverrideWithDefinition[];
 }
 
+export async function getWorkspaceLimitOverrideById(
+  id: string,
+): Promise<WorkspaceLimitOverrideEditorSnapshot> {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Limit override ID is required');
+
+  const override = await workspaceLimitOverrideQueries.delegate.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      workspaceId: true,
+      limitDefinitionId: true,
+      valueInt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      limitDefinition: {
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          unit: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  if (!override) {
+    throwError(ERR.NOT_FOUND, 'Workspace limit override not found');
+  }
+
+  return override as WorkspaceLimitOverrideEditorSnapshot;
+}
+
+export async function deleteWorkspaceLimitOverride(id: string) {
+  if (!id) throwError(ERR.INVALID_INPUT, 'Limit override ID is required');
+
+  try {
+    return await workspaceLimitOverrideCrud.delete(id);
+  } catch (e) {
+    throwError(
+      ERR.DB_ERROR,
+      'Failed to delete workspace limit override',
+      undefined,
+      e,
+    );
+  }
+}
+
+export async function listWorkspaceLimitOverrideOptions() {
+  const limits = await limitDefinitionQueries.delegate.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      unit: true,
+      isActive: true,
+      overridePolicy: true,
+    },
+  });
+
+  return limits;
+}
+
+export async function listPlatformWorkspaceFeatureOverrideAdminSnapshots(opts?: {
+  limit?: number;
+}) {
+  const overrides = await workspaceFeatureOverrideQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 250,
+    select: {
+      id: true,
+      workspaceId: true,
+      featureId: true,
+      isEnabled: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      feature: {
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          category: true,
+          overridePolicy: true,
+        },
+      },
+    },
+  });
+
+  return overrides as PlatformWorkspaceFeatureOverrideAdminSnapshot[];
+}
+
+export async function listPlatformWorkspaceLimitOverrideAdminSnapshots(opts?: {
+  limit?: number;
+}) {
+  const overrides = await workspaceLimitOverrideQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 250,
+    select: {
+      id: true,
+      workspaceId: true,
+      limitDefinitionId: true,
+      valueInt: true,
+      createdAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      limitDefinition: {
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          unit: true,
+          overridePolicy: true,
+        },
+      },
+    },
+  });
+
+  return overrides as PlatformWorkspaceLimitOverrideAdminSnapshot[];
+}
+
 /* -------------------------------------------------------------------------- */
 /*                          ENTITLEMENT RESOLVER                              */
 /* -------------------------------------------------------------------------- */
@@ -722,6 +1044,7 @@ export async function resolveEntitlements(params: {
     for (const fo of featureOverrides) {
       const key = fo.feature?.key;
       if (!key) continue;
+      if (!canOverrideEntitlement(fo.feature?.overridePolicy)) continue;
 
       if (fo.isEnabled) features.add(key);
       else features.delete(key);
@@ -732,6 +1055,7 @@ export async function resolveEntitlements(params: {
     for (const lo of limitOverrides) {
       const key = lo.limitDefinition?.key;
       if (!key) continue;
+      if (!canOverrideEntitlement(lo.limitDefinition?.overridePolicy)) continue;
 
       limits.set(key, lo.valueInt);
     }

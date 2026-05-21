@@ -336,10 +336,6 @@ export function WorkspaceTeamPanel({
       roleKey: assignableRoles[0]?.key ?? '',
     },
   });
-  const selectedInviteRoleKey = useWatch({
-    control: form.control,
-    name: 'roleKey',
-  });
 
   const onInviteSubmit = (data: CreateWorkspaceInviteFormInput) => {
     setFormMessage(null);
@@ -400,16 +396,13 @@ export function WorkspaceTeamPanel({
   };
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+    <section className="grid gap-6">
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <div className="flex items-center gap-2">
             <UsersIcon className="size-4 text-accent" />
             <CardTitle>Team</CardTitle>
           </div>
-          <CardDescription>
-            View active workspace members and remove access when needed.
-          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {removeMessage && (
@@ -497,17 +490,14 @@ export function WorkspaceTeamPanel({
         </CardContent>
       </Card>
 
-      <div className="grid gap-6">
-        <Card className="border-border/70 bg-background/85">
-          <CardHeader>
-            <CardTitle>Invite New Member</CardTitle>
-            <CardDescription>
-              Create workspace invites and share signup links immediately.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <form onSubmit={form.handleSubmit(onInviteSubmit)}>
-              <FieldGroup className="gap-4">
+      <Card className="border-border/70 bg-background/85">
+        <CardHeader>
+          <CardTitle>Invite New Member</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <form onSubmit={form.handleSubmit(onInviteSubmit)}>
+            <FieldGroup className="gap-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <Field>
                   <FieldLabel>Email</FieldLabel>
                   <FieldContent>
@@ -553,54 +543,50 @@ export function WorkspaceTeamPanel({
                       )}
                     />
                   </FieldContent>
-                  <FieldDescription>
-                    {assignableRoles.find(
-                      (role) => role.key === selectedInviteRoleKey,
-                    )?.description ??
-                      'Choose the role this teammate should receive.'}
-                  </FieldDescription>
                   <FieldError>
                     {form.formState.errors.roleKey?.message}
                   </FieldError>
                 </Field>
+              </div>
 
-                {!canInvite && (
-                  <Field>
-                    <FieldDescription>
-                      Inviting teammates requires the `workspaceInvite.create`
-                      permission.
-                    </FieldDescription>
-                  </Field>
-                )}
-
-                {canInvite && assignableRoles.length === 0 && (
-                  <Field>
-                    <FieldDescription>
-                      No assignable workspace roles are active yet. Add or
-                      enable a workspace role definition before sending invites.
-                    </FieldDescription>
-                  </Field>
-                )}
-
-                {formMessage && (
-                  <Alert>
-                    <AlertTitle>Invite created</AlertTitle>
-                    <AlertDescription>{formMessage}</AlertDescription>
-                  </Alert>
-                )}
-
-                {formError && (
-                  <Alert variant="destructive">
-                    <AlertCircleIcon className="size-4" />
-                    <AlertTitle>Unable to create invite</AlertTitle>
-                    <AlertDescription>{formError}</AlertDescription>
-                  </Alert>
-                )}
-
+              {!canInvite && (
                 <Field>
+                  <FieldDescription>
+                    Inviting teammates requires the `workspaceInvite.create`
+                    permission.
+                  </FieldDescription>
+                </Field>
+              )}
+
+              {canInvite && assignableRoles.length === 0 && (
+                <Field>
+                  <FieldDescription>
+                    No assignable workspace roles are active yet. Add or enable
+                    a workspace role definition before sending invites.
+                  </FieldDescription>
+                </Field>
+              )}
+
+              {formMessage && (
+                <Alert>
+                  <AlertTitle>Invite created</AlertTitle>
+                  <AlertDescription>{formMessage}</AlertDescription>
+                </Alert>
+              )}
+
+              {formError && (
+                <Alert variant="destructive">
+                  <AlertCircleIcon className="size-4" />
+                  <AlertTitle>Unable to create invite</AlertTitle>
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
+
+              <Field>
+                <div className="flex">
                   {isInvitePending ? (
                     <SpinnerButton
-                      className="w-full sm:w-auto"
+                      className="w-auto"
                       message="Creating invite..."
                     />
                   ) : (
@@ -611,71 +597,64 @@ export function WorkspaceTeamPanel({
                       Invite Member
                     </Button>
                   )}
-                </Field>
-              </FieldGroup>
-            </form>
-          </CardContent>
-        </Card>
+                </div>
+              </Field>
+            </FieldGroup>
+          </form>
+        </CardContent>
+      </Card>
 
-        <Card className="border-border/70 bg-background/85">
-          <CardHeader>
-            <CardTitle>Invited Members</CardTitle>
-            <CardDescription>
-              Teammates who have been invited but have not accepted yet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {invites.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-                No invited members are waiting to accept right now.
-              </div>
-            ) : (
-              invites.map((invite) => {
-                const signupPath = invite.signupPath;
+      <Card className="border-border/70 bg-background/85">
+        <CardHeader>
+          <CardTitle>Invited Members</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {invites.length === 0 ? (
+            <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+              No invited members are waiting to accept right now.
+            </div>
+          ) : (
+            invites.map((invite) => {
+              const signupPath = invite.signupPath;
 
-                return (
-                  <div
-                    key={invite.id}
-                    className="rounded-xl border border-border/70 bg-muted/15 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {invite.email}
-                        </p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="secondary">{invite.roleName}</Badge>
-                          <Badge variant="outline">Invited</Badge>
-                        </div>
-                        <p className="mt-2 text-xs text-muted-foreground">
-                          Invited on{' '}
-                          {new Date(invite.createdAt).toLocaleString()}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Invite link ready to share.
-                        </p>
+              return (
+                <div
+                  key={invite.id}
+                  className="rounded-xl border border-border/70 bg-muted/15 p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {invite.email}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary">{invite.roleName}</Badge>
+                        <Badge variant="outline">Invited</Badge>
                       </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(
-                            formatInvitePath(signupPath),
-                          );
-                        }}
-                      >
-                        <CopyIcon className="size-4" />
-                        Copy Link
-                      </Button>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Invited on {new Date(invite.createdAt).toLocaleString()}
+                      </p>
                     </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(
+                          formatInvitePath(signupPath),
+                        );
+                      }}
+                    >
+                      <CopyIcon className="size-4" />
+                      Copy Link
+                    </Button>
                   </div>
-                );
-              })
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
     </section>
   );
 }
@@ -804,9 +783,6 @@ export function WorkspaceThemePanel({
             <PaletteIcon className="size-4 text-accent" />
             <CardTitle>Theme</CardTitle>
           </div>
-          <CardDescription>
-            Update the workspace theme and apply it to the admin surface.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -1026,10 +1002,7 @@ export function WorkspaceThemePanel({
 
               <Field>
                 {isPending ? (
-                  <SpinnerButton
-                    className="w-full sm:w-auto"
-                    message="Saving theme..."
-                  />
+                  <SpinnerButton message="Saving theme..." />
                 ) : (
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <Button type="submit" disabled={!canManageTheme}>
@@ -1054,10 +1027,6 @@ export function WorkspaceThemePanel({
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <CardTitle>Theme Preview</CardTitle>
-          <CardDescription>
-            A live workspace preview using the selected fonts, colors, and
-            radius.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div

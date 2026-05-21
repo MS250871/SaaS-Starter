@@ -1,4 +1,8 @@
-import type { AdminNavGroup } from "@/components/admin/admin-shell"
+import type {
+  AdminBreadcrumbOverride,
+  AdminNavGroup,
+} from "@/components/admin/admin-shell"
+import { hasAnyPermission } from '@/modules/permissions/permissions.services'
 
 export type PlatformRouteMeta = {
   title: string
@@ -19,18 +23,22 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Workspaces",
         href: "/platform/workspaces",
         icon: "briefcase",
+        requiredPermissions: ["platformWorkspace.read"],
         children: [
           {
             title: "Domains & Routing",
             href: "/platform/workspaces/domains",
+            requiredPermissions: ["platformWorkspace.read"],
           },
           {
             title: "Members & Invites",
             href: "/platform/workspaces/access",
+            requiredPermissions: ["platformWorkspace.read"],
           },
           {
             title: "Entitlement Overrides",
             href: "/platform/workspaces/overrides",
+            requiredPermissions: ["featureOverride.read", "limitOverride.read"],
           },
         ],
       },
@@ -38,18 +46,22 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Identities",
         href: "/platform/identities",
         icon: "users",
+        requiredPermissions: ["identity.read", "customer.read"],
         children: [
           {
             title: "Customers",
             href: "/platform/identities/customers",
+            requiredPermissions: ["customer.read"],
           },
           {
             title: "Accounts & Auth",
             href: "/platform/identities/accounts",
+            requiredPermissions: ["identity.read"],
           },
           {
             title: "Sessions & OTP",
             href: "/platform/identities/sessions",
+            requiredPermissions: ["identity.read"],
           },
         ],
       },
@@ -62,18 +74,28 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Governance",
         href: "/platform/governance",
         icon: "shield",
+        requiredPermissions: [
+          "platformMembership.read",
+          "platformInvite.read",
+          "platformPermission.read",
+          "platformAudit.read",
+          "*",
+        ],
         children: [
           {
             title: "Platform Team",
             href: "/platform/governance/team",
+            requiredPermissions: ["platformMembership.read", "platformInvite.read", "*"],
           },
           {
             title: "Roles & Permissions",
             href: "/platform/governance/roles",
+            requiredPermissions: ["platformPermission.read", "*"],
           },
           {
             title: "Audit Log",
             href: "/platform/governance/audit",
+            requiredPermissions: ["platformAudit.read", "*"],
           },
         ],
       },
@@ -81,26 +103,32 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Catalog",
         href: "/platform/catalog",
         icon: "settings",
+        requiredPermissions: ["*"],
         children: [
           {
             title: "Plans",
             href: "/platform/catalog/plans",
+            requiredPermissions: ["*"],
           },
           {
             title: "Products",
             href: "/platform/catalog/products",
+            requiredPermissions: ["*"],
           },
           {
             title: "Prices",
             href: "/platform/catalog/prices",
+            requiredPermissions: ["*"],
           },
           {
             title: "Features",
             href: "/platform/catalog/features",
+            requiredPermissions: ["*"],
           },
           {
             title: "Limits",
             href: "/platform/catalog/limits",
+            requiredPermissions: ["*"],
           },
         ],
       },
@@ -108,18 +136,27 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Billing",
         href: "/platform/billing",
         icon: "billing",
+        requiredPermissions: ["platformBilling.read"],
         children: [
           {
             title: "Subscriptions",
             href: "/platform/billing/subscriptions",
+            requiredPermissions: ["platformBilling.read"],
           },
           {
             title: "Payments & Invoices",
             href: "/platform/billing/payments",
+            requiredPermissions: ["platformBilling.read"],
+          },
+          {
+            title: "One-Time Purchases",
+            href: "/platform/billing/purchases",
+            requiredPermissions: ["platformBilling.read"],
           },
           {
             title: "Refunds",
             href: "/platform/billing/refunds",
+            requiredPermissions: ["platformBilling.read"],
           },
         ],
       },
@@ -132,22 +169,27 @@ export const platformNavGroups: AdminNavGroup[] = [
         title: "Operations",
         href: "/platform/operations",
         icon: "lifebuoy",
+        requiredPermissions: ["platformSupport.read", "notification.read", "media.read", "*"],
         children: [
           {
             title: "Support",
             href: "/platform/operations/support",
+            requiredPermissions: ["platformSupport.read", "*"],
           },
           {
             title: "Notifications",
             href: "/platform/operations/notifications",
+            requiredPermissions: ["notification.read", "*"],
           },
           {
             title: "Webhooks & Outbox",
             href: "/platform/operations/integrations",
+            requiredPermissions: ["*"],
           },
           {
             title: "Media & Files",
             href: "/platform/operations/media",
+            requiredPermissions: ["media.read", "*"],
           },
         ],
       },
@@ -261,6 +303,11 @@ export const platformRouteMeta: Record<string, PlatformRouteMeta> = {
     description:
       "Review payment lifecycle, attempts, invoice generation, and provider reconciliation for recurring and one-time charges.",
   },
+  "/platform/billing/purchases": {
+    title: "One-Time Purchases",
+    description:
+      "Track direct commercial purchases separately from recurring subscriptions, including owner, status, invoices, and refund posture.",
+  },
   "/platform/billing/refunds": {
     title: "Refunds",
     description:
@@ -293,6 +340,85 @@ export const platformRouteMeta: Record<string, PlatformRouteMeta> = {
   },
 }
 
+export const platformBreadcrumbOverrides: AdminBreadcrumbOverride[] = [
+  {
+    pattern: "/platform/workspaces/[workspaceId]/routing",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Domains & Routing", href: "/platform/workspaces/domains" },
+      { label: "Workspace Routing" },
+    ],
+  },
+  {
+    pattern: "/platform/workspaces/domains/[domainId]",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Domains & Routing", href: "/platform/workspaces/domains" },
+      { label: "Domain Details" },
+    ],
+  },
+  {
+    pattern: "/platform/workspaces/overrides/features/create",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Entitlement Overrides", href: "/platform/workspaces/overrides" },
+      { label: "Feature Overrides" },
+    ],
+  },
+  {
+    pattern: "/platform/workspaces/overrides/features/[overrideId]/edit",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Entitlement Overrides", href: "/platform/workspaces/overrides" },
+      { label: "Feature Overrides" },
+    ],
+  },
+  {
+    pattern: "/platform/workspaces/overrides/limits/create",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Entitlement Overrides", href: "/platform/workspaces/overrides" },
+      { label: "Limit Overrides" },
+    ],
+  },
+  {
+    pattern: "/platform/workspaces/overrides/limits/[overrideId]/edit",
+    breadcrumbs: [
+      { label: "Workspaces", href: "/platform/workspaces" },
+      { label: "Entitlement Overrides", href: "/platform/workspaces/overrides" },
+      { label: "Limit Overrides" },
+    ],
+  },
+]
+
 export function getPlatformRouteMeta(pathname: string) {
   return platformRouteMeta[pathname] ?? null
+}
+
+export function filterPlatformNavGroupsByPermissions(
+  navGroups: AdminNavGroup[],
+  permissions: string[],
+) {
+  return navGroups
+    .map((group) => ({
+      ...group,
+      items: group.items
+        .map((item) => ({
+          ...item,
+          children: item.children?.filter(
+            (child) =>
+              !child.requiredPermissions ||
+              hasAnyPermission(permissions, child.requiredPermissions),
+          ),
+        }))
+        .filter((item) => {
+          const itemAllowed =
+            !item.requiredPermissions ||
+            hasAnyPermission(permissions, item.requiredPermissions)
+          const hasVisibleChildren = (item.children?.length ?? 0) > 0
+
+          return itemAllowed || hasVisibleChildren
+        }),
+    }))
+    .filter((group) => group.items.length > 0)
 }

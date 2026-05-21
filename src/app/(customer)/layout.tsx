@@ -1,8 +1,9 @@
 import { cookies } from "next/headers"
 
 import { AdminShell, type AdminNavGroup } from "@/components/admin/admin-shell"
-import { prisma } from "@/lib/prisma"
 import { readActorContext } from "@/lib/request/read-actor-context"
+import { withActionTxContext } from "@/lib/request/withActionContext"
+import { getWorkspaceThemeSnapshot } from "@/modules/workspace/services/setting.services"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
 
 function getDisplayName(params: {
@@ -43,26 +44,19 @@ export default async function CustomerLayout({
 }) {
   const cookieStore = await cookies()
   const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
-  const { actor } = await readActorContext()
+  const { actor, session } = await readActorContext()
 
   let themes: unknown = undefined
-  const identity = actor.identityId
-    ? await prisma.identity.findUnique({
-        where: { id: actor.identityId },
-        select: {
-          firstName: true,
-          lastName: true,
-          email: true,
-        },
-      })
-    : null
-  const userName = getDisplayName(identity ?? {})
+  const userName = getDisplayName({
+    firstName: session?.identityFirstName,
+    lastName: session?.identityLastName,
+    email: session?.identityEmail,
+  })
 
   if (actor.workspaceId) {
-    const settings = await prisma.workspaceSettings.findUnique({
-      where: { workspaceId: actor.workspaceId },
-      select: { themes: true },
-    })
+    const settings = await withActionTxContext(() =>
+      getWorkspaceThemeSnapshot(actor.workspaceId!),
+    )
 
     themes = settings?.themes
   }
@@ -89,7 +83,7 @@ export default async function CustomerLayout({
         },
         {
           title: "Support",
-          href: "/customer#support",
+          href: "/customer/support",
           icon: "lifebuoy",
         },
       ],
@@ -110,7 +104,7 @@ export default async function CustomerLayout({
         navGroups={navGroups}
         user={{
           name: userName,
-          email: identity?.email ?? undefined,
+          email: session?.identityEmail ?? undefined,
           initials: getInitials(userName),
         }}
         defaultSidebarOpen={defaultSidebarOpen}

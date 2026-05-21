@@ -8,6 +8,7 @@ import {
   NavigationMenuLink,
   NavigationMenuList,
 } from '@/components/ui/navigation-menu';
+import { LinkPendingHint } from '@/components/layout/link-pending-hint';
 
 import { navItems } from '@/lib/nav/navigation.config';
 import { cn } from '@/lib/utils';
@@ -36,7 +37,10 @@ export function Navigation() {
                   active ? 'bg-accent text-foreground' : 'hover:bg-accent',
                 )}
               >
-                <Link href={item.href}>{item.name}</Link>
+                <Link href={item.href} className="inline-flex items-center gap-2">
+                  <span>{item.name}</span>
+                  <LinkPendingHint />
+                </Link>
               </NavigationMenuLink>
             </NavigationMenuItem>
           );

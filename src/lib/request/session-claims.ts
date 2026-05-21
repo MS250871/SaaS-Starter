@@ -27,8 +27,12 @@ export function readSessionClaimsFromHeaders(
   const parsed = sessionPayloadSchema.safeParse({
     sessionId,
     identityId: getHeader('x-identity-id') ?? undefined,
+    identityFirstName: getHeader('x-identity-first-name') ?? undefined,
+    identityLastName: getHeader('x-identity-last-name') ?? undefined,
+    identityEmail: getHeader('x-identity-email') ?? undefined,
     customerId: getHeader('x-customer-id') ?? undefined,
     workspaceId: getHeader('x-workspace-id') ?? undefined,
+    workspaceName: getHeader('x-workspace-name') ?? undefined,
     membershipId: getHeader('x-membership-id') ?? undefined,
     workspaceRoleId: getHeader('x-workspace-role-id') ?? undefined,
     workspaceRoleKey:

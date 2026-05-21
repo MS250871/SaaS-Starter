@@ -2,6 +2,11 @@ import { attachMediaToEntity, uploadMediaObject } from '@/modules/media/media.se
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { findFileAttachmentByScopedMediaId } from '@/modules/media/media.services';
+import { SupportContextType } from '@/generated/prisma/client';
+import {
+  supportTicketMessageQueries,
+  supportTicketQueries,
+} from '@/modules/support/db';
 
 const MAX_SUPPORT_ATTACHMENTS = 5;
 const MAX_SUPPORT_ATTACHMENT_SIZE_BYTES = 15 * 1024 * 1024;
@@ -31,6 +36,7 @@ export async function createSupportAttachments(params: {
   files: File[];
   workspaceId: string;
   identityId: string;
+  customerId?: string;
   entityType: string;
   entityId: string;
 }) {
@@ -61,6 +67,7 @@ export async function createSupportAttachments(params: {
     const uploaded = await uploadMediaObject({
       workspaceId: params.workspaceId,
       identityId: params.identityId,
+      customerId: params.customerId,
       fileName: file.name,
       mimeType: file.type || 'application/octet-stream',
       size: file.size,
@@ -78,6 +85,7 @@ export async function createSupportAttachments(params: {
       entityId: params.entityId,
       workspaceId: params.workspaceId,
       identityId: params.identityId,
+      customerId: params.customerId,
     });
 
     attachments.push({
@@ -128,4 +136,148 @@ export async function getWorkspaceSupportAttachmentAccess(params: {
     mimeType: attachment.media.mimeType,
     status: attachment.media.status,
   };
+}
+
+async function getSupportTicketForAttachment(params: {
+  entityType: string;
+  entityId: string;
+}) {
+  if (params.entityType === SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE) {
+    return supportTicketQueries.findUnique({
+      where: {
+        id: params.entityId,
+      },
+      select: {
+        id: true,
+        workspaceId: true,
+        createdByCustomerId: true,
+        contextType: true,
+      },
+    });
+  }
+
+  if (params.entityType === SUPPORT_TICKET_MESSAGE_ATTACHMENT_ENTITY_TYPE) {
+    const message = await supportTicketMessageQueries.findUnique({
+      where: {
+        id: params.entityId,
+      },
+      select: {
+        ticketId: true,
+      },
+    });
+
+    if (!message?.ticketId) {
+      return null;
+    }
+
+    return supportTicketQueries.findUnique({
+      where: {
+        id: message.ticketId,
+      },
+      select: {
+        id: true,
+        workspaceId: true,
+        createdByCustomerId: true,
+        contextType: true,
+      },
+    });
+  }
+
+  return null;
+}
+
+function mapAttachmentAccess(
+  attachment: Awaited<ReturnType<typeof findFileAttachmentByScopedMediaId>>,
+) {
+  if (!attachment) {
+    throwError(ERR.NOT_FOUND, 'Support attachment not found');
+  }
+
+  if (attachment.media.status === 'DELETED') {
+    throwError(ERR.INVALID_STATE, 'Support attachment is no longer available');
+  }
+
+  return {
+    attachmentId: attachment.id,
+    entityType: attachment.entityType,
+    entityId: attachment.entityId,
+    mediaId: attachment.media.id,
+    storageKey: attachment.media.storageKey,
+    fileName: attachment.media.fileName,
+    mimeType: attachment.media.mimeType,
+    status: attachment.media.status,
+  };
+}
+
+export async function getPlatformSupportAttachmentAccess(params: {
+  mediaId: string;
+}) {
+  if (!params.mediaId) {
+    throwError(ERR.INVALID_INPUT, 'mediaId is required');
+  }
+
+  const attachment = await findFileAttachmentByScopedMediaId({
+    mediaId: params.mediaId,
+    entityTypes: [
+      SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE,
+      SUPPORT_TICKET_MESSAGE_ATTACHMENT_ENTITY_TYPE,
+    ],
+  });
+
+  if (!attachment) {
+    throwError(ERR.NOT_FOUND, 'Support attachment not found');
+  }
+
+  const ticket = await getSupportTicketForAttachment({
+    entityType: attachment.entityType,
+    entityId: attachment.entityId,
+  });
+
+  if (!ticket) {
+    throwError(ERR.NOT_FOUND, 'Support attachment not found');
+  }
+
+  return mapAttachmentAccess(attachment);
+}
+
+export async function getCustomerSupportAttachmentAccess(params: {
+  workspaceId: string;
+  customerId: string;
+  mediaId: string;
+}) {
+  if (!params.workspaceId || !params.customerId || !params.mediaId) {
+    throwError(
+      ERR.INVALID_INPUT,
+      'workspaceId, customerId, and mediaId are required',
+    );
+  }
+
+  const attachment = await findFileAttachmentByScopedMediaId({
+    mediaId: params.mediaId,
+    workspaceId: params.workspaceId,
+    entityTypes: [
+      SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE,
+      SUPPORT_TICKET_MESSAGE_ATTACHMENT_ENTITY_TYPE,
+    ],
+  });
+
+  if (!attachment) {
+    throwError(ERR.NOT_FOUND, 'Support attachment not found');
+  }
+
+  const ticket = await getSupportTicketForAttachment({
+    entityType: attachment.entityType,
+    entityId: attachment.entityId,
+  });
+
+  if (
+    !ticket ||
+    ticket.workspaceId !== params.workspaceId ||
+    ticket.createdByCustomerId !== params.customerId ||
+    ticket.contextType !== SupportContextType.CUSTOMER
+  ) {
+    throwError(ERR.NOT_FOUND, 'Support attachment not found');
+  }
+
+  return mapAttachmentAccess(attachment);
 }

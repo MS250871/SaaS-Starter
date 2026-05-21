@@ -757,3 +757,188 @@ export async function countWorkspaceIdentityNotifications(params: {
     },
   });
 }
+
+export type PlatformNotificationAdminSnapshot = Prisma.NotificationGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    recipientIdentityId: true;
+    recipientCustomerId: true;
+    type: true;
+    targetType: true;
+    title: true;
+    body: true;
+    payload: true;
+    isRead: true;
+    readAt: true;
+    createdAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    recipientIdentity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    recipientCustomer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    deliveries: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        channel: true;
+        provider: true;
+        status: true;
+        recipient: true;
+        subject: true;
+        errorMessage: true;
+        sentAt: true;
+        deliveredAt: true;
+        failedAt: true;
+        createdAt: true;
+      };
+    };
+    _count: {
+      select: {
+        deliveries: true;
+      };
+    };
+  };
+}>;
+
+function buildPlatformNotificationAdminSelect() {
+  return {
+    id: true,
+    workspaceId: true,
+    recipientIdentityId: true,
+    recipientCustomerId: true,
+    type: true,
+    targetType: true,
+    title: true,
+    body: true,
+    payload: true,
+    isRead: true,
+    readAt: true,
+    createdAt: true,
+    workspace: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+      },
+    },
+    recipientIdentity: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    recipientCustomer: {
+      select: {
+        id: true,
+        externalId: true,
+        identity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    },
+    deliveries: {
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        channel: true,
+        provider: true,
+        status: true,
+        recipient: true,
+        subject: true,
+        errorMessage: true,
+        sentAt: true,
+        deliveredAt: true,
+        failedAt: true,
+        createdAt: true,
+      },
+    },
+    _count: {
+      select: {
+        deliveries: true,
+      },
+    },
+  } satisfies Prisma.NotificationSelect;
+}
+
+export async function listPlatformNotificationAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformNotificationAdminSnapshot[]> {
+  const notifications = await notificationQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformNotificationAdminSelect(),
+  });
+
+  return notifications as PlatformNotificationAdminSnapshot[];
+}
+
+export async function getPlatformNotificationAdminSnapshot(
+  notificationId: string,
+): Promise<PlatformNotificationAdminSnapshot> {
+  if (!notificationId) {
+    throwError(ERR.INVALID_INPUT, 'Notification ID is required');
+  }
+
+  const notification = await notificationQueries.delegate.findUnique({
+    where: { id: notificationId },
+    select: buildPlatformNotificationAdminSelect(),
+  });
+
+  if (!notification) {
+    throwError(ERR.NOT_FOUND, 'Notification not found');
+  }
+
+  return notification as PlatformNotificationAdminSnapshot;
+}

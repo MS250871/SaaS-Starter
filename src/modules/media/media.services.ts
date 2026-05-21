@@ -793,3 +793,581 @@ export async function syncMediaStatusFromJobs(
 
   return markMediaReady(mediaId, params?.readyCdnUrl);
 }
+
+export type PlatformMediaAdminSnapshot = Prisma.MediaGetPayload<{
+  select: {
+    id: true;
+    fileName: true;
+    mimeType: true;
+    size: true;
+    storageKey: true;
+    url: true;
+    cdnUrl: true;
+    status: true;
+    checksum: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    _count: {
+      select: {
+        fileAttachments: true;
+        mediaJobs: true;
+      };
+    };
+  };
+}>;
+
+export type PlatformMediaDetailAdminSnapshot = Prisma.MediaGetPayload<{
+  select: {
+    id: true;
+    fileName: true;
+    mimeType: true;
+    size: true;
+    storageKey: true;
+    url: true;
+    cdnUrl: true;
+    status: true;
+    checksum: true;
+    metadata: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    fileAttachments: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        entityType: true;
+        entityId: true;
+        workspaceId: true;
+        identityId: true;
+        customerId: true;
+        createdAt: true;
+      };
+    };
+    mediaJobs: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        jobType: true;
+        status: true;
+        error: true;
+        createdAt: true;
+        processedAt: true;
+      };
+    };
+  };
+}>;
+
+export type WorkspaceMediaAdminSnapshot = Prisma.MediaGetPayload<{
+  select: ReturnType<typeof buildPlatformMediaAdminSelect>;
+}>;
+
+export type WorkspaceMediaDetailAdminSnapshot = Prisma.MediaGetPayload<{
+  select: {
+    id: true;
+    fileName: true;
+    mimeType: true;
+    size: true;
+    storageKey: true;
+    url: true;
+    cdnUrl: true;
+    status: true;
+    checksum: true;
+    metadata: true;
+    workspaceId: true;
+    identityId: true;
+    customerId: true;
+    createdAt: true;
+    updatedAt: true;
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        externalId: true;
+        identity: {
+          select: {
+            id: true;
+            firstName: true;
+            lastName: true;
+            email: true;
+          };
+        };
+        workspace: {
+          select: {
+            id: true;
+            name: true;
+            slug: true;
+          };
+        };
+      };
+    };
+    fileAttachments: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        entityType: true;
+        entityId: true;
+        workspaceId: true;
+        identityId: true;
+        customerId: true;
+        createdAt: true;
+      };
+    };
+    mediaJobs: {
+      orderBy: {
+        createdAt: 'desc';
+      };
+      select: {
+        id: true;
+        jobType: true;
+        status: true;
+        error: true;
+        createdAt: true;
+        processedAt: true;
+      };
+    };
+  };
+}>;
+
+function buildWorkspaceMediaScopeWhere(workspaceId: string) {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  return {
+    OR: [
+      { workspaceId },
+      {
+        customer: {
+          is: {
+            workspaceId,
+          },
+        },
+      },
+    ],
+  } satisfies Prisma.MediaWhereInput;
+}
+
+function buildPlatformMediaAdminSelect() {
+  return {
+    id: true,
+    fileName: true,
+    mimeType: true,
+    size: true,
+    storageKey: true,
+    url: true,
+    cdnUrl: true,
+    status: true,
+    checksum: true,
+    workspaceId: true,
+    identityId: true,
+    customerId: true,
+    createdAt: true,
+    updatedAt: true,
+    workspace: {
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        isActive: true,
+      },
+    },
+    identity: {
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    },
+    customer: {
+      select: {
+        id: true,
+        externalId: true,
+        identity: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+        workspace: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        },
+      },
+    },
+    _count: {
+      select: {
+        fileAttachments: true,
+        mediaJobs: true,
+      },
+    },
+  } satisfies Prisma.MediaSelect;
+}
+
+export async function listPlatformMediaAdminSnapshots(opts?: {
+  limit?: number;
+}): Promise<PlatformMediaAdminSnapshot[]> {
+  const media = await mediaQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformMediaAdminSelect(),
+  });
+
+  return media as PlatformMediaAdminSnapshot[];
+}
+
+export async function getPlatformMediaAdminSnapshot(
+  id: string,
+): Promise<PlatformMediaDetailAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Media ID is required');
+  }
+
+  const media = await mediaQueries.delegate.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      size: true,
+      storageKey: true,
+      url: true,
+      cdnUrl: true,
+      status: true,
+      checksum: true,
+      metadata: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      fileAttachments: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          entityType: true,
+          entityId: true,
+          workspaceId: true,
+          identityId: true,
+          customerId: true,
+          createdAt: true,
+        },
+      },
+      mediaJobs: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          jobType: true,
+          status: true,
+          error: true,
+          createdAt: true,
+          processedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!media) {
+    throwError(ERR.NOT_FOUND, 'Media not found');
+  }
+
+  return media as PlatformMediaDetailAdminSnapshot;
+}
+
+export async function listWorkspaceMediaAdminSnapshots(
+  workspaceId: string,
+  opts?: {
+    limit?: number;
+  },
+): Promise<WorkspaceMediaAdminSnapshot[]> {
+  const media = await mediaQueries.delegate.findMany({
+    where: buildWorkspaceMediaScopeWhere(workspaceId),
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: buildPlatformMediaAdminSelect(),
+  });
+
+  return media as WorkspaceMediaAdminSnapshot[];
+}
+
+export async function getWorkspaceMediaAdminSnapshot(
+  workspaceId: string,
+  id: string,
+): Promise<WorkspaceMediaDetailAdminSnapshot> {
+  if (!id) {
+    throwError(ERR.INVALID_INPUT, 'Media ID is required');
+  }
+
+  const media = await mediaQueries.delegate.findFirst({
+    where: {
+      id,
+      ...buildWorkspaceMediaScopeWhere(workspaceId),
+    },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      size: true,
+      storageKey: true,
+      url: true,
+      cdnUrl: true,
+      status: true,
+      checksum: true,
+      metadata: true,
+      workspaceId: true,
+      identityId: true,
+      customerId: true,
+      createdAt: true,
+      updatedAt: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          externalId: true,
+          identity: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+          workspace: {
+            select: {
+              id: true,
+              name: true,
+              slug: true,
+            },
+          },
+        },
+      },
+      fileAttachments: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          entityType: true,
+          entityId: true,
+          workspaceId: true,
+          identityId: true,
+          customerId: true,
+          createdAt: true,
+        },
+      },
+      mediaJobs: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          id: true,
+          jobType: true,
+          status: true,
+          error: true,
+          createdAt: true,
+          processedAt: true,
+        },
+      },
+    },
+  });
+
+  if (!media) {
+    throwError(ERR.NOT_FOUND, 'Media not found');
+  }
+
+  return media as WorkspaceMediaDetailAdminSnapshot;
+}
+
+export async function getWorkspaceMediaDownloadAccess(params: {
+  workspaceId: string;
+  mediaId: string;
+}) {
+  if (!params.mediaId) {
+    throwError(ERR.INVALID_INPUT, 'mediaId is required');
+  }
+
+  const media = await mediaQueries.delegate.findFirst({
+    where: {
+      id: params.mediaId,
+      ...buildWorkspaceMediaScopeWhere(params.workspaceId),
+    },
+    select: {
+      id: true,
+      fileName: true,
+      mimeType: true,
+      storageKey: true,
+      status: true,
+    },
+  });
+
+  if (!media) {
+    throwError(ERR.NOT_FOUND, 'Media not found');
+  }
+
+  if (media.status === 'DELETED') {
+    throwError(ERR.INVALID_STATE, 'Media has been deleted');
+  }
+
+  return media;
+}

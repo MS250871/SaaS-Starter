@@ -91,6 +91,25 @@ export type WorkspaceUserPermissionOverride = Prisma.UserPermissionGetPayload<{
   }
 }>
 
+export type GovernancePermissionAdminSnapshot = Prisma.PermissionGetPayload<{
+  select: {
+    id: true
+    key: true
+    name: true
+    description: true
+    entity: true
+    isActive: true
+    updatedAt: true
+    _count: {
+      select: {
+        rolePermissions: true
+        workspaceRolePermissions: true
+        userPermissions: true
+      }
+    }
+  }
+}>
+
 export async function getPermissionById(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Permission ID is required")
 
@@ -157,6 +176,12 @@ export async function updatePermission(
   }
 }
 
+export async function setPermissionActive(id: string, isActive: boolean) {
+  return updatePermission(id, {
+    isActive,
+  })
+}
+
 export async function deletePermission(id: string) {
   if (!id) throwError(ERR.INVALID_INPUT, "Permission ID is required")
 
@@ -205,15 +230,17 @@ export async function deleteRolePermission(id: string) {
 
 export async function listRolePermissionsByRoleDefinition(
   roleDefinitionId: string,
-) {
+): Promise<RolePermissionWithPermission[]> {
   if (!roleDefinitionId) {
     throwError(ERR.INVALID_INPUT, "roleDefinitionId is required")
   }
 
-  return rolePermissionQueries.many({
+  const permissions = await rolePermissionQueries.many({
     where: { roleDefinitionId },
     include: { permission: true },
   })
+
+  return permissions as unknown as RolePermissionWithPermission[]
 }
 
 export async function clearRolePermissionsByRoleDefinition(
@@ -813,4 +840,65 @@ export function hasAnyPermission(
   }
 
   return required.some((permission) => permissions.includes(permission))
+}
+
+export async function listGovernancePermissionAdminSnapshots(opts?: {
+  limit?: number
+}) {
+  const permissions = await permissionQueries.delegate.findMany({
+    orderBy: [{ entity: 'asc' }, { key: 'asc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      entity: true,
+      isActive: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          rolePermissions: true,
+          workspaceRolePermissions: true,
+          userPermissions: true,
+        },
+      },
+    },
+  })
+
+  return permissions as GovernancePermissionAdminSnapshot[]
+}
+
+export async function getGovernancePermissionAdminSnapshot(permissionId: string) {
+  if (!permissionId) {
+    throwError(ERR.INVALID_INPUT, 'Permission ID is required')
+  }
+
+  const permission = await permissionQueries.delegate.findUnique({
+    where: {
+      id: permissionId,
+    },
+    select: {
+      id: true,
+      key: true,
+      name: true,
+      description: true,
+      entity: true,
+      isActive: true,
+      updatedAt: true,
+      _count: {
+        select: {
+          rolePermissions: true,
+          workspaceRolePermissions: true,
+          userPermissions: true,
+        },
+      },
+    },
+  })
+
+  if (!permission) {
+    throwError(ERR.NOT_FOUND, 'Permission not found')
+  }
+
+  return permission as GovernancePermissionAdminSnapshot
 }

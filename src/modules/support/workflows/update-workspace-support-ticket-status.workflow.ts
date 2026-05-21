@@ -1,6 +1,6 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
-  getWorkspaceSupportTicketById,
+  getWorkspaceManagedSupportTicketById,
   updateSupportTicketStatus,
 } from '@/modules/support/support.services';
 
@@ -10,7 +10,7 @@ export async function updateWorkspaceSupportTicketStatusWorkflow(input: {
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
 }) {
   return withUnitOfWork(async () => {
-    const ticket = await getWorkspaceSupportTicketById(
+    const ticket = await getWorkspaceManagedSupportTicketById(
       input.workspaceId,
       input.ticketId,
     );

@@ -70,9 +70,13 @@ export const sessionPayloadSchema = z.object({
   sessionId: z.string(),
 
   identityId: z.string(),
+  identityFirstName: z.string().optional(),
+  identityLastName: z.string().optional(),
+  identityEmail: z.string().optional(),
   customerId: z.string().optional(),
 
   workspaceId: z.string().optional(),
+  workspaceName: z.string().optional(),
   membershipId: z.string().optional(),
 
   workspaceRoleId: z.string().optional(),

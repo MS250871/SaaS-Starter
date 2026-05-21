@@ -1,24 +1,21 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { SendIcon } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
 import {
   Field,
   FieldContent,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -33,22 +30,31 @@ import {
 } from '@/components/ui/select';
 import { SpinnerButton } from '@/components/ui/spinner-button';
 import { Textarea } from '@/components/ui/textarea';
+import { useActionToast } from '@/hooks/use-action-toast';
 import { createWorkspaceSupportTicketAction } from '@/modules/support/actions/create-workspace-support-ticket.action';
 import {
   createWorkspaceSupportTicketActionSchema,
   type CreateWorkspaceSupportTicketActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 
 export function WorkspaceSupportCreatePanel({
   basePath,
   canCreateTicket,
+  defaultTarget,
+  customerOptions,
 }: {
   basePath: string;
   canCreateTicket: boolean;
+  defaultTarget: 'customer' | 'platform';
+  customerOptions: Array<{
+    id: string;
+    name: string;
+    email: string | null;
+  }>;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<string | null>(null);
+  const { showActionSuccess } = useActionToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
   const [fileInputKey, setFileInputKey] = useState(0);
@@ -56,18 +62,19 @@ export function WorkspaceSupportCreatePanel({
   const form = useForm<CreateWorkspaceSupportTicketActionInput>({
     resolver: zodResolver(createWorkspaceSupportTicketActionSchema),
     defaultValues: {
-      target: 'workspace',
+      target: defaultTarget,
+      customerId: '',
       title: '',
       body: '',
       priority: 'medium',
     },
   });
 
-  const onSubmit = (data: CreateWorkspaceSupportTicketActionInput) => {
-    setMessage(null);
+  const onSubmit = async (data: CreateWorkspaceSupportTicketActionInput) => {
     setError(null);
+    setIsSubmitting(true);
 
-    startTransition(async () => {
+    try {
       const formData = new FormData();
       Object.entries(data).forEach(([key, value]) => {
         formData.append(key, String(value));
@@ -80,118 +87,195 @@ export function WorkspaceSupportCreatePanel({
 
       if (!response.success) {
         setError(response.error.message);
+        setIsSubmitting(false);
         return;
       }
 
-      setMessage(response.data.successMessage);
+      showActionSuccess(
+        response.data.successMessage,
+        response.data.contextType === 'PLATFORM'
+          ? 'Redirecting to platform escalations.'
+          : 'Redirecting to support queue.',
+      );
       setAttachmentFiles([]);
       setFileInputKey((current) => current + 1);
-      router.push(
+      form.reset({
+        target: data.target,
+        customerId: data.target === 'customer' ? data.customerId ?? '' : '',
+        title: '',
+        body: '',
+        priority: 'medium',
+      });
+      router.replace(
         response.data.contextType === 'PLATFORM'
           ? `${basePath}/support/escalations`
           : `${basePath}/support`,
       );
-      router.refresh();
-    });
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Unable to create ticket',
+      );
+      setIsSubmitting(false);
+    }
   };
+
+  const currentTarget = useWatch({
+    control: form.control,
+    name: 'target',
+  });
+  const selectedCustomerId = useWatch({
+    control: form.control,
+    name: 'customerId',
+  });
+  const requiresCustomer = currentTarget === 'customer';
+  const backHref =
+    currentTarget === 'platform'
+      ? `${basePath}/support/escalations`
+      : `${basePath}/support`;
 
   return (
     <section className="grid gap-6">
       <Card className="border-border/70 bg-background/85">
         <CardHeader>
           <CardTitle>Create Support Ticket</CardTitle>
-          <CardDescription>
-            Open a customer support ticket for your workspace or raise a platform
-            escalation for the SaaS operator.
-          </CardDescription>
         </CardHeader>
       </Card>
 
-      <Card className="border-border/70 bg-background/85">
+      <Card className="workspace-info-card border bg-background/85">
         <CardContent className="pt-6">
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup className="gap-4">
-              <Field>
-                <FieldLabel>Destination</FieldLabel>
-                <FieldContent>
-                  <Controller
-                    control={form.control}
-                    name="target"
-                    render={({ field }) => (
-                      <Select
-                        disabled={!canCreateTicket || isPending}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="workspace">
-                            Workspace customer support
-                          </SelectItem>
-                          <SelectItem value="platform">
-                            Platform escalation
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </FieldContent>
-              </Field>
+              <div
+                className={
+                  requiresCustomer
+                    ? 'grid gap-4 xl:grid-cols-[0.9fr_1.1fr_1.3fr_0.8fr]'
+                    : 'grid gap-4 xl:grid-cols-[0.9fr_1.5fr_0.8fr]'
+                }
+              >
+                <Field>
+                  <FieldLabel>Destination</FieldLabel>
+                  <FieldContent>
+                    <Controller
+                      control={form.control}
+                      name="target"
+                      render={({ field }) => (
+                        <Select
+                          disabled={!canCreateTicket || isSubmitting}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="customer">
+                              Customer support ticket
+                            </SelectItem>
+                            <SelectItem value="platform">
+                              Platform escalation
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </FieldContent>
+                </Field>
 
-              <Field>
-                <FieldLabel>Title</FieldLabel>
-                <FieldContent>
-                  <Input
-                    placeholder="Summarize the issue"
-                    disabled={!canCreateTicket || isPending}
-                    {...form.register('title')}
-                  />
-                </FieldContent>
-                <FieldError>{form.formState.errors.title?.message}</FieldError>
-              </Field>
+                <Field>
+                  <FieldLabel>Title</FieldLabel>
+                  <FieldContent>
+                    <Input
+                      placeholder={
+                        requiresCustomer
+                          ? 'Summarize the customer issue'
+                          : 'Summarize the escalation'
+                      }
+                      disabled={!canCreateTicket || isSubmitting}
+                      {...form.register('title')}
+                    />
+                  </FieldContent>
+                  <FieldError>{form.formState.errors.title?.message}</FieldError>
+                </Field>
 
-              <Field>
-                <FieldLabel>Priority</FieldLabel>
-                <FieldContent>
-                  <Controller
-                    control={form.control}
-                    name="priority"
-                    render={({ field }) => (
-                      <Select
-                        disabled={!canCreateTicket || isPending}
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="low">Low</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="high">High</SelectItem>
-                          <SelectItem value="urgent">Urgent</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </FieldContent>
-              </Field>
+                {requiresCustomer ? (
+                  <Field>
+                    <FieldLabel>Customer</FieldLabel>
+                    <FieldContent>
+                      <Controller
+                        control={form.control}
+                        name="customerId"
+                        render={({ field }) => (
+                          <Select
+                            disabled={
+                              !canCreateTicket ||
+                              isSubmitting ||
+                              customerOptions.length === 0
+                            }
+                            onValueChange={field.onChange}
+                            value={field.value ?? ''}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select a customer" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {customerOptions.map((customer) => (
+                                <SelectItem key={customer.id} value={customer.id}>
+                                  {customer.name}
+                                  {customer.email ? ` (${customer.email})` : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </FieldContent>
+                    <FieldError>{form.formState.errors.customerId?.message}</FieldError>
+                  </Field>
+                ) : null}
+
+                <Field>
+                  <FieldLabel>Priority</FieldLabel>
+                  <FieldContent>
+                    <Controller
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <Select
+                          disabled={!canCreateTicket || isSubmitting}
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="urgent">Urgent</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </FieldContent>
+                </Field>
+              </div>
 
               <Field>
                 <FieldLabel>Details</FieldLabel>
                 <FieldContent>
                   <Textarea
-                    placeholder="Describe the issue, customer impact, and any steps already tried."
-                    disabled={!canCreateTicket || isPending}
+                    placeholder={
+                      requiresCustomer
+                        ? 'Describe the customer issue, impact, and any steps already tried.'
+                        : 'Describe the platform issue, impact, and any steps already tried.'
+                    }
+                    disabled={!canCreateTicket || isSubmitting}
                     {...form.register('body')}
                   />
                 </FieldContent>
-                <FieldDescription>
-                  Customer support tickets stay with your workspace support desk.
-                  Platform escalations are for SaaS-operator help requests.
-                </FieldDescription>
                 <FieldError>{form.formState.errors.body?.message}</FieldError>
               </Field>
 
@@ -200,7 +284,7 @@ export function WorkspaceSupportCreatePanel({
                 <FieldContent>
                   <Input
                     key={fileInputKey}
-                    disabled={!canCreateTicket || isPending}
+                    disabled={!canCreateTicket || isSubmitting}
                     multiple
                     onChange={(event) => {
                       setAttachmentFiles(Array.from(event.target.files ?? []));
@@ -208,10 +292,6 @@ export function WorkspaceSupportCreatePanel({
                     type="file"
                   />
                 </FieldContent>
-                <FieldDescription>
-                  Add screenshots, documents, or customer evidence when it helps
-                  explain the issue.
-                </FieldDescription>
               </Field>
 
               {attachmentFiles.length > 0 && (
@@ -220,11 +300,12 @@ export function WorkspaceSupportCreatePanel({
                 </div>
               )}
 
-              {message && (
+              {requiresCustomer && customerOptions.length === 0 && (
                 <Alert>
-                  <SendIcon className="size-4" />
-                  <AlertTitle>Ticket created</AlertTitle>
-                  <AlertDescription>{message}</AlertDescription>
+                  <AlertTitle>No customers available</AlertTitle>
+                  <AlertDescription>
+                    Add a customer first before logging a support ticket on their behalf.
+                  </AlertDescription>
                 </Alert>
               )}
 
@@ -236,27 +317,33 @@ export function WorkspaceSupportCreatePanel({
               )}
 
               {!canCreateTicket && (
-                <Field>
-                  <FieldDescription>
-                    Creating tickets requires the `supportTicket.create`
-                    permission.
-                  </FieldDescription>
-                </Field>
+                <Alert>
+                  <AlertTitle>Read-only access</AlertTitle>
+                  <AlertDescription>
+                    Creating tickets requires the <code>supportTicket.create</code> permission.
+                  </AlertDescription>
+                </Alert>
               )}
 
               <Field>
-                {isPending ? (
-                  <SpinnerButton
-                    className="w-full sm:w-auto"
-                    message="Creating ticket..."
-                  />
+                {isSubmitting ? (
+                  <div className="flex">
+                    <SpinnerButton message="Creating ticket..." />
+                  </div>
                 ) : (
                   <div className="flex flex-wrap gap-3">
-                    <Button type="submit" disabled={!canCreateTicket}>
+                    <Button
+                      type="submit"
+                      disabled={
+                        !canCreateTicket ||
+                        (requiresCustomer &&
+                          (customerOptions.length === 0 || !selectedCustomerId))
+                      }
+                    >
                       Create Ticket
                     </Button>
                     <Button asChild variant="outline">
-                      <Link href={`${basePath}/support`}>Back to Support</Link>
+                      <Link href={backHref}>Back to Support</Link>
                     </Button>
                   </div>
                 )}

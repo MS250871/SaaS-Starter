@@ -1,6 +1,7 @@
 'use server';
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createNavAction } from '@/lib/http/create-nav-action';
 import { getRequestContext } from '@/lib/context/request-context';
 import { resolvePublicRedirectTarget } from '@/lib/http/resolve-public-redirect';
@@ -14,9 +15,17 @@ import {
   setVerificationSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
+import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 import { otpSchema } from '@/modules/auth/schema';
 import { verifyWorkflow } from '@/modules/auth/workflows/verify.workflow';
-import { postLoginWorkflow } from '@/modules/auth/workflows/post-login.workflow';
+import {
+  postLoginWorkflow,
+  resolveWorkspaceCanonicalSurfaceHost,
+} from '@/modules/auth/workflows/post-login.workflow';
+import {
+  buildHostTransferPath,
+  issueHostTransferToken,
+} from '@/modules/auth/services/host-transfer.services';
 import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import {
   buildWorkspaceLoginPath,
@@ -161,6 +170,30 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
     }
 
     if ('finalSession' in postLoginResult && postLoginResult.finalSession) {
+      if (postLoginResult.finalSession.workspaceId && postLoginResult.redirectTo) {
+        const hdrs = await headers();
+        const currentHost = normalizeHostname(
+          hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? '',
+        );
+        const canonicalHost = await resolveWorkspaceCanonicalSurfaceHost(
+          postLoginResult.finalSession.workspaceId,
+        );
+
+        if (canonicalHost && currentHost !== canonicalHost) {
+          const token = await issueHostTransferToken({
+            session: postLoginResult.finalSession,
+            workspaceId: postLoginResult.finalSession.workspaceId,
+            targetHost: canonicalHost,
+            intent: auth.intent,
+            returnPath: postLoginResult.redirectTo,
+          });
+
+          await clearAuthCookie();
+
+          redirect(buildHostTransferPath(token));
+        }
+      }
+
       await setUserSession(postLoginResult.finalSession);
       await clearAuthCookie();
 

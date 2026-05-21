@@ -3,18 +3,21 @@ export const FEATURES_SEED = [
     key: 'domain_path_based',
     name: 'Path-based domain',
     category: 'domain',
+    overridePolicy: 'NEVER',
     sortOrder: 1,
   },
   {
     key: 'domain_subdomain',
     name: 'Subdomain',
     category: 'domain',
+    overridePolicy: 'PLATFORM_ONLY',
     sortOrder: 2,
   },
   {
     key: 'domain_custom',
     name: 'Custom domain',
     category: 'domain',
+    overridePolicy: 'PLATFORM_ONLY',
     sortOrder: 3,
   },
 

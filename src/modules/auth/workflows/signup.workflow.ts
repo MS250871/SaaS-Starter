@@ -11,6 +11,7 @@ import { createIdentity } from '@/modules/auth/services/identity.services';
 import { generateOtp } from '@/modules/auth/services/otp.services';
 import { AuthAccountType, OtpPurpose } from '@/generated/prisma/enums';
 import { validateInviteToken } from '@/modules/workspace/services/invite.services';
+import { validatePlatformInviteToken } from '@/modules/platform/services/invite.services';
 import { queueOtpDelivery } from '@/modules/auth/services/otp-outbox.services';
 
 export type SignupWorkflowResult = {
@@ -63,7 +64,10 @@ export async function signupWorkflow(input: SignupDomain) {
           limits: {},
           isPlatformAdmin: true,
         },
-        () => validateInviteToken(input.inviteToken!),
+        () =>
+          input.entry === 'platform'
+            ? validatePlatformInviteToken(input.inviteToken!)
+            : validateInviteToken(input.inviteToken!),
       );
 
       if (invite.email && invite.email !== input.email) {

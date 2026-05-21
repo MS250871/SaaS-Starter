@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -210,16 +209,18 @@ export function WorkspaceBillingPanel({
       <div className="grid gap-4 xl:grid-cols-4">
         <Card className="border-accent/40 bg-background/90">
           <CardHeader className="pb-3">
-            <CardDescription className="text-accent">Current Plan</CardDescription>
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
+              Current Plan
+            </p>
             <CardTitle className="text-primary">{currentPlanName}</CardTitle>
           </CardHeader>
         </Card>
 
         <Card className="border-accent/40 bg-background/90">
           <CardHeader className="pb-3">
-            <CardDescription className="text-accent">
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
               Subscription Status
-            </CardDescription>
+            </p>
             <CardTitle className="text-primary">
               {activeSubscription?.status ?? billingConfig?.subscriptionStatus ?? '—'}
             </CardTitle>
@@ -228,14 +229,18 @@ export function WorkspaceBillingPanel({
 
         <Card className="border-accent/40 bg-background/90">
           <CardHeader className="pb-3">
-            <CardDescription className="text-accent">Payments</CardDescription>
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
+              Payments
+            </p>
             <CardTitle className="text-primary">{payments.length}</CardTitle>
           </CardHeader>
         </Card>
 
         <Card className="border-accent/40 bg-background/90">
           <CardHeader className="pb-3">
-            <CardDescription className="text-accent">Invoices</CardDescription>
+            <p className="text-xs font-medium uppercase tracking-[0.24em] text-accent">
+              Invoices
+            </p>
             <CardTitle className="text-primary">{invoices.length}</CardTitle>
           </CardHeader>
         </Card>
@@ -246,9 +251,6 @@ export function WorkspaceBillingPanel({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <CardTitle>Subscription</CardTitle>
-              <CardDescription className="mt-2">
-                Current recurring billing state for this workspace.
-              </CardDescription>
             </div>
             {canManageBilling && (
               <div className="flex flex-wrap gap-2">
@@ -291,14 +293,6 @@ export function WorkspaceBillingPanel({
               </div>
             )}
           </div>
-          {canManageBilling && (
-            <p className="text-xs text-muted-foreground">
-              Same-cycle upgrades on card mandates keep the current renewal date
-              and bill only the prorated difference. UPI or eMandate upgrades
-              restart the subscription today and refund the unused portion of the
-              current cycle.
-            </p>
-          )}
         </CardHeader>
         <CardContent className="space-y-4">
           {planMessage && (
@@ -367,10 +361,6 @@ export function WorkspaceBillingPanel({
       <Card className="border-border/70 bg-background/90">
         <CardHeader>
           <CardTitle>One-Time Add-Ons</CardTitle>
-          <CardDescription className="mt-2">
-            Purchase setup and implementation add-ons without changing the recurring
-            workspace subscription.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           {oneTimeOffers.length === 0 ? (
@@ -384,7 +374,7 @@ export function WorkspaceBillingPanel({
                   key={offer.priceId}
                   className="rounded-xl border border-accent/40 bg-background p-5"
                 >
-                  <span className="inline-flex w-fit rounded-full border border-accent/40 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-foreground">
+                  <span className="inline-flex w-fit rounded-full border border-accent/40 bg-accent/12 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-accent">
                     One-time purchase
                   </span>
                   <h3 className="mt-3 text-base font-semibold text-primary">
@@ -423,9 +413,6 @@ export function WorkspaceBillingPanel({
       <Card className="border-border/70 bg-background/90">
         <CardHeader>
           <CardTitle>Payment Activity</CardTitle>
-          <CardDescription className="mt-2">
-            Completed charges and incomplete checkout attempts for this workspace.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="completed">
@@ -544,9 +531,6 @@ export function WorkspaceBillingPanel({
       <Card className="border-border/70 bg-background/90">
         <CardHeader>
           <CardTitle>Recent Invoices</CardTitle>
-          <CardDescription className="mt-2">
-            Generated invoices linked to successful and pending payments.
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>

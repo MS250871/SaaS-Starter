@@ -59,6 +59,7 @@ import {
   findCustomerByWorkspaceIdentity,
 } from '@/modules/customer/services/customer.services';
 import {
+  buildManagedWorkspaceSubdomain,
   buildWorkspaceCanonicalPath,
   buildWorkspaceSurfacePath,
   normalizeWorkspaceDomainStrategy,
@@ -133,6 +134,7 @@ export async function buildFinalSessionWorkflow({
 }): Promise<SessionClaims> {
   return withUnitOfWork(async () => {
     const identityId = identitySession.identityId;
+    const identity = await getIdentityById(identityId);
     await expireIdentitySessionsIfNeeded(identityId);
 
     if (customerId && inputWorkspaceMembership) {
@@ -160,6 +162,7 @@ export async function buildFinalSessionWorkflow({
 
     const workspaceRoleDefinitionId = workspaceMembership?.roleDefinitionId;
     const membershipId = workspaceMembership?.id;
+    const workspace = workspaceId ? await getWorkspaceById(workspaceId) : null;
 
     const { roleIds: platformRoleIds, roleKeys: platformRoleKeys, roleSystemKeys: platformRoleSystemKeys } =
       await getPlatformAccessContext(identityId);
@@ -217,8 +220,12 @@ export async function buildFinalSessionWorkflow({
     return {
       sessionId: session.id,
       identityId,
+      identityFirstName: identity.firstName ?? undefined,
+      identityLastName: identity.lastName ?? undefined,
+      identityEmail: identity.email ?? undefined,
       customerId: session.customerId ?? customerId,
       workspaceId,
+      workspaceName: workspace?.name ?? undefined,
       membershipId,
       workspaceRoleId: workspaceRoleDefinitionId,
       workspaceRoleKey: workspaceMembership?.roleKey,
@@ -260,6 +267,79 @@ export async function resolveWorkspaceSurfaceRedirect(params: {
       strategy,
       slug: workspace.slug,
       path: params.fallbackPath,
+    });
+  });
+}
+
+function resolveWorkspaceCanonicalHost(params: {
+  slug: string;
+  defaultDomain?: string | null;
+  settings?: unknown;
+  strategy: ReturnType<typeof normalizeWorkspaceDomainStrategy>;
+}) {
+  if (params.strategy === 'free_path') {
+    return null;
+  }
+
+  if (typeof params.defaultDomain === 'string' && params.defaultDomain.trim()) {
+    return params.defaultDomain.trim().toLowerCase();
+  }
+
+  const domainSettings =
+    params.settings &&
+    typeof params.settings === 'object' &&
+    'domain' in params.settings &&
+    params.settings.domain &&
+    typeof params.settings.domain === 'object'
+      ? (params.settings.domain as {
+          primaryHost?: string | null;
+          rootDomain?: string | null;
+        })
+      : null;
+
+  if (
+    domainSettings?.primaryHost &&
+    typeof domainSettings.primaryHost === 'string' &&
+    domainSettings.primaryHost.trim()
+  ) {
+    return domainSettings.primaryHost.trim().toLowerCase();
+  }
+
+  if (params.strategy === 'subdomain') {
+    const configuredRootDomain =
+      typeof domainSettings?.rootDomain === 'string' &&
+      domainSettings.rootDomain.trim()
+        ? domainSettings.rootDomain.trim().toLowerCase()
+        : process.env.ROOT_DOMAIN?.trim().toLowerCase();
+
+    if (configuredRootDomain) {
+      return buildManagedWorkspaceSubdomain(params.slug, configuredRootDomain);
+    }
+  }
+
+  return null;
+}
+
+export async function resolveWorkspaceCanonicalSurfaceHost(
+  workspaceId: string,
+) {
+  return withUnitOfWork(async () => {
+    const workspace = await getWorkspaceById(workspaceId);
+    const settings = await getWorkspaceSettings(workspaceId);
+    const settingsJson =
+      settings?.settings && typeof settings.settings === 'object'
+        ? settings.settings
+        : null;
+    const strategy = normalizeWorkspaceDomainStrategy(
+      (settingsJson as { domain?: { strategy?: string } } | null)?.domain
+        ?.strategy,
+    );
+
+    return resolveWorkspaceCanonicalHost({
+      slug: workspace.slug,
+      defaultDomain: workspace.defaultDomain,
+      settings: settingsJson,
+      strategy,
     });
   });
 }

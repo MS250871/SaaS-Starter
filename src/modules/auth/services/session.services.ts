@@ -1,6 +1,6 @@
 import { sessionCrud, sessionQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { SessionEndReason } from '@/generated/prisma/client';
+import { SessionEndReason, type Prisma } from '@/generated/prisma/client';
 import type { Session } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import {
@@ -16,6 +16,52 @@ const USER_SESSION_REFRESH_THRESHOLD_MS =
   USER_SESSION_REFRESH_THRESHOLD_SECONDS * 1000;
 const USER_SESSION_ACTIVITY_WRITE_INTERVAL_MS =
   USER_SESSION_ACTIVITY_WRITE_INTERVAL_SECONDS * 1000;
+
+export type PlatformSessionAdminSnapshot = Prisma.SessionGetPayload<{
+  select: {
+    id: true;
+    identityId: true;
+    workspaceId: true;
+    customerId: true;
+    membershipId: true;
+    workspaceRoleKey: true;
+    workspaceRoleSystemKey: true;
+    browser: true;
+    os: true;
+    device: true;
+    deviceId: true;
+    deviceFingerprint: true;
+    isActive: true;
+    expiresAt: true;
+    endedAt: true;
+    endedReason: true;
+    lastSeenAt: true;
+    createdAt: true;
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+        phone: true;
+        isActive: true;
+      };
+    };
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+      };
+    };
+    customer: {
+      select: {
+        id: true;
+        workspaceId: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Get session by ID
@@ -379,4 +425,64 @@ export async function extendSessionIfNeeded(session: Session) {
   }
 
   return session;
+}
+
+export async function listPlatformSessionAdminSnapshots(opts?: {
+  limit?: number;
+  identityId?: string | null;
+}) {
+  const sessions = await sessionQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          identityId: opts.identityId,
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      identityId: true,
+      workspaceId: true,
+      customerId: true,
+      membershipId: true,
+      workspaceRoleKey: true,
+      workspaceRoleSystemKey: true,
+      browser: true,
+      os: true,
+      device: true,
+      deviceId: true,
+      deviceFingerprint: true,
+      isActive: true,
+      expiresAt: true,
+      endedAt: true,
+      endedReason: true,
+      lastSeenAt: true,
+      createdAt: true,
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          isActive: true,
+        },
+      },
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+        },
+      },
+      customer: {
+        select: {
+          id: true,
+          workspaceId: true,
+        },
+      },
+    },
+  });
+
+  return sessions as PlatformSessionAdminSnapshot[];
 }

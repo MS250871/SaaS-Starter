@@ -1,6 +1,9 @@
+import Link from "next/link"
 import { BadgeDollarSignIcon, FileClockIcon, LifeBuoyIcon } from "lucide-react"
 
+import { AdminContentSheetTestButton } from "@/components/admin/admin-content-sheet"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -9,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { readActorContext } from "@/lib/request/read-actor-context"
+import { getCustomerSupportOverviewData } from "@/modules/support/server/customer-support-page-data"
 
 function CustomerStat({
   label,
@@ -32,9 +36,14 @@ function CustomerStat({
 
 export default async function CustomerPage() {
   const { actor } = await readActorContext()
+  const supportOverview = await getCustomerSupportOverviewData()
 
   return (
     <div className="grid gap-6">
+      <div className="flex justify-end">
+        <AdminContentSheetTestButton areaLabel="Customer" />
+      </div>
+
       <section className="grid gap-4 md:grid-cols-3">
         <CustomerStat
           label="Customer Context"
@@ -87,20 +96,62 @@ export default async function CustomerPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <LifeBuoyIcon className="size-4 text-primary" />
-              <CardTitle>Support Shortcuts</CardTitle>
+              <CardTitle>Support</CardTitle>
             </div>
             <CardDescription>
-              Useful for tickets, account assistance, and onboarding checklists.
+              Continue existing conversations or open a new ticket for the
+              workspace support desk.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between rounded-2xl border border-border/70 px-4 py-3">
-              <span className="text-sm font-medium">Open support case</span>
-              <Badge variant="outline">Planned</Badge>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-border/70 px-4 py-3">
+                <p className="text-sm font-medium">Open tickets</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {supportOverview.supportSummary.openTickets}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border/70 px-4 py-3">
+                <p className="text-sm font-medium">Total tickets</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {supportOverview.supportSummary.totalTickets}
+                </p>
+              </div>
             </div>
-            <div className="flex items-center justify-between rounded-2xl border border-border/70 px-4 py-3">
-              <span className="text-sm font-medium">Share onboarding docs</span>
-              <Badge variant="outline">Planned</Badge>
+            <div className="rounded-2xl border border-border/70 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm font-medium">Recent tickets</p>
+                <div className="flex gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href="/customer/support">View all</Link>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link href="/customer/support/create">Open ticket</Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2">
+                {supportOverview.recentTickets.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No support tickets yet.
+                  </p>
+                ) : (
+                  supportOverview.recentTickets.map((ticket) => (
+                    <div
+                      key={ticket.id}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-border/70 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{ticket.title}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {new Date(ticket.updatedAt).toLocaleString()}
+                        </p>
+                      </div>
+                      <Badge variant="outline">{ticket.status}</Badge>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

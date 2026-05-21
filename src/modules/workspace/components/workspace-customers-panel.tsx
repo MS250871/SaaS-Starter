@@ -1,10 +1,10 @@
-import Link from 'next/link';
-import { EyeIcon, PlusIcon, UploadIcon } from 'lucide-react';
+'use client';
 
-import {
-  WorkspaceDataTable,
-  type WorkspaceTableColumn,
-} from '@/components/data-table/workspace-data-table';
+import Link from 'next/link';
+import type { ColumnDef } from '@tanstack/react-table';
+import { EyeIcon } from 'lucide-react';
+
+import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
@@ -13,7 +13,9 @@ type CustomerListItem = {
   name: string;
   email: string | null;
   externalId: string | null;
+  sourceLabel: string;
   createdAt: string;
+  createdAtLabel: string;
 };
 
 function formatDate(value: string) {
@@ -26,127 +28,86 @@ function formatDate(value: string) {
 export function WorkspaceCustomersPanel({
   basePath,
   customers,
-  page,
-  pageSize,
-  totalItems,
-  totalPages,
-  filters,
 }: {
   basePath: string;
   customers: CustomerListItem[];
-  page: number;
-  pageSize: number;
-  totalItems: number;
-  totalPages: number;
-  filters: {
-    query: string;
-    source: string;
-  };
 }) {
-  const columns: WorkspaceTableColumn<CustomerListItem>[] = [
+  const columns: ColumnDef<CustomerListItem>[] = [
     {
-      id: 'name',
+      accessorKey: 'name',
       header: 'Customer',
-      cell: (customer) => (
+      cell: ({ row }) => (
         <div className="min-w-0 space-y-1">
-          <p className="truncate font-medium">{customer.name}</p>
+          <p className="truncate font-medium">{row.original.name}</p>
           <p className="truncate text-sm text-muted-foreground">
-            {customer.email ?? 'No email'}
+            {row.original.email ?? 'No email'}
           </p>
         </div>
       ),
     },
     {
-      id: 'source',
+      accessorKey: 'sourceLabel',
       header: 'Source',
-      cell: (customer) =>
-        customer.externalId ? (
+      cell: ({ row }) =>
+        row.original.externalId ? (
           <div className="space-y-1">
-            <Badge variant="outline">External Sync</Badge>
+            <Badge variant="outline">{row.original.sourceLabel}</Badge>
             <p className="text-xs text-muted-foreground">
-              {customer.externalId}
+              {row.original.externalId}
             </p>
           </div>
         ) : (
-          <Badge variant="secondary">Native</Badge>
+          <Badge variant="secondary">{row.original.sourceLabel}</Badge>
         ),
     },
     {
-      id: 'joined',
+      accessorKey: 'createdAtLabel',
       header: 'Joined',
-      cell: (customer) => (
+      cell: ({ row }) => (
         <span className="text-sm text-muted-foreground">
-          {formatDate(customer.createdAt)}
+          {formatDate(row.original.createdAt)}
         </span>
       ),
     },
     {
-      id: 'details',
-      header: 'Details',
-      headerClassName: 'text-right',
-      className: 'text-right',
-      cell: (customer) => (
-        <Button asChild variant="outline" size="sm">
-          <Link href={`${basePath}/customers/${customer.id}`}>
-            <EyeIcon className="mr-2 size-4" />
-            Details
-          </Link>
-        </Button>
+      id: 'actions',
+      header: 'Actions',
+      enableSorting: false,
+      cell: ({ row }) => (
+        <div className="flex justify-end">
+          <Button asChild variant="outline" size="sm">
+            <Link href={`${basePath}/customers/${row.original.id}`}>
+              <EyeIcon className="mr-2 size-4" />
+              Details
+            </Link>
+          </Button>
+        </div>
       ),
     },
   ];
 
   return (
-    <WorkspaceDataTable
+    <AdminDataTable
       title="Customers"
-      description="Manage workspace customers with a reusable table surface built for filters, pagination, and future SaaS-specific expansion."
-      basePath={`${basePath}/customers`}
-      actions={[
-        {
-          label: 'Create Customer',
-          href: `${basePath}/customers/create`,
-          icon: <PlusIcon className="mr-2 size-4" />,
-        },
+      columns={columns}
+      data={customers}
+      searchPlaceholder="Search customers by name, email, external ID, or source"
+      emptyStateTitle="No customers found"
+      emptyStateDescription="Create the first customer for this workspace to start building the directory."
+      primaryAction={{
+        label: 'Create Customer',
+        href: `${basePath}/customers/create`,
+      }}
+      secondaryActions={[
         {
           label: 'Bulk Create',
           href: `${basePath}/customers/bulk-create`,
           variant: 'outline',
-          icon: <UploadIcon className="mr-2 size-4" />,
         },
       ]}
-      filters={[
-        {
-          key: 'q',
-          label: 'Search',
-          type: 'search',
-          placeholder: 'Search by customer name, email, or external ID',
-          value: filters.query,
-        },
-        {
-          key: 'source',
-          label: 'Source',
-          type: 'select',
-          value: filters.source,
-          options: [
-            { label: 'All customers', value: 'all' },
-            { label: 'Native', value: 'native' },
-            { label: 'External sync', value: 'external' },
-          ],
-        },
-      ]}
-      columns={columns}
-      rows={customers}
-      rowKey={(customer) => customer.id}
-      emptyStateTitle="No customers found"
-      emptyStateDescription="Try adjusting the filters or create the first customer for this workspace."
-      page={page}
-      totalPages={totalPages}
-      totalItems={totalItems}
-      pageSize={pageSize}
-      query={{
-        q: filters.query || undefined,
-        source: filters.source !== 'all' ? filters.source : undefined,
-      }}
+      defaultPageSize={10}
+      headerTextClassName="lg:max-w-[32rem] xl:max-w-[36rem]"
+      actionsClassName="lg:flex-nowrap"
     />
   );
 }

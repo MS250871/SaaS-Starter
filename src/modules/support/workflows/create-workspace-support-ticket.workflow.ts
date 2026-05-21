@@ -2,9 +2,10 @@ import { SupportContextType } from '@/generated/prisma/client';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { getWorkspaceCustomerById } from '@/modules/customer/services/customer.services';
 import {
+  createCustomerSupportTicket,
   createPlatformSupportTicket,
-  createWorkspaceSupportTicket,
 } from '@/modules/support/support.services';
 import {
   createSupportAttachments,
@@ -14,7 +15,8 @@ import {
 export async function createWorkspaceSupportTicketWorkflow(input: {
   workspaceId: string;
   createdById: string;
-  target: 'workspace' | 'platform';
+  target: 'customer' | 'platform';
+  customerId?: string | null;
   title: string;
   body: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
@@ -23,6 +25,14 @@ export async function createWorkspaceSupportTicketWorkflow(input: {
   return withUnitOfWork(async () => {
     if (!input.workspaceId || !input.createdById) {
       throwError(ERR.UNAUTHORIZED, 'Workspace session missing');
+    }
+
+    if (input.target === 'customer' && !input.customerId) {
+      throwError(ERR.INVALID_INPUT, 'Customer is required');
+    }
+
+    if (input.target === 'customer' && input.customerId) {
+      await getWorkspaceCustomerById(input.workspaceId, input.customerId);
     }
 
     const ticket =
@@ -34,9 +44,9 @@ export async function createWorkspaceSupportTicketWorkflow(input: {
             body: input.body,
             priority: input.priority,
           })
-        : await createWorkspaceSupportTicket({
+        : await createCustomerSupportTicket({
             workspaceId: input.workspaceId,
-            createdById: input.createdById,
+            customerId: input.customerId!,
             title: input.title,
             body: input.body,
             priority: input.priority,
@@ -55,7 +65,7 @@ export async function createWorkspaceSupportTicketWorkflow(input: {
       contextType:
         input.target === 'platform'
           ? SupportContextType.PLATFORM
-          : SupportContextType.WORKSPACE,
+          : SupportContextType.CUSTOMER,
       status: ticket.status,
       priority: ticket.priority,
       title: ticket.title,

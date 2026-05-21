@@ -81,7 +81,6 @@ export function PlatformFeaturesTable({ rows }: { rows: FeatureRow[] }) {
   return (
     <AdminDataTable
       title="Features"
-      description="Define reusable capability flags that plans can attach, hide, or later override at the workspace level."
       columns={columns}
       data={rows}
       searchPlaceholder="Search features by name, key, or category"

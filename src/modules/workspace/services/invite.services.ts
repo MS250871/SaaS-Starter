@@ -39,6 +39,43 @@ export type WorkspacePendingInviteWithRole = Prisma.WorkspaceInviteGetPayload<{
   }
 }>
 
+export type PlatformWorkspaceInviteAdminSnapshot = Prisma.WorkspaceInviteGetPayload<{
+  select: {
+    id: true;
+    workspaceId: true;
+    email: true;
+    roleKey: true;
+    roleSystemKey: true;
+    status: true;
+    token: true;
+    expiresAt: true;
+    createdAt: true;
+    invitedBy: {
+      select: {
+        firstName: true;
+        lastName: true;
+        email: true;
+      };
+    };
+    workspace: {
+      select: {
+        id: true;
+        name: true;
+        slug: true;
+        isActive: true;
+      };
+    };
+    roleDefinition: {
+      select: {
+        id: true;
+        name: true;
+        key: true;
+        hierarchyRank: true;
+      };
+    };
+  };
+}>
+
 export function generateInviteToken() {
   return crypto.randomBytes(32).toString("hex")
 }
@@ -266,6 +303,51 @@ export async function listPendingWorkspaceInvitesWithRoles(
   })
 
   return invites as unknown as WorkspacePendingInviteWithRole[]
+}
+
+export async function listPlatformWorkspaceInviteAdminSnapshots(opts?: {
+  limit?: number;
+}) {
+  const invites = await workspaceInviteQueries.delegate.findMany({
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 250,
+    select: {
+      id: true,
+      workspaceId: true,
+      email: true,
+      roleKey: true,
+      roleSystemKey: true,
+      status: true,
+      token: true,
+      expiresAt: true,
+      createdAt: true,
+      invitedBy: {
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
+      },
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          isActive: true,
+        },
+      },
+      roleDefinition: {
+        select: {
+          id: true,
+          name: true,
+          key: true,
+          hierarchyRank: true,
+        },
+      },
+    },
+  });
+
+  return invites as PlatformWorkspaceInviteAdminSnapshot[];
 }
 
 export function isInviteExpired(invite: { expiresAt?: Date | null }) {

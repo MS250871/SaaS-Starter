@@ -3,6 +3,7 @@ import { Logo } from './logo';
 import { navItems } from '@/lib/nav/navigation.config';
 import { AuthButtons } from './auth-buttons';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { LinkPendingHint } from './link-pending-hint';
 
 export function Footer({
   isLoggedIn = false,
@@ -34,9 +35,10 @@ export function Footer({
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className="hover:text-foreground transition-colors"
+                    className="inline-flex items-center gap-2 transition-colors hover:text-foreground"
                   >
-                    {item.name}
+                    <span>{item.name}</span>
+                    <LinkPendingHint />
                   </Link>
                 </li>
               ))}
@@ -49,14 +51,22 @@ export function Footer({
 
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <Link href="/privacy" className="hover:text-foreground">
-                  Privacy
+                <Link
+                  href="/privacy"
+                  className="inline-flex items-center gap-2 hover:text-foreground"
+                >
+                  <span>Privacy</span>
+                  <LinkPendingHint />
                 </Link>
               </li>
 
               <li>
-                <Link href="/terms" className="hover:text-foreground">
-                  Terms
+                <Link
+                  href="/terms"
+                  className="inline-flex items-center gap-2 hover:text-foreground"
+                >
+                  <span>Terms</span>
+                  <LinkPendingHint />
                 </Link>
               </li>
             </ul>

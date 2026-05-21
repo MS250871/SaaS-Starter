@@ -102,7 +102,6 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
   return (
     <AdminDataTable
       title="Prices"
-      description="Control recurring and one-time pricing entries, provider references, interval variants, and catalog activation state."
       columns={columns}
       data={rows}
       searchPlaceholder="Search prices by product, plan, amount, or provider reference"

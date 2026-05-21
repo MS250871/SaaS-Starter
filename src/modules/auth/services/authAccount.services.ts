@@ -1,9 +1,32 @@
 import { authAccountCrud, authAccountQueries } from '@/modules/auth/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { AuthAccountType } from '@/generated/prisma/client';
+import { AuthAccountType, type Prisma } from '@/generated/prisma/client';
 import { emailSchema } from '../schema';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+
+export type PlatformAuthAccountAdminSnapshot = Prisma.AuthAccountGetPayload<{
+  select: {
+    id: true;
+    identityId: true;
+    type: true;
+    value: true;
+    isVerified: true;
+    verifiedAt: true;
+    passwordHash: true;
+    createdAt: true;
+    identity: {
+      select: {
+        id: true;
+        firstName: true;
+        lastName: true;
+        email: true;
+        phone: true;
+        isActive: true;
+      };
+    };
+  };
+}>;
 
 /**
  * Get auth account by ID
@@ -268,4 +291,41 @@ export async function setAuthAccountPassword(id: string, passwordHash: string) {
   } catch (e) {
     throwError(ERR.DB_ERROR, 'Failed to set password', undefined, e);
   }
+}
+
+export async function listPlatformAuthAccountAdminSnapshots(opts?: {
+  limit?: number;
+  identityId?: string | null;
+}) {
+  const accounts = await authAccountQueries.delegate.findMany({
+    where: opts?.identityId
+      ? {
+          identityId: opts.identityId,
+        }
+      : undefined,
+    orderBy: [{ createdAt: 'desc' }],
+    take: opts?.limit ?? 500,
+    select: {
+      id: true,
+      identityId: true,
+      type: true,
+      value: true,
+      isVerified: true,
+      verifiedAt: true,
+      passwordHash: true,
+      createdAt: true,
+      identity: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          isActive: true,
+        },
+      },
+    },
+  });
+
+  return accounts as PlatformAuthAccountAdminSnapshot[];
 }

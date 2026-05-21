@@ -45,6 +45,8 @@ const readActorContextCached = cache(async () => {
     });
 
     return {
+      sessionClaims,
+      session: null,
       actor: {
         sessionId: sessionClaims?.sessionId,
         identityId: actor.identityId,
@@ -96,6 +98,8 @@ const readActorContextCached = cache(async () => {
         features: actor.features,
         limits: actor.limits,
       } satisfies ActorContextSnapshot,
+      sessionClaims,
+      session,
       requestContext,
     };
   });

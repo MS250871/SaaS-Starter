@@ -11,7 +11,7 @@ import {
 import {
   addWorkspaceSupportTicketInternalNoteActionSchema,
   type AddWorkspaceSupportTicketInternalNoteActionInput,
-} from '@/modules/workspace/schema';
+} from '@/modules/support/schema';
 import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
 import { addWorkspaceSupportTicketInternalNoteWorkflow } from '@/modules/support/workflows/add-workspace-support-ticket-internal-note.workflow';
 

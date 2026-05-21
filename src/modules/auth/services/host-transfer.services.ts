@@ -1,7 +1,7 @@
 import {
   hostTransferTokenSchema,
   type HostTransferToken,
-  type SessionPayload,
+  type SessionClaims,
 } from '@/lib/auth/auth.schema';
 import { decryptToken, encryptToken } from '@/lib/security/crypto';
 import { throwError } from '@/lib/errors/app-error';
@@ -10,7 +10,7 @@ import { ERR } from '@/lib/errors/codes';
 const HOST_TRANSFER_TOKEN_MAX_AGE_MS = 5 * 60 * 1000;
 
 export async function issueHostTransferToken(params: {
-  session: SessionPayload;
+  session: Pick<SessionClaims, 'sessionId' | 'identityId'>;
   workspaceId: string;
   targetHost: string;
   intent?: 'free' | 'paid' | null;
