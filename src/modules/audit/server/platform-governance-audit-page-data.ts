@@ -1,5 +1,5 @@
 import { withActionTxContext } from '@/lib/request/withActionContext';
-import { listPlatformAdminAuditSnapshots } from '@/modules/audit/audit.services';
+import { listPlatformAdminAuditSnapshots } from '@/modules/audit/services/audit.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

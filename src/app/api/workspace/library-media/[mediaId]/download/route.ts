@@ -4,8 +4,8 @@ import { getUserSession } from '@/lib/auth/auth-cookies';
 import { handleError } from '@/lib/errors/app-error';
 import { createPresignedDownloadUrl } from '@/lib/media/r2';
 import { withRequestContext } from '@/lib/request/withRequestContext';
-import { getWorkspaceMediaDownloadAccess } from '@/modules/media/media.services';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { getWorkspaceMediaDownloadAccess } from '@/modules/media/services/media.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 
 export async function GET(
   request: Request,

@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
-import { CatalogRowActions } from '@/modules/platform/components/catalog/catalog-row-actions';
+import { CatalogRowMenu } from '@/modules/platform/components/catalog/menus/catalog-row-menu';
 import {
   deleteLimitCatalogAction,
   toggleLimitCatalogAction,
@@ -33,7 +33,7 @@ export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
     {
       accessorKey: 'unit',
       header: 'Unit',
-      cell: ({ row }) => row.original.unit || '—',
+      cell: ({ row }) => row.original.unit || 'Ã¢â‚¬â€',
     },
     {
       accessorKey: 'sortOrder',
@@ -65,7 +65,7 @@ export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <CatalogRowActions
+        <CatalogRowMenu
           entityLabel="Limit"
           entityId={row.original.id}
           idField="limitId"

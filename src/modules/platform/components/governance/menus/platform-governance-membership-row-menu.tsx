@@ -32,7 +32,7 @@ type ChangeRoleActionResult = ActionResult & {
   roleSystemKey: string | null;
 };
 
-export function PlatformGovernanceMembershipRowActions({
+export function PlatformGovernanceMembershipRowMenu({
   membershipId,
   identityHref,
   currentRoleKey,

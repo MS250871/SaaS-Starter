@@ -7,7 +7,7 @@ import {
   assignSupportTicket,
   getPlatformManagedSupportTicketById,
   unassignSupportTicket,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 
 export async function updatePlatformSupportTicketAssignmentWorkflow(input: {
   ticketId: string;

@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import type { PlatformWorkspaceLimitOverrideRow } from '@/modules/entitlements/server/platform-workspace-overrides-page-data';
-import { PlatformWorkspaceLinkActions } from '@/modules/platform/components/workspaces/platform-workspace-link-actions';
+import { PlatformWorkspaceLinkGroup } from '@/modules/platform/components/workspaces/links/platform-workspace-link-group';
 
 export function PlatformWorkspaceLimitOverridesTable({
   rows,
@@ -61,7 +61,7 @@ export function PlatformWorkspaceLimitOverridesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformWorkspaceLinkActions
+        <PlatformWorkspaceLinkGroup
           label="limit override"
           actions={[
             ...(canEditOverride

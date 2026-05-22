@@ -2,7 +2,7 @@ import { withActionTxContext } from '@/lib/request/withActionContext';
 import {
   getPlatformWebhookEventAdminSnapshot,
   listPlatformWebhookEventAdminSnapshots,
-} from '@/modules/integration/webhook-event.services';
+} from '@/modules/integration/services/webhook-event.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

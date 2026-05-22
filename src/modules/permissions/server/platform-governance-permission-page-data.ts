@@ -1,5 +1,5 @@
 import { withActionTxContext } from '@/lib/request/withActionContext';
-import { getGovernancePermissionAdminSnapshot } from '@/modules/permissions/permissions.services';
+import { getGovernancePermissionAdminSnapshot } from '@/modules/permissions/services/permissions.services';
 
 export async function getPlatformGovernancePermissionEditorData(permissionId?: string) {
   return withActionTxContext(async () => {

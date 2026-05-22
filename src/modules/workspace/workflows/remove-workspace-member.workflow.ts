@@ -5,7 +5,7 @@ import { endMembershipSessions } from '@/modules/auth/services/session.services'
 import {
   getRoleDefinitionById,
   getRoleDefinitionByKey,
-} from '@/modules/roles/role.services';
+} from '@/modules/roles/services/role.services';
 import {
   countActiveWorkspaceOwners,
   deactivateMembership,

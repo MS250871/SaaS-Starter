@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import type { getPlatformMediaDetailPageData } from '@/modules/media/server/platform-media-admin-page-data';
 import { requeuePlatformMediaJobAction } from '@/modules/media/actions/platform-media-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 type PlatformMediaDetailData = Awaited<
   ReturnType<typeof getPlatformMediaDetailPageData>
@@ -153,7 +153,7 @@ export function PlatformMediaDetailView({
                       <p className="text-xs text-muted-foreground">Error: {job.error}</p>
                     </div>
                     {job.canRequeue ? (
-                      <PlatformOperationsAsyncButton
+                      <PlatformOperationsTaskButton
                         action={requeuePlatformMediaJobAction}
                         fields={{ mediaJobId: job.id }}
                         label="Requeue job"

@@ -6,7 +6,7 @@ import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import { revokePlatformSessionAction } from '@/modules/auth/actions/platform-identity-admin.actions';
 import type { PlatformSessionRow } from '@/modules/auth/server/platform-identity-admin-data';
-import { PlatformSessionRowActions } from '@/modules/platform/components/identities/platform-session-row-actions';
+import { PlatformSessionRowMenu } from '@/modules/platform/components/identities/menus/platform-session-row-menu';
 
 export function PlatformSessionsTable({
   rows,
@@ -64,7 +64,7 @@ export function PlatformSessionsTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformSessionRowActions
+        <PlatformSessionRowMenu
           sessionId={row.original.id}
           identityHref={`/platform/identities/${row.original.identityId}`}
           canRevoke={row.original.isActive}

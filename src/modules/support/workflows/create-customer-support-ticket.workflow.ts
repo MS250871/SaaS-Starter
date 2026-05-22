@@ -2,11 +2,11 @@ import { SupportContextType } from '@/generated/prisma/client';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { createCustomerSupportTicket } from '@/modules/support/support.services';
+import { createCustomerSupportTicket } from '@/modules/support/services/support.services';
 import {
   createSupportAttachments,
   SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE,
-} from '@/modules/support/support-attachments.services';
+} from '@/modules/support/services/support-attachments.services';
 
 export async function createCustomerSupportTicketWorkflow(input: {
   workspaceId: string;

@@ -12,7 +12,7 @@ import {
   getWebhookEventById,
   markWebhookEventProcessed,
   scheduleWebhookEventRetry,
-} from '@/modules/integration/webhook-event.services';
+} from '@/modules/integration/services/webhook-event.services';
 import {
   type PriceCheckoutSnapshot,
   getPriceCheckoutSnapshotById,

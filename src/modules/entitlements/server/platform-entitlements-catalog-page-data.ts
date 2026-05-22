@@ -8,7 +8,7 @@ import {
   listLimitAdminSnapshots,
   listLimits,
   listPlanCatalogSnapshots,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-IN', {

@@ -1,6 +1,6 @@
 import { WorkspaceSupportCreatePanel } from '@/modules/workspace/components/workspace-support-create-panel';
 import { getWorkspaceSupportCreatePageData } from '@/modules/support/server/workspace-support-page-data';
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 
 export default async function WorkspaceSupportCreatePage({
   searchParams,

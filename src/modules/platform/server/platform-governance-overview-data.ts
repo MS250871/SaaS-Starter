@@ -1,9 +1,9 @@
 import { withActionTxContext } from '@/lib/request/withActionContext';
 import { listPlatformInviteAdminSnapshots } from '@/modules/platform/services/invite.services';
 import { listPlatformMembershipAdminSnapshots } from '@/modules/platform/services/membership.services';
-import { listGovernanceRoleAdminSnapshots } from '@/modules/roles/role.services';
-import { listGovernancePermissionAdminSnapshots } from '@/modules/permissions/permissions.services';
-import { listPlatformAdminAuditSnapshots } from '@/modules/audit/audit.services';
+import { listGovernanceRoleAdminSnapshots } from '@/modules/roles/services/role.services';
+import { listGovernancePermissionAdminSnapshots } from '@/modules/permissions/services/permissions.services';
+import { listPlatformAdminAuditSnapshots } from '@/modules/audit/services/audit.services';
 
 export async function getPlatformGovernanceOverviewData() {
   return withActionTxContext(async () => {

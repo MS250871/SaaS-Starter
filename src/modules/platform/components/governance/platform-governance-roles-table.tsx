@@ -8,7 +8,7 @@ import {
   deleteRoleDefinitionAdminAction,
   toggleRoleDefinitionActiveAction,
 } from '@/modules/roles/actions/platform-role-admin.actions';
-import { GovernanceRowActions } from '@/modules/platform/components/governance/governance-row-actions';
+import { GovernanceRowMenu } from '@/modules/platform/components/governance/menus/governance-row-menu';
 import type { PlatformGovernanceRoleRow } from '@/modules/roles/server/platform-governance-roles-page-data';
 
 export function PlatformGovernanceRolesTable({
@@ -87,7 +87,7 @@ export function PlatformGovernanceRolesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <GovernanceRowActions
+        <GovernanceRowMenu
           entityLabel="Role"
           entityId={row.original.id}
           idField="roleDefinitionId"

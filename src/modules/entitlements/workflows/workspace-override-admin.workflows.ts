@@ -17,7 +17,7 @@ import {
   listWorkspaceLimitOverrides,
   setWorkspaceFeatureOverride,
   setWorkspaceLimitOverride,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 import {
   canOverrideEntitlement,
   isRoutingSensitiveFeatureKey,

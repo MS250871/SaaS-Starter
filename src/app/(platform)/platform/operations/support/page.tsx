@@ -7,7 +7,7 @@ import {
 import { PlatformOperationsSupportTable } from '@/modules/platform/components/operations/platform-operations-support-table';
 import { PlatformSupportTicketCreatePanel } from '@/modules/platform/components/operations/platform-support-ticket-create-panel';
 import { requirePlatformPermission } from '@/modules/platform/server/require-platform-admin';
-import { hasAnyPermission } from '@/modules/permissions/permissions.services';
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services';
 import { getPlatformSupportPageData } from '@/modules/support/server/platform-support-admin-page-data';
 
 export default async function PlatformOperationsSupportPage() {

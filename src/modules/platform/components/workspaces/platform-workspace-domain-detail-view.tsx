@@ -17,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { PlatformWorkspaceDomainDetailActions } from '@/modules/platform/components/workspaces/platform-workspace-domain-detail-actions';
+import { PlatformWorkspaceDomainDetailControls } from '@/modules/platform/components/workspaces/controls/platform-workspace-domain-detail-controls';
 import type { getPlatformWorkspaceDomainDetailPageData } from '@/modules/workspace/server/platform-workspace-domain-page-data';
 
 type PlatformWorkspaceDomainDetailData = Awaited<
@@ -127,7 +127,7 @@ export function PlatformWorkspaceDomainDetailView({
                 routing role and verification state.
               </CardDescription>
             </div>
-            <PlatformWorkspaceDomainDetailActions
+            <PlatformWorkspaceDomainDetailControls
               workspaceDomainId={data.domain.id}
               canRefreshVerification={canRefreshVerification}
               canSetPrimary={canSetPrimary}

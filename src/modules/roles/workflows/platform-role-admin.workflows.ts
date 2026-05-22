@@ -1,13 +1,13 @@
 import {
   clearRolePermissionsByRoleDefinition,
   createRolePermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import {
   createRoleDefinition,
   deleteRoleDefinition,
   getGovernanceRoleAdminSnapshot,
   updateRoleDefinition,
-} from '@/modules/roles/role.services';
+} from '@/modules/roles/services/role.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import type { RoleScope } from '@/modules/roles/role.types';

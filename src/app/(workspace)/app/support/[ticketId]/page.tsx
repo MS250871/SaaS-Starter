@@ -1,6 +1,6 @@
 import { WorkspaceSupportThreadPanel } from '@/modules/workspace/components/workspace-support-thread-panel';
 import { getWorkspaceSupportThreadPageData } from '@/modules/support/server/workspace-support-page-data';
-import { hasAnyPermission } from '@/modules/permissions/permissions.services';
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services';
 
 export default async function WorkspaceSupportThreadPage({
   params,

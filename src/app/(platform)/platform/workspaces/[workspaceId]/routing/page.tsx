@@ -1,4 +1,4 @@
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 import { PlatformWorkspaceRoutingDetailView } from '@/modules/platform/components/workspaces/platform-workspace-routing-detail-view';
 import { requirePlatformPermission } from '@/modules/platform/server/require-platform-admin';
 import { getPlatformWorkspaceRoutingDetailPageData } from '@/modules/workspace/server/platform-workspace-domain-page-data';

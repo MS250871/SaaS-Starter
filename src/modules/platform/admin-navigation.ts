@@ -2,7 +2,7 @@ import type {
   AdminBreadcrumbOverride,
   AdminNavGroup,
 } from "@/components/admin/admin-shell"
-import { hasAnyPermission } from '@/modules/permissions/permissions.services'
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services'
 
 export type PlatformRouteMeta = {
   title: string

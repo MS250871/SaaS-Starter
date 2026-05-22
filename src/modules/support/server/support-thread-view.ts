@@ -1,4 +1,4 @@
-import type { WorkspaceSupportThreadSnapshot } from '@/modules/support/support.services';
+import type { WorkspaceSupportThreadSnapshot } from '@/modules/support/services/support.services';
 import type { SupportOwnerScope } from '@/modules/support/support-ownership';
 
 type SupportIdentity = WorkspaceSupportThreadSnapshot['messageIdentities'][number];

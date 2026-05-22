@@ -3,7 +3,7 @@ import { ERR } from '@/lib/errors/codes';
 import {
   assertPermission,
   hasAnyPermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 
 function hasPlatformRole(roleSystemKeys: string[], roleKeys?: string[]) {
   return roleSystemKeys.length > 0 || (roleKeys?.length ?? 0) > 0;

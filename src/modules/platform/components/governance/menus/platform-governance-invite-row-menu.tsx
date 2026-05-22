@@ -30,7 +30,7 @@ type ChangeInviteRoleActionResult = ActionResult & {
   roleSystemKey: string | null;
 };
 
-export function PlatformGovernanceInviteRowActions({
+export function PlatformGovernanceInviteRowMenu({
   inviteId,
   canRevoke,
   canManageRoles,

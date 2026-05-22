@@ -10,7 +10,7 @@ import {
   buildHostTransferPath,
   issueHostTransferToken,
 } from '@/modules/auth/services/host-transfer.services';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 import {
   changeWorkspacePlanActionSchema,
   type ChangeWorkspacePlanActionInput,

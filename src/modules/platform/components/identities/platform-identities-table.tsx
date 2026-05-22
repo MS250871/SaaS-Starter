@@ -6,7 +6,7 @@ import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import { togglePlatformIdentityActiveAction } from '@/modules/auth/actions/platform-identity-admin.actions';
 import type { PlatformIdentityRow } from '@/modules/auth/server/platform-identity-admin-data';
-import { PlatformIdentityRowActions } from '@/modules/platform/components/identities/platform-identity-row-actions';
+import { PlatformIdentityRowMenu } from '@/modules/platform/components/identities/menus/platform-identity-row-menu';
 
 export function PlatformIdentitiesTable({
   rows,
@@ -83,7 +83,7 @@ export function PlatformIdentitiesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformIdentityRowActions
+        <PlatformIdentityRowMenu
           identityId={row.original.id}
           viewHref={`/platform/identities/${row.original.id}`}
           isActive={row.original.isActive}

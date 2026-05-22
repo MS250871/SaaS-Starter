@@ -11,17 +11,17 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-type WorkspaceLinkAction = {
+type PlatformLinkAction = {
   label: string;
   href: string;
 };
 
-export function PlatformWorkspaceLinkActions({
+export function PlatformLinkGroup({
   label,
   actions,
 }: {
   label: string;
-  actions: WorkspaceLinkAction[];
+  actions: PlatformLinkAction[];
 }) {
   return (
     <DropdownMenu>

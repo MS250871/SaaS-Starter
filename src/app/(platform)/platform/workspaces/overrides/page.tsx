@@ -3,7 +3,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 import { PlatformWorkspaceFeatureOverridesTable } from '@/modules/platform/components/workspaces/platform-workspace-feature-overrides-table';
 import { PlatformWorkspaceLimitOverridesTable } from '@/modules/platform/components/workspaces/platform-workspace-limit-overrides-table';
 import { requirePlatformAnyPermission } from '@/modules/platform/server/require-platform-admin';

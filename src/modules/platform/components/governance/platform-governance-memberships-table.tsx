@@ -8,7 +8,7 @@ import {
   changePlatformMembershipRoleAction,
   togglePlatformMembershipActiveAction,
 } from '@/modules/platform/actions/platform-governance-admin.actions';
-import { PlatformGovernanceMembershipRowActions } from '@/modules/platform/components/governance/platform-governance-membership-row-actions';
+import { PlatformGovernanceMembershipRowMenu } from '@/modules/platform/components/governance/menus/platform-governance-membership-row-menu';
 import type { PlatformGovernanceMembershipRow } from '@/modules/platform/server/platform-governance-team-page-data';
 import type { PlatformGovernanceAssignableRole } from '@/modules/platform/server/platform-governance-team-page-data';
 
@@ -99,7 +99,7 @@ export function PlatformGovernanceMembershipsTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformGovernanceMembershipRowActions
+        <PlatformGovernanceMembershipRowMenu
           membershipId={row.original.id}
           identityHref={`/platform/identities/${row.original.identityId}`}
           currentRoleKey={row.original.roleKey}

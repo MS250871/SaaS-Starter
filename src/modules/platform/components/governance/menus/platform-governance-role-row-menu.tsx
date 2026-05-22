@@ -1,7 +1,6 @@
 'use client';
 
 import { useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
@@ -10,7 +9,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useActionToast } from '@/hooks/use-action-toast';
@@ -20,17 +18,15 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformWorkspaceRowActions({
-  workspaceId,
-  viewHref,
+export function PlatformGovernanceRoleRowMenu({
+  roleDefinitionId,
   isActive,
-  canToggleWorkspace,
+  canToggle,
   toggleAction,
 }: {
-  workspaceId: string;
-  viewHref: string;
+  roleDefinitionId: string;
   isActive: boolean;
-  canToggleWorkspace: boolean;
+  canToggle: boolean;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
   const router = useRouter();
@@ -40,7 +36,7 @@ export function PlatformWorkspaceRowActions({
   const runToggle = () => {
     startTransition(async () => {
       const formData = new FormData();
-      formData.set('workspaceId', workspaceId);
+      formData.set('roleDefinitionId', roleDefinitionId);
       formData.set('isActive', String(!isActive));
 
       const response = await toggleAction(formData);
@@ -50,34 +46,32 @@ export function PlatformWorkspaceRowActions({
         return;
       }
 
-      showActionSuccess(
-        response.data.successMessage,
-        'Workspace access was updated.',
-      );
+      showActionSuccess(response.data.successMessage, 'Role access updated.');
       router.refresh();
     });
   };
+
+  if (!canToggle) {
+    return (
+      <Button variant="outline" size="icon" disabled>
+        <MoreHorizontalIcon className="size-4" />
+        <span className="sr-only">No role actions available</span>
+      </Button>
+    );
+  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" disabled={isPending}>
           <MoreHorizontalIcon className="size-4" />
-          <span className="sr-only">Open workspace actions</span>
+          <span className="sr-only">Open role actions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem asChild>
-          <Link href={viewHref}>View workspace</Link>
+        <DropdownMenuItem onClick={runToggle}>
+          {isActive ? 'Deactivate role' : 'Activate role'}
         </DropdownMenuItem>
-        {canToggleWorkspace ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={runToggle}>
-              {isActive ? 'Deactivate workspace' : 'Activate workspace'}
-            </DropdownMenuItem>
-          </>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -12,7 +12,7 @@ import {
   listPlatformWorkspaceFeatureOverrideAdminSnapshots,
   listPlatformWorkspaceLimitOverrideAdminSnapshots,
   resolveEntitlements,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 import {
   canOverrideEntitlement,
   getOverridePolicyLabel,

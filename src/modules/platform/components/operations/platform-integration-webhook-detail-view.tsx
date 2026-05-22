@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import type { getPlatformWebhookEventDetailPageData } from '@/modules/integration/server/platform-webhook-admin-page-data';
 import { requeuePlatformWebhookEventAction } from '@/modules/integration/actions/platform-webhook-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 type PlatformWebhookDetailData = Awaited<
   ReturnType<typeof getPlatformWebhookEventDetailPageData>
@@ -35,7 +35,7 @@ export function PlatformIntegrationWebhookDetailView({
             </div>
             <div className="flex flex-wrap gap-3 lg:flex-nowrap">
               {data.event.canRequeue ? (
-                <PlatformOperationsAsyncButton
+                <PlatformOperationsTaskButton
                   action={requeuePlatformWebhookEventAction}
                   fields={{ webhookEventId: data.event.id }}
                   label="Requeue webhook"

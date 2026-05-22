@@ -5,8 +5,8 @@ import type {
 } from '@/lib/auth/auth.schema';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
-import { resolvePermissions } from '@/modules/permissions/permissions.services';
+import { resolveEntitlements } from '@/modules/entitlements/services/entitlement.services';
+import { resolvePermissions } from '@/modules/permissions/services/permissions.services';
 
 export async function resolveSessionAccess(
   claims: SessionClaims,

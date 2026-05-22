@@ -5,7 +5,7 @@ import {
   getWorkspaceSupportThreadSnapshot,
   hydrateWorkspaceSupportTicketListItems,
   listWorkspaceSupportQueueTicketSnapshots,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import { buildSupportThreadView } from '@/modules/support/server/support-thread-view';
 import {
   getSupportContextLabel,

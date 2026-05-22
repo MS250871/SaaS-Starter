@@ -3,11 +3,11 @@ import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import {
   createPlatformSupportTicket,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import {
   createSupportAttachments,
   SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE,
-} from '@/modules/support/support-attachments.services';
+} from '@/modules/support/services/support-attachments.services';
 import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
 
 export async function createPlatformSupportTicketWorkflow(input: {

@@ -4,7 +4,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 import { PlatformWorkspaceDomainsTable } from '@/modules/platform/components/workspaces/platform-workspace-domains-table';
 import { requirePlatformPermission } from '@/modules/platform/server/require-platform-admin';
 import { getPlatformWorkspaceDomainsPageData } from '@/modules/workspace/server/platform-workspace-admin-data';

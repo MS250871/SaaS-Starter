@@ -9,7 +9,7 @@ import {
   refreshPlatformWorkspaceDomainVerificationAction,
   setPlatformWorkspacePrimaryDomainAction,
 } from '@/modules/workspace/actions/platform-workspace-domain-admin.actions';
-import { PlatformWorkspaceDomainRowActions } from '@/modules/platform/components/workspaces/platform-workspace-domain-row-actions';
+import { PlatformWorkspaceDomainRowMenu } from '@/modules/platform/components/workspaces/menus/platform-workspace-domain-row-menu';
 import type { PlatformWorkspaceDomainRow } from '@/modules/workspace/server/platform-workspace-admin-data';
 
 export function PlatformWorkspaceDomainsTable({
@@ -86,7 +86,7 @@ export function PlatformWorkspaceDomainsTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformWorkspaceDomainRowActions
+        <PlatformWorkspaceDomainRowMenu
           workspaceId={row.original.workspaceId}
           workspaceDomainId={row.original.id}
           domainType={row.original.type}

@@ -8,7 +8,7 @@ import {
   createFeature,
   deleteFeature,
   updateFeature,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 import {
   parseCheckboxValue,
   platformCatalogFeatureActionSchema,

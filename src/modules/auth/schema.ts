@@ -1,15 +1,5 @@
 import { z } from 'zod';
-import {
-  parsePhoneNumberFromString,
-  type CountryCode,
-} from 'libphonenumber-js';
 import { normalizePhone } from '@/lib/auth/auth-utils';
-
-/* =========================================================
-   Constants
-========================================================= */
-
-const DEFAULT_COUNTRY: CountryCode = 'IN';
 
 /* =========================================================
    Helpers
@@ -21,12 +11,6 @@ const toLower = (val: string) => val.toLowerCase();
 
 const capitalize = (val: string) =>
   val.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-
-function toE164(phone: string, country: CountryCode = DEFAULT_COUNTRY) {
-  const parsed = parsePhoneNumberFromString(phone, country);
-  if (!parsed || !parsed.isValid()) return null;
-  return parsed.number;
-}
 
 /* =========================================================
    Base Validators (reusable)

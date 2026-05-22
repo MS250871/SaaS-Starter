@@ -1,7 +1,7 @@
-import { attachMediaToEntity, uploadMediaObject } from '@/modules/media/media.services';
+import { attachMediaToEntity, uploadMediaObject } from '@/modules/media/services/media.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { findFileAttachmentByScopedMediaId } from '@/modules/media/media.services';
+import { findFileAttachmentByScopedMediaId } from '@/modules/media/services/media.services';
 import { SupportContextType } from '@/generated/prisma/client';
 import {
   supportTicketMessageQueries,

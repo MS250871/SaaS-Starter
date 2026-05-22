@@ -7,9 +7,9 @@ import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.serv
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { buildAbsoluteUrl } from '@/lib/url/absolute-url';
-import { assertPermission } from '@/modules/permissions/permissions.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
-import { getRoleDefinitionById } from '@/modules/roles/role.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
+import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
+import { getRoleDefinitionById } from '@/modules/roles/services/role.services';
 import {
   createWorkspaceInviteActionSchema,
   createWorkspaceInviteSchema,

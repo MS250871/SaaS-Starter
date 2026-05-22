@@ -5,10 +5,10 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/audit.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 import { governanceRoleActionSchema } from '@/modules/roles/role.schema';
-import { setRoleDefinitionActive } from '@/modules/roles/role.services';
+import { setRoleDefinitionActive } from '@/modules/roles/services/role.services';
 import {
   createPlatformRoleWorkflow,
   deletePlatformRoleWorkflow,

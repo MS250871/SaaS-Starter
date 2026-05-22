@@ -7,7 +7,7 @@ import {
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { listPublicPricingPlans } from '@/modules/entitlements/entitlement.services';
+import { listPublicPricingPlans } from '@/modules/entitlements/services/entitlement.services';
 import {
   BillingInterval,
   Currency,

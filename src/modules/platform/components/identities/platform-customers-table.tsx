@@ -5,7 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import type { PlatformCustomerRow } from '@/modules/customer/server/platform-customer-admin-data';
-import { PlatformLinkActions } from '@/modules/platform/components/platform-link-actions';
+import { PlatformLinkGroup } from '@/modules/platform/components/links/platform-link-group';
 
 export function PlatformCustomersTable({
   rows,
@@ -69,7 +69,7 @@ export function PlatformCustomersTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformLinkActions
+        <PlatformLinkGroup
           label="customer"
           actions={[
             {

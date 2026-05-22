@@ -6,8 +6,8 @@ import {
   findWorkspaceRolePermissionOverride,
   getPermissionById,
   setWorkspaceRolePermissionOverride,
-} from '@/modules/permissions/permissions.services';
-import { getRoleDefinitionById } from '@/modules/roles/role.services';
+} from '@/modules/permissions/services/permissions.services';
+import { getRoleDefinitionById } from '@/modules/roles/services/role.services';
 
 export async function updateWorkspaceRolePermissionOverrideWorkflow(input: {
   workspaceId: string;

@@ -9,8 +9,8 @@ import {
   createNotificationWithDeliveries,
   resolveNotificationRecipientForChannel,
   type CreateNotificationDeliveryInput,
-} from '@/modules/notifications/notification.services';
-import { queueNotificationDelivery } from '@/modules/notifications/notification-outbox.services';
+} from '@/modules/notifications/services/notification.services';
+import { queueNotificationDelivery } from '@/modules/notifications/services/notification-outbox.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 

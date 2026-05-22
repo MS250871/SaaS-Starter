@@ -6,12 +6,12 @@ import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { logAdminAction } from '@/modules/audit/audit.services';
-import { getNotificationDeliveryById } from '@/modules/notifications/notification.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
+import { getNotificationDeliveryById } from '@/modules/notifications/services/notification.services';
 import {
   processNotificationDeliveryOutboxEvent,
   replayNotificationDeliveryOutboxEvent,
-} from '@/modules/notifications/notification-outbox.services';
+} from '@/modules/notifications/services/notification-outbox.services';
 import {
   sendPlatformWorkspaceNotificationActionSchema,
   type SendPlatformWorkspaceNotificationActionInput,

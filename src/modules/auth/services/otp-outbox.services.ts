@@ -4,7 +4,7 @@ import {
   findOutboxEventByProcessingKey,
   markOutboxEventDone,
   scheduleOutboxEventRetry,
-} from '@/modules/jobs/outbox-events.services';
+} from '@/modules/jobs/services/outbox-events.services';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { sendOtp } from './otp.services';
 import { throwError } from '@/lib/errors/app-error';

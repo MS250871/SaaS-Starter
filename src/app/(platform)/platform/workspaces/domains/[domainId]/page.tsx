@@ -1,5 +1,5 @@
 import { WorkspaceDomainType } from '@/generated/prisma/client';
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 import { PlatformWorkspaceDomainDetailView } from '@/modules/platform/components/workspaces/platform-workspace-domain-detail-view';
 import { requirePlatformPermission } from '@/modules/platform/server/require-platform-admin';
 import { getPlatformWorkspaceDomainDetailPageData } from '@/modules/workspace/server/platform-workspace-domain-page-data';

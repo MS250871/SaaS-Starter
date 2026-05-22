@@ -12,7 +12,7 @@ import {
 } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
+import { resolveEntitlements } from '@/modules/entitlements/services/entitlement.services';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 
 export type WorkspaceDomainDetailed = Prisma.WorkspaceDomainGetPayload<{

@@ -7,7 +7,7 @@ import { createAction } from '@/lib/http/create-action';
 import {
   hasPermission,
   assertPermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import {
   createBillingCheckoutActionSchema,
   type CreateBillingCheckoutActionInput,

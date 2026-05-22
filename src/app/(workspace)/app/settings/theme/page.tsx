@@ -1,6 +1,6 @@
 import { WorkspaceThemePanel } from "@/modules/workspace/components/workspace-admin-dashboard"
 import { getWorkspaceThemePageData } from "@/modules/workspace/server/workspace-admin-page-data"
-import { hasPermission } from "@/modules/permissions/permissions.services"
+import { hasPermission } from "@/modules/permissions/services/permissions.services"
 
 export default async function WorkspaceSettingsThemePage() {
   const { actor, initialTheme, workspaceId } = await getWorkspaceThemePageData()

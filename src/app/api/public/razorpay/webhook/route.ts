@@ -6,7 +6,7 @@ import { withPublicContext } from '@/lib/request/withPublicContext';
 import { verifyRazorpayWebhookSignature } from '@/lib/payments/razorpay';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { upsertWebhookEvent } from '@/modules/integration/webhook-event.services';
+import { upsertWebhookEvent } from '@/modules/integration/services/webhook-event.services';
 import { processRazorpayWebhookEventWorkflow } from '@/modules/billing/workflows/process-razorpay-webhook.workflow';
 
 type RazorpayWebhookEnvelope = {

@@ -6,11 +6,11 @@ import { getWorkspaceCustomerById } from '@/modules/customer/services/customer.s
 import {
   createCustomerSupportTicket,
   createPlatformSupportTicket,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import {
   createSupportAttachments,
   SUPPORT_TICKET_ATTACHMENT_ENTITY_TYPE,
-} from '@/modules/support/support-attachments.services';
+} from '@/modules/support/services/support-attachments.services';
 
 export async function createWorkspaceSupportTicketWorkflow(input: {
   workspaceId: string;

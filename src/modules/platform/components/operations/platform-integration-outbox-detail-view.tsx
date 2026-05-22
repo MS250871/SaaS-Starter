@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import type { getPlatformOutboxEventDetailPageData } from '@/modules/jobs/server/platform-outbox-admin-page-data';
 import { requeuePlatformOutboxEventAction } from '@/modules/jobs/actions/platform-outbox-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 type PlatformOutboxDetailData = Awaited<
   ReturnType<typeof getPlatformOutboxEventDetailPageData>
@@ -35,7 +35,7 @@ export function PlatformIntegrationOutboxDetailView({
             </div>
             <div className="flex flex-wrap gap-3 lg:flex-nowrap">
               {data.event.canRequeue ? (
-                <PlatformOperationsAsyncButton
+                <PlatformOperationsTaskButton
                   action={requeuePlatformOutboxEventAction}
                   fields={{ outboxEventId: data.event.id }}
                   label="Requeue outbox"

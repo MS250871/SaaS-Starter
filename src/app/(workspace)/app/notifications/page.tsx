@@ -1,6 +1,6 @@
 import { WorkspaceNotificationsPanel } from '@/modules/workspace/components/workspace-notifications-panel';
 import { getWorkspaceNotificationsPageData } from '@/modules/notifications/server/workspace-notifications-page-data';
-import { hasPermission } from '@/modules/permissions/permissions.services';
+import { hasPermission } from '@/modules/permissions/services/permissions.services';
 
 export default async function WorkspaceNotificationsPage() {
   const data = await getWorkspaceNotificationsPageData();

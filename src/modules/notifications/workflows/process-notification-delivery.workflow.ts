@@ -11,7 +11,7 @@ import {
   markNotificationDeliveryFailed,
   markNotificationDeliveryProcessing,
   markNotificationDeliverySent,
-} from '@/modules/notifications/notification.services';
+} from '@/modules/notifications/services/notification.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 

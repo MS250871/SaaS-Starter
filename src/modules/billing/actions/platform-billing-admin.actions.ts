@@ -5,7 +5,7 @@ import { getRequestContext } from '@/lib/context/request-context'
 import { ERR } from '@/lib/errors/codes'
 import { throwError } from '@/lib/errors/app-error'
 import { createTxAction } from '@/lib/http/create-action'
-import { logAdminAction } from '@/modules/audit/audit.services'
+import { logAdminAction } from '@/modules/audit/services/audit.services'
 import {
   platformBillingCancelSubscriptionActionSchema,
   platformBillingRefundPaymentActionSchema,

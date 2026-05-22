@@ -7,7 +7,7 @@ import {
   getWorkspaceSupportThreadSnapshot,
   hydrateWorkspaceSupportTicketListItems,
   listCustomerSupportQueueTickets,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import { getSupportContextLabel } from '@/modules/support/support-ownership';
 import { listActiveWorkspaceMembersWithRoles } from '@/modules/workspace/services/membership.services';
 

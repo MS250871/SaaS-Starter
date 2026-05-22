@@ -6,7 +6,7 @@ import {
   assignSupportTicket,
   getWorkspaceManagedSupportTicketById,
   unassignSupportTicket,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import { findActiveWorkspaceMembershipByIdentity } from '@/modules/workspace/services/membership.services';
 
 export async function updateWorkspaceSupportTicketAssignmentWorkflow(input: {

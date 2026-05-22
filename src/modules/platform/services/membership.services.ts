@@ -7,7 +7,7 @@ import {
   getPlatformDefaultRoleDefinition,
   resolveRoleAssignment,
   type RoleAssignmentSnapshot,
-} from "@/modules/roles/role.services"
+} from "@/modules/roles/services/role.services"
 import {
   isPlatformRoleSystemKey,
   type PlatformRoleSystemKey,

@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PlatformOutboxRow } from '@/modules/jobs/server/platform-outbox-admin-page-data';
 import { requeuePlatformOutboxEventAction } from '@/modules/jobs/actions/platform-outbox-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 export function PlatformOperationsOutboxTable({
   rows,
@@ -75,7 +75,7 @@ export function PlatformOperationsOutboxTable({
             <Link href={`/platform/operations/integrations/outbox/${row.original.id}`}>View</Link>
           </Button>
           {['FAILED', 'PENDING'].includes(row.original.status) ? (
-            <PlatformOperationsAsyncButton
+            <PlatformOperationsTaskButton
               action={requeuePlatformOutboxEventAction}
               fields={{ outboxEventId: row.original.id }}
               label="Requeue"

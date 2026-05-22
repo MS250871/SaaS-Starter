@@ -1,6 +1,6 @@
 import { createRouteHandler } from '@/lib/http/create-route-handler';
 import { withSystemJobContext } from '@/lib/request/withSystemJobContext';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
+import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 

@@ -7,7 +7,7 @@ import {
   listWorkspaceFeatureOverrides,
   listWorkspaceLimitOverrides,
   resolveEntitlements,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 import { canOverrideEntitlement } from '@/modules/entitlements/override-policy';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';

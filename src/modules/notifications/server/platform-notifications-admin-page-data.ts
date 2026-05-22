@@ -3,7 +3,7 @@ import { listPlatformCustomerAdminSnapshots } from '@/modules/customer/services/
 import {
   getPlatformNotificationAdminSnapshot,
   listPlatformNotificationAdminSnapshots,
-} from '@/modules/notifications/notification.services';
+} from '@/modules/notifications/services/notification.services';
 import { listPlatformWorkspaceMembershipAdminSnapshots } from '@/modules/workspace/services/membership.services';
 import { listPlatformWorkspaceAdminSnapshots } from '@/modules/workspace/services/workspace.services';
 

@@ -7,7 +7,7 @@ import { createAction } from '@/lib/http/create-action';
 import {
   assertPermission,
   hasPermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import {
   workspaceRolePermissionOverrideActionSchema,
   type WorkspaceRolePermissionOverrideActionInput,

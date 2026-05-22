@@ -2,7 +2,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
   getWorkspaceUserPermissionOverride,
   revokePermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 
 export async function revokeWorkspaceUserPermissionOverrideWorkflow(input: {
   workspaceId: string;

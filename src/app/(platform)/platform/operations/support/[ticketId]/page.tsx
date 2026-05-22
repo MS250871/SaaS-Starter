@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { PlatformSupportTicketDetailView } from '@/modules/platform/components/operations/platform-support-ticket-detail-view';
 import { requirePlatformPermission } from '@/modules/platform/server/require-platform-admin';
-import { hasAnyPermission } from '@/modules/permissions/permissions.services';
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services';
 import { getPlatformSupportTicketDetailPageData } from '@/modules/support/server/platform-support-admin-page-data';
 
 export default async function PlatformOperationsSupportTicketPage({

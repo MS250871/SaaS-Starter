@@ -4,7 +4,7 @@ import { createAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 import {
   updateWorkspaceThemeActionSchema,
   updateWorkspaceThemeSchema,

@@ -2,7 +2,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
   getWorkspaceManagedSupportTicketById,
   updateSupportTicketStatus,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 
 export async function updateWorkspaceSupportTicketStatusWorkflow(input: {
   workspaceId: string;

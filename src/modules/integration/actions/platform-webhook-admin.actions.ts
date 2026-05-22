@@ -5,11 +5,11 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/audit.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   getWebhookEventById,
   requeueWebhookEvent,
-} from '@/modules/integration/webhook-event.services';
+} from '@/modules/integration/services/webhook-event.services';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 
 async function requirePlatformAdminSession() {

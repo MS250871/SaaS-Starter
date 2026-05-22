@@ -4,7 +4,7 @@ import {
   listPlatformMediaAdminSnapshots,
   type PlatformMediaAdminSnapshot,
   type PlatformMediaDetailAdminSnapshot,
-} from '@/modules/media/media.services';
+} from '@/modules/media/services/media.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

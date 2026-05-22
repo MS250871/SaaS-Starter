@@ -1,6 +1,6 @@
 import { withActionTxContext } from '@/lib/request/withActionContext';
 import { listPriceCatalogSnapshots, listProductCatalogSnapshots } from '@/modules/billing/services/catalog.services';
-import { listFeatureAdminSnapshots, listLimitAdminSnapshots, listPlanCatalogSnapshots } from '@/modules/entitlements/entitlement.services';
+import { listFeatureAdminSnapshots, listLimitAdminSnapshots, listPlanCatalogSnapshots } from '@/modules/entitlements/services/entitlement.services';
 
 export async function getPlatformCatalogOverviewData() {
   return withActionTxContext(async () => {

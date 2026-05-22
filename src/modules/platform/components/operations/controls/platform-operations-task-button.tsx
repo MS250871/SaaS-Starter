@@ -11,7 +11,7 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformOperationsAsyncButton({
+export function PlatformOperationsTaskButton({
   action,
   fields,
   label,

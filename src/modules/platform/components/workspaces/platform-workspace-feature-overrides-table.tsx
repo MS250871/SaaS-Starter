@@ -5,7 +5,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import type { PlatformWorkspaceFeatureOverrideRow } from '@/modules/entitlements/server/platform-workspace-overrides-page-data';
-import { PlatformWorkspaceLinkActions } from '@/modules/platform/components/workspaces/platform-workspace-link-actions';
+import { PlatformWorkspaceLinkGroup } from '@/modules/platform/components/workspaces/links/platform-workspace-link-group';
 
 export function PlatformWorkspaceFeatureOverridesTable({
   rows,
@@ -64,7 +64,7 @@ export function PlatformWorkspaceFeatureOverridesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformWorkspaceLinkActions
+        <PlatformWorkspaceLinkGroup
           label="feature override"
           actions={[
             ...(canEditOverride

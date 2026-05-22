@@ -6,7 +6,7 @@ import {
 } from '@/modules/support/db';
 import { listIdentityDisplayProfilesByIds } from '@/modules/auth/services/identity.services';
 import { listCustomerIdentityProfilesByIds } from '@/modules/customer/services/customer.services';
-import { listFileAttachmentsByEntityIds } from '@/modules/media/media.services';
+import { listFileAttachmentsByEntityIds } from '@/modules/media/services/media.services';
 import { listActivePlatformMembershipsByIdentityIds } from '@/modules/platform/services/membership.services';
 import {
   assertPlatformOwnedSupportContext,

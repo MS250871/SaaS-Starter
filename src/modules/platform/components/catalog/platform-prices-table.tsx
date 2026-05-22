@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
-import { CatalogRowActions } from '@/modules/platform/components/catalog/catalog-row-actions';
+import { CatalogRowMenu } from '@/modules/platform/components/catalog/menus/catalog-row-menu';
 import {
   deletePriceCatalogAction,
   togglePriceCatalogAction,
@@ -37,7 +37,7 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
         <div className="min-w-0 space-y-1">
           <p className="truncate font-medium">{row.original.productName}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {row.original.planName} · {row.original.productCode}
+            {row.original.planName} Ã‚Â· {row.original.productCode}
           </p>
         </div>
       ),
@@ -65,7 +65,7 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
     {
       accessorKey: 'providerPriceId',
       header: 'Provider Ref',
-      cell: ({ row }) => row.original.providerPriceId || '—',
+      cell: ({ row }) => row.original.providerPriceId || 'Ã¢â‚¬â€',
     },
     {
       accessorKey: 'isActive',
@@ -85,7 +85,7 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <CatalogRowActions
+        <CatalogRowMenu
           entityLabel="Price"
           entityId={row.original.id}
           idField="priceId"

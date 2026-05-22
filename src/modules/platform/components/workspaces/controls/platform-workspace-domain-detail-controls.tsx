@@ -17,7 +17,7 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformWorkspaceDomainDetailActions({
+export function PlatformWorkspaceDomainDetailControls({
   workspaceDomainId,
   canRefreshVerification,
   canSetPrimary,

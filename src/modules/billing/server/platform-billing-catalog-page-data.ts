@@ -5,7 +5,7 @@ import {
   listPriceCatalogSnapshots,
   listProductCatalogSnapshots,
 } from '@/modules/billing/services/catalog.services';
-import { listPlans } from '@/modules/entitlements/entitlement.services';
+import { listPlans } from '@/modules/entitlements/services/entitlement.services';
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-IN', {

@@ -1,12 +1,12 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
+import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import {
   sendWorkspaceNotificationActionSchema,
   type SendWorkspaceNotificationActionInput,

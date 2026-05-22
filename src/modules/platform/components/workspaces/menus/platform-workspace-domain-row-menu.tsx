@@ -20,7 +20,7 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformWorkspaceDomainRowActions({
+export function PlatformWorkspaceDomainRowMenu({
   workspaceId,
   workspaceDomainId,
   domainType,

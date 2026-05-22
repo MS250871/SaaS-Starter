@@ -1,9 +1,9 @@
 import { withActionTxContext } from '@/lib/request/withActionContext';
-import { listPlatformWebhookEventAdminSnapshots } from '@/modules/integration/webhook-event.services';
-import { listPlatformOutboxEventAdminSnapshots } from '@/modules/jobs/outbox-events.services';
-import { listPlatformMediaAdminSnapshots } from '@/modules/media/media.services';
-import { listPlatformNotificationAdminSnapshots } from '@/modules/notifications/notification.services';
-import { listPlatformSupportTicketAdminSnapshots } from '@/modules/support/support.services';
+import { listPlatformWebhookEventAdminSnapshots } from '@/modules/integration/services/webhook-event.services';
+import { listPlatformOutboxEventAdminSnapshots } from '@/modules/jobs/services/outbox-events.services';
+import { listPlatformMediaAdminSnapshots } from '@/modules/media/services/media.services';
+import { listPlatformNotificationAdminSnapshots } from '@/modules/notifications/services/notification.services';
+import { listPlatformSupportTicketAdminSnapshots } from '@/modules/support/services/support.services';
 
 export async function getPlatformOperationsOverviewData() {
   return withActionTxContext(async () => {

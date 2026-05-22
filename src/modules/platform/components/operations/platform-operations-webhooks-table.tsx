@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { PlatformWebhookRow } from '@/modules/integration/server/platform-webhook-admin-page-data';
 import { requeuePlatformWebhookEventAction } from '@/modules/integration/actions/platform-webhook-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 export function PlatformOperationsWebhooksTable({
   rows,
@@ -77,7 +77,7 @@ export function PlatformOperationsWebhooksTable({
             </Link>
           </Button>
           {['FAILED', 'RECEIVED'].includes(row.original.status) ? (
-            <PlatformOperationsAsyncButton
+            <PlatformOperationsTaskButton
               action={requeuePlatformWebhookEventAction}
               fields={{ webhookEventId: row.original.id }}
               label="Requeue"

@@ -22,7 +22,7 @@ import {
   refreshPlatformWorkspaceDomainVerificationAction,
   setPlatformWorkspacePrimaryDomainAction,
 } from '@/modules/workspace/actions/platform-workspace-domain-admin.actions';
-import { PlatformWorkspaceDomainRowActions } from '@/modules/platform/components/workspaces/platform-workspace-domain-row-actions';
+import { PlatformWorkspaceDomainRowMenu } from '@/modules/platform/components/workspaces/menus/platform-workspace-domain-row-menu';
 import { PlatformWorkspaceRoutingControls } from '@/modules/platform/components/workspaces/platform-workspace-routing-controls';
 import type { getPlatformWorkspaceRoutingDetailPageData } from '@/modules/workspace/server/platform-workspace-domain-page-data';
 
@@ -211,7 +211,7 @@ export function PlatformWorkspaceRoutingDetailView({
                     <TableCell>{row.dnsHealthLabel}</TableCell>
                     <TableCell>{row.lastCheckedAtLabel}</TableCell>
                     <TableCell>
-                      <PlatformWorkspaceDomainRowActions
+                      <PlatformWorkspaceDomainRowMenu
                         workspaceId={data.workspace.id}
                         workspaceDomainId={row.id}
                         domainType={row.type}

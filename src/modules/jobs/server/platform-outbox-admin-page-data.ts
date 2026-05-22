@@ -2,7 +2,7 @@ import { withActionTxContext } from '@/lib/request/withActionContext';
 import {
   getPlatformOutboxEventAdminSnapshot,
   listPlatformOutboxEventAdminSnapshots,
-} from '@/modules/jobs/outbox-events.services';
+} from '@/modules/jobs/services/outbox-events.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import type { getPlatformNotificationDetailPageData } from '@/modules/notifications/server/platform-notifications-admin-page-data';
 import { replayPlatformNotificationDeliveryAction } from '@/modules/notifications/actions/platform-notification-admin.actions';
-import { PlatformOperationsAsyncButton } from '@/modules/platform/components/operations/platform-operations-async-button';
+import { PlatformOperationsTaskButton } from '@/modules/platform/components/operations/controls/platform-operations-task-button';
 
 type PlatformNotificationDetailData = Awaited<
   ReturnType<typeof getPlatformNotificationDetailPageData>
@@ -135,7 +135,7 @@ export function PlatformNotificationDetailView({
                     </p>
                   </div>
                   {delivery.canReplay ? (
-                    <PlatformOperationsAsyncButton
+                    <PlatformOperationsTaskButton
                       action={replayPlatformNotificationDeliveryAction}
                       fields={{ deliveryId: delivery.id }}
                       label="Replay delivery"

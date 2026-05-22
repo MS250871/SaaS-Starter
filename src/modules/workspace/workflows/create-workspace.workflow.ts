@@ -5,7 +5,7 @@ import { getIdentityById } from '@/modules/auth/services/identity.services';
 import { attachPendingPaidBillingToWorkspaceWorkflow } from '@/modules/billing/workflows/attach-pending-paid-billing-to-workspace.workflow';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
-import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/role.services';
+import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/services/role.services';
 import type { WorkspaceRoleSystemKey } from '@/modules/roles/role.types';
 import { createMembership } from '@/modules/workspace/services/membership.services';
 import { createWorkspaceSettings } from '@/modules/workspace/services/setting.services';

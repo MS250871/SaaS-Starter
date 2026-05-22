@@ -4,7 +4,7 @@ import {
   listWorkspaceMediaAdminSnapshots,
   type WorkspaceMediaAdminSnapshot,
   type WorkspaceMediaDetailAdminSnapshot,
-} from '@/modules/media/media.services';
+} from '@/modules/media/services/media.services';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
 function formatDate(value: Date | null | undefined) {

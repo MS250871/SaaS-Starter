@@ -2,7 +2,7 @@ import { withActionTxContext } from '@/lib/request/withActionContext';
 import {
   countWorkspaceIdentityNotifications,
   listWorkspaceIdentityNotifications,
-} from '@/modules/notifications/notification.services';
+} from '@/modules/notifications/services/notification.services';
 import { listWorkspaceCustomersDirectory } from '@/modules/customer/services/customer.services';
 import { listActiveWorkspaceMembersWithRoles } from '@/modules/workspace/services/membership.services';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';

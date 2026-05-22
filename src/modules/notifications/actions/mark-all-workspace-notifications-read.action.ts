@@ -2,7 +2,7 @@
 
 import { createAction } from '@/lib/http/create-action';
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { markAllNotificationsReadWorkflow } from '@/modules/notifications/workflows/mark-notification-read.workflow';

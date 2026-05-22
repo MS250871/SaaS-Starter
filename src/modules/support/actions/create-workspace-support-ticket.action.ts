@@ -4,12 +4,12 @@ import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createAction } from '@/lib/http/create-action';
-import { assertPermission } from '@/modules/permissions/permissions.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
 import {
   createWorkspaceSupportTicketActionSchema,
   type CreateWorkspaceSupportTicketActionInput,
 } from '@/modules/support/schema';
-import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
+import { getSupportAttachmentFiles } from '@/modules/support/services/support-attachments.services';
 import { createWorkspaceSupportTicketWorkflow } from '@/modules/support/workflows/create-workspace-support-ticket.workflow';
 
 const createWorkspaceSupportTicketActionImpl = createAction(

@@ -20,7 +20,7 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function GovernanceRowActions({
+export function GovernanceRowMenu({
   entityLabel,
   entityId,
   idField,

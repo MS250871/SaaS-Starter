@@ -4,7 +4,7 @@ import {
   getWorkspaceDefaultRoleDefinition,
   resolveRoleAssignment,
   type RoleAssignmentSnapshot,
-} from "@/modules/roles/role.services"
+} from "@/modules/roles/services/role.services"
 import type { WorkspaceRoleSystemKey } from "@/modules/roles/role.types"
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"

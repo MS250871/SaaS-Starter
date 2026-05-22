@@ -4,7 +4,7 @@ import { ERR } from '@/lib/errors/codes';
 import {
   getPermissionById,
   upsertWorkspaceUserPermissionOverride,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import { findActiveWorkspaceMembershipByIdentity } from '@/modules/workspace/services/membership.services';
 
 export async function updateWorkspaceUserPermissionOverrideWorkflow(input: {

@@ -3,11 +3,11 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import {
   addSupportTicketReply,
   getWorkspaceSupportTicketById,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import {
   createSupportAttachments,
   SUPPORT_TICKET_MESSAGE_ATTACHMENT_ENTITY_TYPE,
-} from '@/modules/support/support-attachments.services';
+} from '@/modules/support/services/support-attachments.services';
 
 export async function addWorkspaceSupportTicketReplyWorkflow(input: {
   workspaceId: string;

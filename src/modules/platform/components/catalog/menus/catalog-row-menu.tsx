@@ -20,16 +20,24 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformIdentityRowActions({
-  identityId,
+export function CatalogRowMenu({
+  entityLabel,
+  entityId,
+  idField,
   viewHref,
+  editHref,
   isActive,
   toggleAction,
+  deleteAction,
 }: {
-  identityId: string;
+  entityLabel: string;
+  entityId: string;
+  idField: string;
   viewHref: string;
+  editHref: string;
   isActive: boolean;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
+  deleteAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -38,7 +46,7 @@ export function PlatformIdentityRowActions({
   const runToggle = () => {
     startTransition(async () => {
       const formData = new FormData();
-      formData.set('identityId', identityId);
+      formData.set(idField, entityId);
       formData.set('isActive', String(!isActive));
 
       const response = await toggleAction(formData);
@@ -48,10 +56,32 @@ export function PlatformIdentityRowActions({
         return;
       }
 
-      showActionSuccess(
-        response.data.successMessage,
-        'Identity access was updated.',
-      );
+      showActionSuccess(response.data.successMessage, `${entityLabel} updated.`);
+      router.refresh();
+    });
+  };
+
+  const runDelete = () => {
+    const confirmed = window.confirm(
+      `Delete this ${entityLabel.toLowerCase()}? This action cannot be undone.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    startTransition(async () => {
+      const formData = new FormData();
+      formData.set(idField, entityId);
+
+      const response = await deleteAction(formData);
+
+      if (!response.success) {
+        showActionError(response.error);
+        return;
+      }
+
+      showActionSuccess(response.data.successMessage, `${entityLabel} deleted.`);
       router.refresh();
     });
   };
@@ -61,16 +91,22 @@ export function PlatformIdentityRowActions({
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" disabled={isPending}>
           <MoreHorizontalIcon className="size-4" />
-          <span className="sr-only">Open identity actions</span>
+          <span className="sr-only">Open {entityLabel} actions</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
+      <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem asChild>
-          <Link href={viewHref}>View identity</Link>
+          <Link href={viewHref}>View</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href={editHref}>Edit</Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={runToggle}>
-          {isActive ? 'Deactivate identity' : 'Activate identity'}
+          {isActive ? 'Deactivate' : 'Activate'}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={runDelete} className="text-destructive">
+          Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

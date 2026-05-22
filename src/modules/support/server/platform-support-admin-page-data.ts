@@ -10,7 +10,7 @@ import {
   getPlatformSupportTicketThreadSnapshot,
   listPlatformSupportTicketAdminSnapshots,
   type PlatformSupportTicketAdminSnapshot,
-} from '@/modules/support/support.services';
+} from '@/modules/support/services/support.services';
 import { listActiveWorkspaceMembersWithRoles } from '@/modules/workspace/services/membership.services';
 import { listPlatformWorkspaceSelectOptions } from '@/modules/workspace/services/workspace.services';
 

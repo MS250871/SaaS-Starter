@@ -7,7 +7,7 @@ import type { Prisma } from "@/generated/prisma/client"
 import {
   getPlatformDefaultRoleDefinition,
   resolveRoleAssignment,
-} from "@/modules/roles/role.services"
+} from "@/modules/roles/services/role.services"
 import type { PlatformRoleSystemKey } from "@/modules/roles/role.types"
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"

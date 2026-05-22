@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
-import { CatalogRowActions } from '@/modules/platform/components/catalog/catalog-row-actions';
+import { CatalogRowMenu } from '@/modules/platform/components/catalog/menus/catalog-row-menu';
 import {
   deleteProductCatalogAction,
   toggleProductCatalogAction,
@@ -69,7 +69,7 @@ export function PlatformProductsTable({ rows }: { rows: ProductRow[] }) {
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <CatalogRowActions
+        <CatalogRowMenu
           entityLabel="Product"
           entityId={row.original.id}
           idField="productId"

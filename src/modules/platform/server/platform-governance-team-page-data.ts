@@ -2,7 +2,7 @@ import { InviteStatus } from '@/generated/prisma/client';
 import { withActionTxContext } from '@/lib/request/withActionContext';
 import { listPlatformInviteAdminSnapshots } from '@/modules/platform/services/invite.services';
 import { listPlatformMembershipAdminSnapshots } from '@/modules/platform/services/membership.services';
-import { listAssignableRoleDefinitions } from '@/modules/roles/role.services';
+import { listAssignableRoleDefinitions } from '@/modules/roles/services/role.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

@@ -5,11 +5,11 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/audit.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   getOutboxEventById,
   requeueOutboxEvent,
-} from '@/modules/jobs/outbox-events.services';
+} from '@/modules/jobs/services/outbox-events.services';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 
 async function requirePlatformAdminSession() {

@@ -7,8 +7,8 @@ import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { headers } from 'next/headers';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { logAdminAction } from '@/modules/audit/audit.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/notification-outbox.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
+import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import { createPlatformInviteNotificationWorkflow } from '@/modules/notifications/workflows/create-platform-invite-notification.workflow';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 import {
@@ -38,7 +38,7 @@ import {
 } from '@/modules/platform/schema';
 import { createPlatformInviteWorkflow } from '@/modules/platform/workflows/create-platform-invite.workflow';
 import { buildAbsoluteUrl } from '@/lib/url/absolute-url';
-import { getRoleDefinitionById } from '@/modules/roles/role.services';
+import { getRoleDefinitionById } from '@/modules/roles/services/role.services';
 
 function getInviterName(params: {
   firstName?: string | null;

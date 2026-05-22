@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
@@ -9,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useActionToast } from '@/hooks/use-action-toast';
@@ -18,15 +20,15 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformGovernanceRoleRowActions({
-  roleDefinitionId,
+export function PlatformIdentityRowMenu({
+  identityId,
+  viewHref,
   isActive,
-  canToggle,
   toggleAction,
 }: {
-  roleDefinitionId: string;
+  identityId: string;
+  viewHref: string;
   isActive: boolean;
-  canToggle: boolean;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
   const router = useRouter();
@@ -36,7 +38,7 @@ export function PlatformGovernanceRoleRowActions({
   const runToggle = () => {
     startTransition(async () => {
       const formData = new FormData();
-      formData.set('roleDefinitionId', roleDefinitionId);
+      formData.set('identityId', identityId);
       formData.set('isActive', String(!isActive));
 
       const response = await toggleAction(formData);
@@ -46,31 +48,29 @@ export function PlatformGovernanceRoleRowActions({
         return;
       }
 
-      showActionSuccess(response.data.successMessage, 'Role access updated.');
+      showActionSuccess(
+        response.data.successMessage,
+        'Identity access was updated.',
+      );
       router.refresh();
     });
   };
-
-  if (!canToggle) {
-    return (
-      <Button variant="outline" size="icon" disabled>
-        <MoreHorizontalIcon className="size-4" />
-        <span className="sr-only">No role actions available</span>
-      </Button>
-    );
-  }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" disabled={isPending}>
           <MoreHorizontalIcon className="size-4" />
-          <span className="sr-only">Open role actions</span>
+          <span className="sr-only">Open identity actions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuItem asChild>
+          <Link href={viewHref}>View identity</Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={runToggle}>
-          {isActive ? 'Deactivate role' : 'Activate role'}
+          {isActive ? 'Deactivate identity' : 'Activate identity'}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

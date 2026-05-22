@@ -5,10 +5,10 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/audit.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   hasPermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import { assertPlatformAccess } from '@/modules/platform/platform-admin-access';
 import {
   addWorkspaceSupportTicketInternalNoteActionSchema,
@@ -18,7 +18,7 @@ import {
   createPlatformSupportTicketActionSchema,
   type CreatePlatformSupportTicketActionInput,
 } from '@/modules/support/schema';
-import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
+import { getSupportAttachmentFiles } from '@/modules/support/services/support-attachments.services';
 import { addPlatformSupportTicketInternalNoteWorkflow } from '@/modules/support/workflows/add-platform-support-ticket-internal-note.workflow';
 import { addPlatformSupportTicketReplyWorkflow } from '@/modules/support/workflows/add-platform-support-ticket-reply.workflow';
 import { createPlatformSupportTicketWorkflow } from '@/modules/support/workflows/create-platform-support-ticket.workflow';

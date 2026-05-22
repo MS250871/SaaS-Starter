@@ -4,8 +4,8 @@ import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { assertPermission } from '@/modules/permissions/permissions.services';
-import { getWorkspaceIdentityNotification } from '@/modules/notifications/notification.services';
+import { assertPermission } from '@/modules/permissions/services/permissions.services';
+import { getWorkspaceIdentityNotification } from '@/modules/notifications/services/notification.services';
 import {
   markWorkspaceNotificationReadActionSchema,
   type MarkWorkspaceNotificationReadActionInput,

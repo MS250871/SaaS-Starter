@@ -8,7 +8,7 @@ import {
   changePlatformInviteRoleAction,
   revokePlatformInviteAction,
 } from '@/modules/platform/actions/platform-governance-admin.actions';
-import { PlatformGovernanceInviteRowActions } from '@/modules/platform/components/governance/platform-governance-invite-row-actions';
+import { PlatformGovernanceInviteRowMenu } from '@/modules/platform/components/governance/menus/platform-governance-invite-row-menu';
 import type {
   PlatformGovernanceAssignableRole,
   PlatformGovernanceInviteRow,
@@ -86,7 +86,7 @@ export function PlatformGovernanceInvitesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformGovernanceInviteRowActions
+        <PlatformGovernanceInviteRowMenu
           inviteId={row.original.id}
           canRevoke={row.original.isPending}
           canManageRoles={canManageRoles && row.original.isPending}

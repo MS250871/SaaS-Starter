@@ -4,8 +4,8 @@ import { listPlatformPaymentAdminSnapshots } from '@/modules/billing/services/pa
 import { listPlatformRefundAdminSnapshots } from '@/modules/billing/services/refund.services';
 import { listPlatformSubscriptionAdminSnapshots } from '@/modules/billing/services/subscription.services';
 import { listPlatformCustomerAdminSnapshots } from '@/modules/customer/services/customer.services';
-import { listPlatformNotificationAdminSnapshots } from '@/modules/notifications/notification.services';
-import { listPlatformSupportTicketAdminSnapshots } from '@/modules/support/support.services';
+import { listPlatformNotificationAdminSnapshots } from '@/modules/notifications/services/notification.services';
+import { listPlatformSupportTicketAdminSnapshots } from '@/modules/support/services/support.services';
 import { listPlatformWorkspaceAdminSnapshots } from '@/modules/workspace/services/workspace.services';
 import { normalizeWorkspaceDomainStrategy } from '@/modules/workspace/routing';
 

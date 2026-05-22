@@ -8,7 +8,7 @@ import {
   createCustomerSupportTicketActionSchema,
   type CreateCustomerSupportTicketActionInput,
 } from '@/modules/support/schema';
-import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
+import { getSupportAttachmentFiles } from '@/modules/support/services/support-attachments.services';
 import { createCustomerSupportTicketWorkflow } from '@/modules/support/workflows/create-customer-support-ticket.workflow';
 
 const createCustomerSupportTicketActionImpl = createAction(

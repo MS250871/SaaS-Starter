@@ -5,7 +5,7 @@ import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/audit.services';
+import { logAdminAction } from '@/modules/audit/services/audit.services';
 import { governancePermissionActionSchema } from '@/modules/permissions/permission.schema';
 import {
   createPermission,
@@ -13,7 +13,7 @@ import {
   getGovernancePermissionAdminSnapshot,
   setPermissionActive,
   updatePermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 
 function parseCheckboxValue(formData: FormData, key: string) {

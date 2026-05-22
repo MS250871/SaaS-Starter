@@ -20,24 +20,18 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function CatalogRowActions({
-  entityLabel,
-  entityId,
-  idField,
+export function PlatformWorkspaceRowMenu({
+  workspaceId,
   viewHref,
-  editHref,
   isActive,
+  canToggleWorkspace,
   toggleAction,
-  deleteAction,
 }: {
-  entityLabel: string;
-  entityId: string;
-  idField: string;
+  workspaceId: string;
   viewHref: string;
-  editHref: string;
   isActive: boolean;
+  canToggleWorkspace: boolean;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
-  deleteAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -46,7 +40,7 @@ export function CatalogRowActions({
   const runToggle = () => {
     startTransition(async () => {
       const formData = new FormData();
-      formData.set(idField, entityId);
+      formData.set('workspaceId', workspaceId);
       formData.set('isActive', String(!isActive));
 
       const response = await toggleAction(formData);
@@ -56,32 +50,10 @@ export function CatalogRowActions({
         return;
       }
 
-      showActionSuccess(response.data.successMessage, `${entityLabel} updated.`);
-      router.refresh();
-    });
-  };
-
-  const runDelete = () => {
-    const confirmed = window.confirm(
-      `Delete this ${entityLabel.toLowerCase()}? This action cannot be undone.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    startTransition(async () => {
-      const formData = new FormData();
-      formData.set(idField, entityId);
-
-      const response = await deleteAction(formData);
-
-      if (!response.success) {
-        showActionError(response.error);
-        return;
-      }
-
-      showActionSuccess(response.data.successMessage, `${entityLabel} deleted.`);
+      showActionSuccess(
+        response.data.successMessage,
+        'Workspace access was updated.',
+      );
       router.refresh();
     });
   };
@@ -91,23 +63,21 @@ export function CatalogRowActions({
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="icon" disabled={isPending}>
           <MoreHorizontalIcon className="size-4" />
-          <span className="sr-only">Open {entityLabel} actions</span>
+          <span className="sr-only">Open workspace actions</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
+      <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem asChild>
-          <Link href={viewHref}>View</Link>
+          <Link href={viewHref}>View workspace</Link>
         </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link href={editHref}>Edit</Link>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={runToggle}>
-          {isActive ? 'Deactivate' : 'Activate'}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={runDelete} className="text-destructive">
-          Delete
-        </DropdownMenuItem>
+        {canToggleWorkspace ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={runToggle}>
+              {isActive ? 'Deactivate workspace' : 'Activate workspace'}
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   );

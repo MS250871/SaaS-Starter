@@ -6,7 +6,7 @@ import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import { togglePlatformWorkspaceActiveAction } from '@/modules/workspace/actions/platform-workspace-admin.actions';
 import type { PlatformWorkspaceListRow } from '@/modules/workspace/server/platform-workspace-admin-data';
-import { PlatformWorkspaceRowActions } from '@/modules/platform/components/workspaces/platform-workspace-row-actions';
+import { PlatformWorkspaceRowMenu } from '@/modules/platform/components/workspaces/menus/platform-workspace-row-menu';
 
 export function PlatformWorkspacesTable({
   rows,
@@ -105,7 +105,7 @@ export function PlatformWorkspacesTable({
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <PlatformWorkspaceRowActions
+        <PlatformWorkspaceRowMenu
           workspaceId={row.original.id}
           viewHref={`/platform/workspaces/${row.original.id}`}
           isActive={row.original.isActive}

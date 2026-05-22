@@ -4,7 +4,7 @@ import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
-import { CatalogRowActions } from '@/modules/platform/components/catalog/catalog-row-actions';
+import { CatalogRowMenu } from '@/modules/platform/components/catalog/menus/catalog-row-menu';
 import {
   deletePlanCatalogAction,
   togglePlanCatalogAction,
@@ -67,12 +67,12 @@ export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
     {
       accessorKey: 'monthlyPrice',
       header: 'Monthly',
-      cell: ({ row }) => row.original.monthlyPrice ?? '—',
+      cell: ({ row }) => row.original.monthlyPrice ?? 'Ã¢â‚¬â€',
     },
     {
       accessorKey: 'yearlyPrice',
       header: 'Yearly',
-      cell: ({ row }) => row.original.yearlyPrice ?? '—',
+      cell: ({ row }) => row.original.yearlyPrice ?? 'Ã¢â‚¬â€',
     },
     {
       accessorKey: 'updatedAtLabel',
@@ -83,7 +83,7 @@ export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
       header: 'Actions',
       enableSorting: false,
       cell: ({ row }) => (
-        <CatalogRowActions
+        <CatalogRowMenu
           entityLabel="Plan"
           entityId={row.original.id}
           idField="planId"

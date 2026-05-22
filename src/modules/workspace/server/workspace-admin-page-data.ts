@@ -7,8 +7,8 @@ import {
 } from '@/lib/middleware/proxy-utils';
 import {
   countWorkspaceIdentityNotifications,
-} from '@/modules/notifications/notification.services';
-import { resolveEntitlements } from '@/modules/entitlements/entitlement.services';
+} from '@/modules/notifications/services/notification.services';
+import { resolveEntitlements } from '@/modules/entitlements/services/entitlement.services';
 import { getManagedWorkspaceDomainProviderLabel } from '@/modules/workspace/services/domain-provider.services';
 import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
 import { workspaceApiKeyScopes } from '@/modules/workspace/api-key-scopes';
@@ -32,10 +32,10 @@ import {
   listWorkspaceDomainsDetailed,
   type WorkspaceDomainDetailed,
 } from '@/modules/workspace/services/domains.services';
-import { listAssignableRoleDefinitions } from '@/modules/roles/role.services';
+import { listAssignableRoleDefinitions } from '@/modules/roles/services/role.services';
 import { normalizeWorkspaceTheme } from '@/modules/workspace/theme';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
-import { getWorkspaceSupportSummary } from '@/modules/support/support.services';
+import { getWorkspaceSupportSummary } from '@/modules/support/services/support.services';
 
 export type WorkspaceOverviewMetrics = {
   hero: {

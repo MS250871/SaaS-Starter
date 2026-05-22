@@ -2,11 +2,11 @@ import { withActionTxContext } from '@/lib/request/withActionContext';
 import {
   listGovernancePermissionAdminSnapshots,
   listRolePermissionsByRoleDefinition,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import {
   getGovernanceRoleAdminSnapshot,
   listGovernanceRoleAdminSnapshots,
-} from '@/modules/roles/role.services';
+} from '@/modules/roles/services/role.services';
 
 function formatDate(value: Date | null | undefined) {
   if (!value) {

@@ -3,7 +3,7 @@ import { getWorkspaceDomainsPageData } from "@/modules/workspace/server/workspac
 import {
   hasAnyPermission,
   hasPermission,
-} from "@/modules/permissions/permissions.services"
+} from "@/modules/permissions/services/permissions.services"
 
 export default async function WorkspaceDomainsPage() {
   const {

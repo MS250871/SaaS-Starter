@@ -1,6 +1,6 @@
 import { WorkspaceAccessPanel } from '@/modules/workspace/components/workspace-access-panel';
 import { getWorkspaceAccessPageData } from '@/modules/permissions/server/workspace-access-page-data';
-import { hasAnyPermission } from '@/modules/permissions/permissions.services';
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services';
 
 export default async function WorkspaceSettingsAccessPage() {
   const {

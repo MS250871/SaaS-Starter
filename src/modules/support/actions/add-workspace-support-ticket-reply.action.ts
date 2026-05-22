@@ -7,12 +7,12 @@ import { createAction } from '@/lib/http/create-action';
 import {
   assertPermission,
   hasPermission,
-} from '@/modules/permissions/permissions.services';
+} from '@/modules/permissions/services/permissions.services';
 import {
   addWorkspaceSupportTicketReplyActionSchema,
   type AddWorkspaceSupportTicketReplyActionInput,
 } from '@/modules/support/schema';
-import { getSupportAttachmentFiles } from '@/modules/support/support-attachments.services';
+import { getSupportAttachmentFiles } from '@/modules/support/services/support-attachments.services';
 import { addWorkspaceSupportTicketReplyWorkflow } from '@/modules/support/workflows/add-workspace-support-ticket-reply.workflow';
 
 function assertCanReplyToSupportTicket(permissions: string[]) {

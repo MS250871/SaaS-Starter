@@ -2,7 +2,7 @@ import {
   listFeatureCatalog,
   listLimitCatalog,
   listPublicPricingPlans,
-} from '@/modules/entitlements/entitlement.services';
+} from '@/modules/entitlements/services/entitlement.services';
 import {
   listActiveOneTimePurchaseOffers,
   type OneTimePurchaseOffer,

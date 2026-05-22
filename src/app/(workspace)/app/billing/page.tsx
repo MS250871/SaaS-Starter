@@ -1,6 +1,6 @@
 import { WorkspaceBillingPanel } from '@/modules/billing/components/workspace-billing-panel';
 import { getWorkspaceBillingPageData } from '@/modules/billing/server/workspace-billing-page-data';
-import { hasAnyPermission } from '@/modules/permissions/permissions.services';
+import { hasAnyPermission } from '@/modules/permissions/services/permissions.services';
 
 export default async function WorkspaceBillingPage() {
   const {

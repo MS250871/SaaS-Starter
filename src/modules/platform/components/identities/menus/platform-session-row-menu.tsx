@@ -20,7 +20,7 @@ type ActionResult = {
   successMessage?: string;
 };
 
-export function PlatformSessionRowActions({
+export function PlatformSessionRowMenu({
   sessionId,
   identityHref,
   canRevoke,

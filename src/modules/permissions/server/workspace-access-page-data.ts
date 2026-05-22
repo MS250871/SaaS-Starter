@@ -3,8 +3,8 @@ import {
   listPermissions,
   listWorkspaceRolePermissionOverrides,
   listWorkspaceUserPermissionOverridesDetailed,
-} from '@/modules/permissions/permissions.services';
-import { listRoleDefinitionsWithPermissions } from '@/modules/roles/role.services';
+} from '@/modules/permissions/services/permissions.services';
+import { listRoleDefinitionsWithPermissions } from '@/modules/roles/services/role.services';
 import { listActiveWorkspaceMembersWithRoles } from '@/modules/workspace/services/membership.services';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
 
