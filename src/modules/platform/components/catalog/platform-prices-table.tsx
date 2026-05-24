@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -29,6 +30,7 @@ function formatInterval(interval: string) {
 }
 
 export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
+  const [priceRows, setPriceRows] = useState(rows);
   const columns: ColumnDef<PriceRow>[] = [
     {
       accessorKey: 'productName',
@@ -92,6 +94,20 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
           viewHref={`/platform/catalog/prices/${row.original.id}`}
           editHref={`/platform/catalog/prices/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(priceId, next) => {
+            setPriceRows((current) =>
+              current.map((entry) =>
+                entry.id === priceId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(priceId) => {
+            setPriceRows((current) =>
+              current.filter((entry) => entry.id !== priceId),
+            );
+          }}
           toggleAction={togglePriceCatalogAction}
           deleteAction={deletePriceCatalogAction}
         />
@@ -103,7 +119,7 @@ export function PlatformPricesTable({ rows }: { rows: PriceRow[] }) {
     <AdminDataTable
       title="Prices"
       columns={columns}
-      data={rows}
+      data={priceRows}
       searchPlaceholder="Search prices by product, plan, amount, or provider reference"
       emptyStateTitle="No prices found"
       emptyStateDescription="Create the first price to make a product billable."

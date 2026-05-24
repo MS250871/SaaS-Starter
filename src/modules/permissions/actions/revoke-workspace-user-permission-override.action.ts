@@ -48,6 +48,24 @@ const revokeWorkspaceUserPermissionOverrideActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'GOVERNANCE',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.userPermissionOverride.revoke',
+        entityType: 'UserPermission',
+        entityId: result.userPermissionId,
+        description: `Direct permission override removed for ${result.memberName}.`,
+        metadata: {
+          identityId: result.identityId,
+          permissionId: result.permissionId,
+          permissionKey: result.permissionKey,
+        },
+      }),
+    },
+  },
 );
 
 export async function revokeWorkspaceUserPermissionOverrideAction(

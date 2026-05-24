@@ -44,6 +44,30 @@ const createWorkspaceSupportTicketActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'SUPPORT',
+        source: 'WORKSPACE_APP',
+        action:
+          result.contextType === 'PLATFORM'
+            ? 'workspace.support.escalation.create'
+            : 'workspace.support.ticket.create',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description:
+          result.contextType === 'PLATFORM'
+            ? 'Platform escalation created from workspace support.'
+            : 'Customer support ticket created from workspace support.',
+        newValue: {
+          contextType: result.contextType,
+          priority: result.priority,
+          status: result.status,
+        },
+      }),
+    },
+  },
 );
 
 export async function createWorkspaceSupportTicketAction(formData: FormData) {

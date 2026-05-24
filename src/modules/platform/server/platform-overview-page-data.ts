@@ -1,12 +1,10 @@
-import { withActionTxContext } from '@/lib/request/withActionContext';
-import { listPlatformIdentityAdminSnapshots } from '@/modules/auth/services/identity.services';
-import { listPlatformPaymentAdminSnapshots } from '@/modules/billing/services/payment.services';
-import { listPlatformRefundAdminSnapshots } from '@/modules/billing/services/refund.services';
-import { listPlatformSubscriptionAdminSnapshots } from '@/modules/billing/services/subscription.services';
-import { listPlatformCustomerAdminSnapshots } from '@/modules/customer/services/customer.services';
-import { listPlatformNotificationAdminSnapshots } from '@/modules/notifications/services/notification.services';
-import { listPlatformSupportTicketAdminSnapshots } from '@/modules/support/services/support.services';
-import { listPlatformWorkspaceAdminSnapshots } from '@/modules/workspace/services/workspace.services';
+import { withActionReadContext } from '@/lib/request/withActionContext';
+import { identityQueries } from '@/modules/auth/db';
+import { paymentQueries, refundQueries, subscriptionQueries } from '@/modules/billing/db';
+import { customerQueries } from '@/modules/customer/db';
+import { notificationQueries } from '@/modules/notifications/db';
+import { supportTicketQueries } from '@/modules/support/db';
+import { workspaceQueries } from '@/modules/workspace/db';
 import { normalizeWorkspaceDomainStrategy } from '@/modules/workspace/routing';
 
 type OverviewCard = {
@@ -71,6 +69,179 @@ type MonthBucket = {
   label: string;
   index: number;
 };
+
+const SCREENSHOT_SAMPLE_OVERVIEW = {
+  hero: {
+    workspaceCount: 126,
+    activeWorkspaceCount: 111,
+    activeSubscriptionCount: 74,
+    scheduledCancellationCount: 6,
+    trailing30dCollections: 2485000,
+    trailing30dRefunds: 128000,
+    openEscalations: 9,
+    failedDeliveries: 13,
+    pendingRefunds: 4,
+    unreadNotifications: 27,
+    liveSubscriptionWorkspaceCount: 68,
+    configuredHostCount: 59,
+    identityCount: 3420,
+    customerCount: 18640,
+  },
+  cards: [
+    {
+      title: 'Tenant Base',
+      value: '126',
+      trend: '111 active workspaces',
+      detail: '59 with configured primary hosts',
+    },
+    {
+      title: 'Live Subscriptions',
+      value: '74',
+      trend: '6 cancel at cycle end',
+      detail: '68 workspaces currently on paid plans',
+    },
+    {
+      title: '30 Day Collections',
+      value: formatCurrency(2485000),
+      trend: '+3.1L vs last month',
+      detail: `${formatCurrency(128000)} refunded in the same window`,
+    },
+    {
+      title: 'Attention Queue',
+      value: '26',
+      trend: '9 support escalations',
+      detail: '13 failed deliveries - 4 pending refunds',
+    },
+  ] satisfies OverviewCard[],
+  tenantGrowthSeries: [
+    { month: 'Dec', workspaces: 11, identities: 190, customers: 820 },
+    { month: 'Jan', workspaces: 17, identities: 360, customers: 1410 },
+    { month: 'Feb', workspaces: 24, identities: 620, customers: 2680 },
+    { month: 'Mar', workspaces: 18, identities: 540, customers: 2310 },
+    { month: 'Apr', workspaces: 29, identities: 770, customers: 3920 },
+    { month: 'May', workspaces: 27, identities: 940, customers: 5150 },
+  ] satisfies PlatformOverviewPageData['tenantGrowthSeries'],
+  commerceSeries: [
+    {
+      month: 'Dec',
+      collected: 1280000,
+      refunded: 96000,
+      paymentCount: 108,
+      collectedLakh: 12.8,
+      refundedLakh: 0.96,
+    },
+    {
+      month: 'Jan',
+      collected: 1650000,
+      refunded: 71000,
+      paymentCount: 129,
+      collectedLakh: 16.5,
+      refundedLakh: 0.71,
+    },
+    {
+      month: 'Feb',
+      collected: 1490000,
+      refunded: 88000,
+      paymentCount: 121,
+      collectedLakh: 14.9,
+      refundedLakh: 0.88,
+    },
+    {
+      month: 'Mar',
+      collected: 1980000,
+      refunded: 102000,
+      paymentCount: 156,
+      collectedLakh: 19.8,
+      refundedLakh: 1.02,
+    },
+    {
+      month: 'Apr',
+      collected: 1820000,
+      refunded: 93000,
+      paymentCount: 149,
+      collectedLakh: 18.2,
+      refundedLakh: 0.93,
+    },
+    {
+      month: 'May',
+      collected: 2485000,
+      refunded: 128000,
+      paymentCount: 188,
+      collectedLakh: 24.85,
+      refundedLakh: 1.28,
+    },
+  ] satisfies PlatformOverviewPageData['commerceSeries'],
+  routingMix: [
+    {
+      key: 'freePath',
+      label: 'Free path',
+      value: 41,
+      fill: 'var(--color-freePath)',
+    },
+    {
+      key: 'subdomain',
+      label: 'Subdomain',
+      value: 52,
+      fill: 'var(--color-subdomain)',
+    },
+    {
+      key: 'customDomain',
+      label: 'Custom domain',
+      value: 33,
+      fill: 'var(--color-customDomain)',
+    },
+  ] satisfies PlatformOverviewPageData['routingMix'],
+  queueHealth: [
+    {
+      label: 'Unread notifications',
+      value: 27,
+    },
+    {
+      label: 'Failed deliveries',
+      value: 13,
+    },
+    {
+      label: 'Pending refunds',
+      value: 4,
+    },
+    {
+      label: 'Open escalations',
+      value: 9,
+    },
+  ] satisfies PlatformOverviewPageData['queueHealth'],
+};
+
+function shouldUseScreenshotSampleData(data: PlatformOverviewPageData) {
+  const hasAnyCollections = data.commerceSeries.some(
+    (item) => item.collected > 0 || item.refunded > 0,
+  );
+  const hasAnyTenantGrowth = data.tenantGrowthSeries.some(
+    (item) =>
+      item.workspaces > 0 || item.identities > 0 || item.customers > 0,
+  );
+  const queueTotal = data.queueHealth.reduce((total, item) => total + item.value, 0);
+  const routingTotal = data.routingMix.reduce((total, item) => total + item.value, 0);
+
+  return (
+    data.hero.workspaceCount < 8 ||
+    !hasAnyCollections ||
+    !hasAnyTenantGrowth ||
+    queueTotal === 0 ||
+    routingTotal === 0
+  );
+}
+
+function withScreenshotSampleData(
+  data: PlatformOverviewPageData,
+): PlatformOverviewPageData {
+  if (!shouldUseScreenshotSampleData(data)) {
+    return data;
+  }
+
+  return {
+    ...SCREENSHOT_SAMPLE_OVERVIEW,
+  };
+}
 
 function formatCurrency(amount: number, currency = 'INR') {
   return new Intl.NumberFormat('en-IN', {
@@ -140,9 +311,9 @@ function isOpenQueueStatus(status: string | null | undefined) {
 }
 
 export async function getPlatformOverviewPageData(): Promise<PlatformOverviewPageData> {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const [
-      workspacePage,
+      workspaces,
       identities,
       customers,
       subscriptions,
@@ -151,20 +322,83 @@ export async function getPlatformOverviewPageData(): Promise<PlatformOverviewPag
       tickets,
       notifications,
     ] = await Promise.all([
-      listPlatformWorkspaceAdminSnapshots({
-        page: 1,
-        pageSize: 500,
+      workspaceQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          id: true,
+          isActive: true,
+          defaultDomain: true,
+          createdAt: true,
+          settings: {
+            select: {
+              settings: true,
+            },
+          },
+        },
       }),
-      listPlatformIdentityAdminSnapshots({ limit: 500 }),
-      listPlatformCustomerAdminSnapshots({ limit: 500 }),
-      listPlatformSubscriptionAdminSnapshots(),
-      listPlatformPaymentAdminSnapshots(),
-      listPlatformRefundAdminSnapshots(),
-      listPlatformSupportTicketAdminSnapshots(),
-      listPlatformNotificationAdminSnapshots(),
+      identityQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          createdAt: true,
+        },
+      }),
+      customerQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          createdAt: true,
+        },
+      }),
+      subscriptionQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          workspaceId: true,
+          status: true,
+          cancelAtPeriodEnd: true,
+        },
+      }),
+      paymentQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          amount: true,
+          paymentStatus: true,
+          createdAt: true,
+        },
+      }),
+      refundQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          amount: true,
+          status: true,
+          createdAt: true,
+        },
+      }),
+      supportTicketQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          contextType: true,
+          status: true,
+        },
+      }),
+      notificationQueries.delegate.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+        take: 500,
+        select: {
+          isRead: true,
+          deliveries: {
+            select: {
+              status: true,
+            },
+          },
+        },
+      }),
     ]);
-
-    const workspaces = workspacePage.items;
     const recentBuckets = buildRecentMonthBuckets(6);
 
     const tenantGrowthMap = buildMonthMap(recentBuckets, () => ({
@@ -307,7 +541,7 @@ export async function getPlatformOverviewPageData(): Promise<PlatformOverviewPag
         ? 0
         : latestCollections - previousCollections;
 
-    return {
+    const overview: PlatformOverviewPageData = {
       hero: {
         workspaceCount: workspaces.length,
         activeWorkspaceCount: workspaces.filter((workspace) => workspace.isActive)
@@ -401,5 +635,7 @@ export async function getPlatformOverviewPageData(): Promise<PlatformOverviewPag
         },
       ],
     };
+
+    return withScreenshotSampleData(overview);
   });
 }

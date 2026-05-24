@@ -102,6 +102,32 @@ const createWorkspaceRedirectAliasActionImpl = createAction(
       })),
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'ROUTING',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.redirectAlias.create',
+        entityType: 'WorkspaceDomain',
+        entityId: result.domain.id,
+        description: `Redirect alias ${result.domain.domain} added to the workspace.`,
+        metadata: {
+          dnsRecordCount: result.dnsRecords.length,
+          redirectStatusCode: result.domain.redirectStatusCode,
+          redirectTo: result.domain.redirectTo,
+        },
+        newValue: {
+          domain: result.domain.domain,
+          isPrimary: result.domain.isPrimary,
+          redirectStatusCode: result.domain.redirectStatusCode,
+          redirectTo: result.domain.redirectTo,
+          routingMode: result.domain.routingMode,
+          status: result.domain.status,
+        },
+      }),
+    },
+  },
 );
 
 export async function createWorkspaceRedirectAliasAction(formData: FormData) {

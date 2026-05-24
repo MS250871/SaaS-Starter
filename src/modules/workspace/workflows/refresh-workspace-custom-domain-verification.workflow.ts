@@ -1,5 +1,6 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { syncManagedWorkspaceDomain } from '@/modules/workspace/services/domain-provider.services';
+import { invalidateWorkspaceSurfaceCaches } from '@/modules/workspace/services/workspace-cache.services';
 import {
   applyWorkspaceCustomDomainVerificationResult,
   getWorkspaceCustomDomainVerificationSnapshot,
@@ -25,7 +26,8 @@ export async function refreshWorkspaceCustomDomainVerificationWorkflow(input: {
     }),
   );
 
-  await withUnitOfWork(() => syncWorkspaceRoutingState(snapshot.workspaceId));
+  await syncWorkspaceRoutingState(snapshot.workspaceId);
+  await invalidateWorkspaceSurfaceCaches(snapshot.workspaceId);
 
   return result;
 }

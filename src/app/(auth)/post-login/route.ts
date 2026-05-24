@@ -8,6 +8,10 @@ import {
   setVerificationSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
+import {
+  buildPublicUrl,
+  resolvePublicHostname,
+} from '@/lib/http/public-url';
 import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 import {
   postLoginWorkflow,
@@ -17,13 +21,23 @@ import {
   buildHostTransferPath,
   issueHostTransferToken,
 } from '@/modules/auth/services/host-transfer.services';
-import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
+import { dispatchOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import { withRequestContext } from '@/lib/request/withRequestContext';
 import { getRequestContext } from '@/lib/context/request-context';
 import {
   buildWorkspaceLoginPath,
   buildWorkspaceSurfacePath,
 } from '@/modules/workspace/routing';
+
+function buildCurrentHostUrl(req: NextRequest, path: string) {
+  return buildPublicUrl({
+    path,
+    host: req.headers.get('host'),
+    forwardedHost: req.headers.get('x-forwarded-host'),
+    forwardedProto: req.headers.get('x-forwarded-proto'),
+    fallbackUrl: req.url,
+  });
+}
 
 export async function GET(req: NextRequest) {
   return withRequestContext(req, async () => {
@@ -32,7 +46,8 @@ export async function GET(req: NextRequest) {
     const requestContext = getRequestContext();
     const buildWorkspaceLoginUrl = () =>
       requestContext.workspace?.workspaceId
-        ? new URL(
+        ? buildCurrentHostUrl(
+            req,
             buildWorkspaceLoginPath({
               workspaceId: requestContext.workspace.workspaceId,
               intent:
@@ -42,9 +57,8 @@ export async function GET(req: NextRequest) {
               strategy: requestContext.workspace.strategy,
               slug: requestContext.workspace.slug,
             }),
-            req.url,
           )
-        : new URL('/login', req.url);
+        : buildCurrentHostUrl(req, '/login');
 
     if (!identitySession?.identityId || !auth) {
       return NextResponse.redirect(buildWorkspaceLoginUrl());
@@ -57,13 +71,13 @@ export async function GET(req: NextRequest) {
       activeVerification.identityId === identitySession.identityId
     ) {
       return NextResponse.redirect(
-        new URL(
+        buildCurrentHostUrl(
+          req,
           buildWorkspaceSurfacePath({
             strategy: requestContext.workspace?.strategy,
             slug: requestContext.workspace?.slug,
             path: '/verify-phone',
           }),
-          req.url,
         ),
       );
     }
@@ -85,22 +99,23 @@ export async function GET(req: NextRequest) {
       }
 
       if (result.meta?.outboxEventId) {
-        await processOtpOutboxEvent(result.meta.outboxEventId);
+        await dispatchOtpOutboxEvent(result.meta.outboxEventId);
       }
 
-      return NextResponse.redirect(new URL(result.redirectTo, req.url));
+      return NextResponse.redirect(buildCurrentHostUrl(req, result.redirectTo));
     }
 
     if ('finalSession' in result && result.finalSession) {
       if (result.finalSession.workspaceId && result.redirectTo) {
-        const currentHost = normalizeHostname(
-          req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '',
-        );
+        const currentHost = resolvePublicHostname({
+          host: req.headers.get('host'),
+          forwardedHost: req.headers.get('x-forwarded-host'),
+        });
         const canonicalHost = await resolveWorkspaceCanonicalSurfaceHost(
           result.finalSession.workspaceId,
         );
 
-        if (canonicalHost && currentHost !== canonicalHost) {
+        if (canonicalHost && currentHost !== normalizeHostname(canonicalHost)) {
           const token = await issueHostTransferToken({
             session: result.finalSession,
             workspaceId: result.finalSession.workspaceId,
@@ -112,7 +127,7 @@ export async function GET(req: NextRequest) {
           await clearAuthCookie();
 
           return NextResponse.redirect(
-            new URL(buildHostTransferPath(token), req.url),
+            buildCurrentHostUrl(req, buildHostTransferPath(token)),
           );
         }
       }
@@ -121,7 +136,7 @@ export async function GET(req: NextRequest) {
       await clearAuthCookie();
 
       return NextResponse.redirect(
-        new URL(result.redirectTo ?? '/dashboard', req.url),
+        buildCurrentHostUrl(req, result.redirectTo ?? '/dashboard'),
       );
     }
 

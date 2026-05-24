@@ -1,6 +1,8 @@
 import { WorkspaceDomainType } from '@/generated/prisma/client';
 
-import { withActionTxContext } from '@/lib/request/withActionContext';
+import { withActionReadContext } from '@/lib/request/withActionContext';
+import { customerQueries } from '@/modules/customer/db';
+import { membershipQueries } from '@/modules/workspace/db';
 import {
   getRootDomainHost,
   normalizeHostname,
@@ -13,7 +15,6 @@ import { getManagedWorkspaceDomainProviderLabel } from '@/modules/workspace/serv
 import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
 import { workspaceApiKeyScopes } from '@/modules/workspace/api-key-scopes';
 import { countWorkspaceCustomers } from '@/modules/customer/services/customer.services';
-import { listWorkspaceCustomers } from '@/modules/customer/services/customer.services';
 import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
 import {
   countPendingWorkspaceInvites,
@@ -225,10 +226,6 @@ function buildRecentMonthBuckets(count: number) {
   return buckets;
 }
 
-function safeDate(value: Date | null | undefined) {
-  return value instanceof Date && !Number.isNaN(value.getTime()) ? value : null;
-}
-
 function formatCurrency(amount: number, currency = 'INR') {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -245,7 +242,7 @@ function formatCompact(amount: number) {
 }
 
 export async function getWorkspaceOverviewPageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     if (!context.workspaceId || !context.workspace) {
@@ -263,8 +260,8 @@ export async function getWorkspaceOverviewPageData() {
       domainCount,
       apiKeyCount,
       unreadNotificationCount,
-      members,
-      customersPage,
+      recentMemberAdds,
+      recentCustomerAdds,
       domains,
       activeSubscription,
       supportSummary,
@@ -281,10 +278,22 @@ export async function getWorkspaceOverviewPageData() {
             unreadOnly: true,
           })
         : Promise.resolve(0),
-      listActiveWorkspaceMembersWithRoles(context.workspaceId),
-      listWorkspaceCustomers(context.workspaceId, {
-        page: 1,
-        pageSize: 500,
+      membershipQueries.delegate.count({
+        where: {
+          workspaceId: context.workspaceId,
+          isActive: true,
+          createdAt: {
+            gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
+          },
+        },
+      }),
+      customerQueries.delegate.count({
+        where: {
+          workspaceId: context.workspaceId,
+          createdAt: {
+            gte: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
+          },
+        },
       }),
       listWorkspaceDomainsDetailed(context.workspaceId),
       getWorkspaceActiveSubscriptionPlanSummary(context.workspaceId),
@@ -350,16 +359,6 @@ export async function getWorkspaceOverviewPageData() {
     ];
 
     const workspaceScale = Math.max(customerCount, memberCount * 12, 180);
-    const recentMemberAdds = members.filter((member) => {
-      const createdAt = safeDate(member.createdAt);
-      if (!createdAt) return false;
-      return createdAt >= new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
-    }).length;
-    const recentCustomerAdds = customersPage.items.filter((customer) => {
-      const createdAt = safeDate(customer.createdAt);
-      if (!createdAt) return false;
-      return createdAt >= new Date(Date.now() - 1000 * 60 * 60 * 24 * 30);
-    }).length;
     const seriesSeed =
       memberCount * 17 +
       customerCount * 11 +
@@ -557,7 +556,7 @@ export async function getWorkspaceOverviewPageData() {
 }
 
 export async function getWorkspaceTeamPageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     if (!context.workspaceId) {
@@ -631,7 +630,7 @@ export async function getWorkspaceTeamPageData() {
 }
 
 export async function getWorkspaceThemePageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     return {
@@ -642,7 +641,7 @@ export async function getWorkspaceThemePageData() {
 }
 
 export async function getWorkspaceApiKeysPageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     if (!context.workspaceId) {
@@ -702,7 +701,7 @@ export async function getWorkspaceApiKeysPageData() {
 }
 
 export async function getWorkspaceDomainsPageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     if (!context.workspaceId || !context.workspace) {

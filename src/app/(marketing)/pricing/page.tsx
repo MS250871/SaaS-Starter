@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { withPublicContext } from '@/lib/request/withPublicContext';
 
+export const dynamic = 'force-dynamic';
+
 function formatLimitDisplay(value: number, unit?: string | null) {
   if (value === 0) {
     return 'Not included';
@@ -29,17 +31,17 @@ export default async function PricingPage() {
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto mb-16 max-w-3xl space-y-4 text-center">
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-primary">
-            SaaS Starter Example
+            Pricing Example
           </p>
 
           <h2 className="text-3xl font-bold tracking-tight md:text-4xl">
-            LMS pricing example powered by your seeded catalog
+            A public pricing page powered by the starter&apos;s seeded catalog
           </h2>
 
           <p className="text-lg text-muted-foreground">
-            This page demonstrates how a SaaS starter can drive pricing from
-            real plan, feature, limit, product, and price tables. The example
-            here uses an LMS SaaS model.
+            This route is here to demonstrate how the starter can power a real
+            pricing surface from plans, products, prices, features, limits, and
+            one-time offers. The example content uses an LMS SaaS model.
           </p>
         </div>
 
@@ -142,7 +144,7 @@ export default async function PricingPage() {
                       )}
                     </td>
                     {plans.map((plan) => {
-                      const enabled = plan.featureSet.has(feature.key);
+                      const enabled = (plan.featureKeys ?? []).includes(feature.key);
 
                       return (
                         <td key={`${plan.key}-${feature.key}`} className="px-4 py-3">
@@ -189,7 +191,7 @@ export default async function PricingPage() {
                       )}
                     </td>
                     {plans.map((plan) => {
-                      const limitValue = plan.limitMap.get(limit.key);
+                      const limitValue = plan.limitsByKey?.[limit.key];
 
                       return (
                         <td key={`${plan.key}-${limit.key}`} className="px-4 py-3">

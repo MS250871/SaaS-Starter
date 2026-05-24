@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -45,7 +44,6 @@ export function PlatformSupportTicketControls({
     assigneeName: string | null;
   }) => void;
 }) {
-  const router = useRouter();
   const [status, setStatus] = useState(currentStatus);
   const [assigneeId, setAssigneeId] = useState(currentAssigneeId ?? 'unassigned');
   const [isStatusPending, startStatusTransition] = useTransition();
@@ -75,7 +73,6 @@ export function PlatformSupportTicketControls({
 
       onStatusUpdated?.(response.data.status);
       showActionSuccess(response.data.successMessage, 'Ticket status updated.');
-      router.refresh();
     });
   };
 
@@ -100,7 +97,6 @@ export function PlatformSupportTicketControls({
         response.data.successMessage,
         'Ticket assignment updated.',
       );
-      router.refresh();
     });
   };
 

@@ -25,6 +25,18 @@ const markAllWorkspaceNotificationsReadActionImpl = createAction(
       successMessage: 'All notifications marked as read.',
     };
   },
+  {
+    audit: {
+      onSuccess: () => ({
+        scope: 'WORKSPACE' as const,
+        category: 'NOTIFICATION' as const,
+        source: 'WORKSPACE_APP' as const,
+        action: 'workspace.notification.readAll',
+        entityType: 'Workspace',
+        description: 'All workspace notifications marked as read.',
+      }),
+    },
+  },
 );
 
 export async function markAllWorkspaceNotificationsReadAction() {

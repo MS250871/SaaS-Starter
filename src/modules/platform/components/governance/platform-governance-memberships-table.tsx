@@ -18,6 +18,7 @@ export function PlatformGovernanceMembershipsTable({
   assignableRoles = [],
   canManageRoles = false,
   onMembershipRoleChanged,
+  onMembershipToggled,
 }: {
   rows: PlatformGovernanceMembershipRow[];
   includeSectionActions?: boolean;
@@ -29,6 +30,12 @@ export function PlatformGovernanceMembershipsTable({
       roleName: string;
       roleKey: string;
       roleSystemKey: string | null;
+    },
+  ) => void;
+  onMembershipToggled?: (
+    membershipId: string,
+    next: {
+      isActive: boolean;
     },
   ) => void;
 }) {
@@ -107,6 +114,7 @@ export function PlatformGovernanceMembershipsTable({
           canManageRoles={canManageRoles}
           assignableRoles={assignableRoles}
           onRoleChangeSuccess={onMembershipRoleChanged}
+          onToggleSuccess={onMembershipToggled}
           changeRoleAction={changePlatformMembershipRoleAction}
           toggleAction={togglePlatformMembershipActiveAction}
         />

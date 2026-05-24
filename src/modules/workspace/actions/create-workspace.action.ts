@@ -3,6 +3,8 @@
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
 import { createNavAction } from '@/lib/http/create-nav-action';
+import { resolvePublicRedirectTarget } from '@/lib/http/resolve-public-redirect';
+import { resolvePublicHostname } from '@/lib/http/public-url';
 import { runWithActor } from '@/lib/context/actor-context';
 import {
   clearAuthCookie,
@@ -29,6 +31,11 @@ import {
   buildHostTransferPath,
   issueHostTransferToken,
 } from '@/modules/auth/services/host-transfer.services';
+import {
+  buildNavErrorAudit,
+  getNavAuditState,
+  setNavAuditState,
+} from '@/modules/auth/auth-nav-audit';
 
 const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
@@ -66,7 +73,7 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
       },
     });
 
-    redirect('/post-login');
+    redirect(await resolvePublicRedirectTarget('/post-login'));
   }
 
   const result = await runWithActor(
@@ -89,6 +96,25 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
       }),
   );
 
+  setNavAuditState({
+    scope: 'SYSTEM',
+    category: 'WORKSPACE',
+    source: 'AUTH',
+    action: 'workspace.create',
+    entityType: 'Workspace',
+    entityId: result.workspaceId,
+    description: `Workspace ${result.slug} created.`,
+    metadata: {
+      intent: result.intent,
+      membershipId: result.membershipId,
+      roleKey: result.roleKey,
+      roleSystemKey: result.roleSystemKey ?? null,
+      routingStrategy: result.routingStrategy,
+      slug: result.slug,
+      subscriptionId: result.subscriptionId ?? null,
+    },
+  });
+
   await setAuthCookies({
     data: {
       ...auth,
@@ -101,12 +127,16 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
     workspaceId: result.workspaceId,
     fallbackPath: '/app',
   });
-  const currentHost = normalizeHostname((await headers()).get('host') ?? '');
+  const hdrs = await headers();
+  const currentHost = resolvePublicHostname({
+    host: hdrs.get('host'),
+    forwardedHost: hdrs.get('x-forwarded-host'),
+  });
 
   if (
     result.routingStrategy !== 'free_path' &&
     result.primaryDomain &&
-    currentHost !== result.primaryDomain
+    currentHost !== normalizeHostname(result.primaryDomain)
   ) {
     const token = await issueHostTransferToken({
       session: identitySession,
@@ -137,6 +167,20 @@ const createWorkspaceActionImpl = createNavAction(async (formData: FormData) => 
   await clearAuthCookie();
 
   redirect(redirectPath);
+}, {
+  audit: {
+    onSuccess: () => getNavAuditState(),
+    onError: ({ error, state }) =>
+      buildNavErrorAudit({
+        action: 'workspace.create',
+        description: 'Workspace creation failed.',
+        error,
+        state: state as ReturnType<typeof getNavAuditState>,
+        category: 'WORKSPACE',
+        source: 'AUTH',
+        entityType: 'Workspace',
+      }),
+  },
 });
 
 export async function createWorkspaceAction(formData: FormData) {

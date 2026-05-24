@@ -52,6 +52,22 @@ const addWorkspaceSupportTicketReplyActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'SUPPORT',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.support.ticket.reply.create',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: `Reply added to ${result.title}.`,
+        metadata: {
+          messageId: result.messageId,
+        },
+      }),
+    },
+  },
 );
 
 export async function addWorkspaceSupportTicketReplyAction(formData: FormData) {

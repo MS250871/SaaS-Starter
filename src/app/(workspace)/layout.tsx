@@ -1,5 +1,6 @@
 import { Suspense } from "react"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
+import { redirect } from "next/navigation"
 
 import { AdminNotificationLinkButton } from "@/components/admin/admin-notification-link-button"
 import {
@@ -9,10 +10,12 @@ import {
   type AdminNavGroup,
 } from "@/components/admin/admin-shell"
 import { readActorContext } from "@/lib/request/read-actor-context"
-import { withActionTxContext } from "@/lib/request/withActionContext"
+import { withActionReadContext } from "@/lib/request/withActionContext"
+import { resolvePublicHostValue } from "@/lib/http/public-url"
 import { buildWorkspaceAdminPath } from "@/modules/workspace/admin-routes"
 import { WorkspaceNotificationMenuSlot } from "@/modules/notifications/server/workspace-notification-menu-slot"
 import { buildWorkspaceSurfacePath } from "@/modules/workspace/routing"
+import { resolveWorkspaceCanonicalRequestRedirect } from "@/modules/workspace/services/workspace-canonical.services"
 import { getWorkspaceThemeSnapshot } from "@/modules/workspace/services/setting.services"
 import { buildWorkspaceSettingsLinks } from "@/modules/workspace/settings-navigation"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
@@ -167,12 +170,30 @@ export default async function WorkspaceLayout({
   const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
   const { actor, requestContext, session } = await readActorContext()
   const workspaceId = actor.workspaceId
+  const hdrs = await headers()
+
+  if (workspaceId && requestContext?.path) {
+    const canonicalRedirectUrl = await resolveWorkspaceCanonicalRequestRedirect({
+      workspaceId,
+      currentHost: resolvePublicHostValue({
+        host: hdrs.get("host"),
+        forwardedHost: hdrs.get("x-forwarded-host"),
+      }),
+      currentPath: requestContext.path,
+      visiblePath: requestContext.originalPath,
+      search: requestContext.search,
+    })
+
+    if (canonicalRedirectUrl) {
+      redirect(canonicalRedirectUrl)
+    }
+  }
 
   let themes: unknown = undefined
   const workspaceContext = requestContext?.workspace
 
   if (workspaceId) {
-    const themeSnapshot = await withActionTxContext(() =>
+    const themeSnapshot = await withActionReadContext(() =>
       getWorkspaceThemeSnapshot(workspaceId),
     )
     themes = themeSnapshot?.themes
@@ -214,6 +235,10 @@ export default async function WorkspaceLayout({
       <AdminShell
         areaLabel="Workspace"
         logoHref={workspaceBasePath}
+        sidebarBrand={{
+          title: workspaceName,
+          ariaLabel: `Go to ${workspaceName} workspace home`,
+        }}
         notificationsHref={notificationsHref}
         notificationsSlot={
           workspaceId && actor.identityId ? (

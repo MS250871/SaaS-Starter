@@ -59,13 +59,13 @@ import {
   findCustomerByWorkspaceIdentity,
 } from '@/modules/customer/services/customer.services';
 import {
-  buildManagedWorkspaceSubdomain,
-  buildWorkspaceCanonicalPath,
   buildWorkspaceSurfacePath,
-  normalizeWorkspaceDomainStrategy,
 } from '@/modules/workspace/routing';
 import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
-import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
+import {
+  resolveWorkspaceCanonicalSurfaceHost as resolveWorkspaceCanonicalSurfaceHostInternal,
+  resolveWorkspaceSurfaceRedirect as resolveWorkspaceSurfaceRedirectInternal,
+} from '@/modules/workspace/services/workspace-canonical.services';
 import { SessionEndReason } from '@/generated/prisma/client';
 
 export type IdentitySessionSnapshot = {
@@ -255,93 +255,13 @@ export async function resolveWorkspaceSurfaceRedirect(params: {
   workspaceId: string;
   fallbackPath: '/app' | '/customer';
 }) {
-  return withUnitOfWork(async () => {
-    const workspace = await getWorkspaceById(params.workspaceId);
-    const settings = await getWorkspaceSettings(params.workspaceId);
-    const strategy = normalizeWorkspaceDomainStrategy(
-      (settings?.settings as { domain?: { strategy?: string } } | undefined)
-        ?.domain?.strategy,
-    );
-
-    return buildWorkspaceCanonicalPath({
-      strategy,
-      slug: workspace.slug,
-      path: params.fallbackPath,
-    });
-  });
-}
-
-function resolveWorkspaceCanonicalHost(params: {
-  slug: string;
-  defaultDomain?: string | null;
-  settings?: unknown;
-  strategy: ReturnType<typeof normalizeWorkspaceDomainStrategy>;
-}) {
-  if (params.strategy === 'free_path') {
-    return null;
-  }
-
-  if (typeof params.defaultDomain === 'string' && params.defaultDomain.trim()) {
-    return params.defaultDomain.trim().toLowerCase();
-  }
-
-  const domainSettings =
-    params.settings &&
-    typeof params.settings === 'object' &&
-    'domain' in params.settings &&
-    params.settings.domain &&
-    typeof params.settings.domain === 'object'
-      ? (params.settings.domain as {
-          primaryHost?: string | null;
-          rootDomain?: string | null;
-        })
-      : null;
-
-  if (
-    domainSettings?.primaryHost &&
-    typeof domainSettings.primaryHost === 'string' &&
-    domainSettings.primaryHost.trim()
-  ) {
-    return domainSettings.primaryHost.trim().toLowerCase();
-  }
-
-  if (params.strategy === 'subdomain') {
-    const configuredRootDomain =
-      typeof domainSettings?.rootDomain === 'string' &&
-      domainSettings.rootDomain.trim()
-        ? domainSettings.rootDomain.trim().toLowerCase()
-        : process.env.ROOT_DOMAIN?.trim().toLowerCase();
-
-    if (configuredRootDomain) {
-      return buildManagedWorkspaceSubdomain(params.slug, configuredRootDomain);
-    }
-  }
-
-  return null;
+  return resolveWorkspaceSurfaceRedirectInternal(params);
 }
 
 export async function resolveWorkspaceCanonicalSurfaceHost(
   workspaceId: string,
 ) {
-  return withUnitOfWork(async () => {
-    const workspace = await getWorkspaceById(workspaceId);
-    const settings = await getWorkspaceSettings(workspaceId);
-    const settingsJson =
-      settings?.settings && typeof settings.settings === 'object'
-        ? settings.settings
-        : null;
-    const strategy = normalizeWorkspaceDomainStrategy(
-      (settingsJson as { domain?: { strategy?: string } } | null)?.domain
-        ?.strategy,
-    );
-
-    return resolveWorkspaceCanonicalHost({
-      slug: workspace.slug,
-      defaultDomain: workspace.defaultDomain,
-      settings: settingsJson,
-      strategy,
-    });
-  });
+  return resolveWorkspaceCanonicalSurfaceHostInternal(workspaceId);
 }
 
 function sanitizeReturnPath(value: string | undefined) {
@@ -951,6 +871,27 @@ export async function postLoginWorkflow(input: {
       return {
         finalSession,
         redirectTo: PLATFORM_REDIRECT,
+      };
+    }
+
+    if (auth.flow === 'login' && auth.entry === 'platform' && requestedWorkspaceId) {
+      if (!requestedWorkspaceMembership) {
+        throwError(ERR.UNAUTHORIZED, 'You do not have access to this workspace');
+      }
+
+      const finalSession = await buildFinalSessionWorkflow({
+        identitySession,
+        workspaceId: requestedWorkspaceId,
+        workspaceMembership: requestedWorkspaceMembership,
+      });
+
+      return {
+        finalSession,
+        redirectTo: await resolvePostLoginRedirect({
+          auth,
+          workspaceId: requestedWorkspaceId,
+          fallbackPath: '/app',
+        }),
       };
     }
 

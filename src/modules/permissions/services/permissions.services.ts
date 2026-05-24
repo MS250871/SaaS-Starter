@@ -15,9 +15,11 @@ import {
   PermissionEffect,
 } from "@/generated/prisma/client"
 import type { Prisma } from "@/generated/prisma/client"
+import { cacheKeys } from "@/lib/cache/cache-keys"
 
 import { throwError } from "@/lib/errors/app-error"
 import { ERR } from "@/lib/errors/codes"
+import { readPermissionsCache } from "@/modules/permissions/services/permission-cache.services"
 
 type RolePermissionInput = {
   permissionId: string
@@ -235,10 +237,15 @@ export async function listRolePermissionsByRoleDefinition(
     throwError(ERR.INVALID_INPUT, "roleDefinitionId is required")
   }
 
-  const permissions = await rolePermissionQueries.many({
-    where: { roleDefinitionId },
-    include: { permission: true },
-  })
+  const permissions = await readPermissionsCache(
+    (permissionsVersion) =>
+      cacheKeys.rolePermissions(permissionsVersion, roleDefinitionId),
+    () =>
+      rolePermissionQueries.many({
+        where: { roleDefinitionId },
+        include: { permission: true },
+      }),
+  )
 
   return permissions as unknown as RolePermissionWithPermission[]
 }
@@ -334,10 +341,19 @@ export async function listWorkspaceRolePermissions(
     )
   }
 
-  const overrides = await workspaceRolePermissionQueries.many({
-    where: { workspaceId, roleDefinitionId },
-    include: { permission: true },
-  })
+  const overrides = await readPermissionsCache(
+    (permissionsVersion) =>
+      cacheKeys.workspaceRolePermissions(
+        permissionsVersion,
+        workspaceId,
+        roleDefinitionId,
+      ),
+    () =>
+      workspaceRolePermissionQueries.many({
+        where: { workspaceId, roleDefinitionId },
+        include: { permission: true },
+      }),
+  )
 
   return overrides as unknown as WorkspaceRolePermissionWithPermission[]
 }
@@ -516,11 +532,16 @@ export async function listIdentityPermissions(
 ): Promise<IdentityPermissionWithPermission[]> {
   if (!identityId) throwError(ERR.INVALID_INPUT, "identityId required")
 
-  const permissions = await userPermissionQueries.many({
-    where: { identityId, isActive: true },
-    orderBy: { createdAt: "desc" },
-    include: { permission: true },
-  })
+  const permissions = await readPermissionsCache(
+    (permissionsVersion) =>
+      cacheKeys.identityPermissions(permissionsVersion, identityId),
+    () =>
+      userPermissionQueries.many({
+        where: { identityId, isActive: true },
+        orderBy: { createdAt: "desc" },
+        include: { permission: true },
+      }),
+  )
 
   return permissions as unknown as IdentityPermissionWithPermission[]
 }
@@ -533,11 +554,20 @@ export async function listWorkspaceIdentityPermissions(
     throwError(ERR.INVALID_INPUT, "workspaceId and identityId required")
   }
 
-  const permissions = await userPermissionQueries.many({
-    where: { identityId, workspaceId, isActive: true },
-    orderBy: { createdAt: "desc" },
-    include: { permission: true },
-  })
+  const permissions = await readPermissionsCache(
+    (permissionsVersion) =>
+      cacheKeys.workspaceIdentityPermissions(
+        permissionsVersion,
+        workspaceId,
+        identityId,
+      ),
+    () =>
+      userPermissionQueries.many({
+        where: { identityId, workspaceId, isActive: true },
+        orderBy: { createdAt: "desc" },
+        include: { permission: true },
+      }),
+  )
 
   return permissions as unknown as IdentityPermissionWithPermission[]
 }

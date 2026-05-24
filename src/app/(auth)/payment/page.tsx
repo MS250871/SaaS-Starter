@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { redirect } from 'next/navigation';
 import AuthBackLink from '@/components/layout/auth-back-link';
 import { Logo } from '@/components/layout/logo';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
@@ -51,6 +52,11 @@ export default async function PaymentPage({
   const resolvedSearchParams = await searchParams;
   const { actor } = await readActorContext();
   const workspaceAuth = await getWorkspaceAuthPageData();
+
+  if (workspaceAuth?.canonicalRedirectUrl) {
+    redirect(workspaceAuth.canonicalRedirectUrl);
+  }
+
   const data = await getPaymentPageData(resolvedSearchParams);
 
   const backHref = actor.membershipId

@@ -1,5 +1,6 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -11,6 +12,7 @@ import {
   syncPlanLimits,
   updatePlan,
 } from '@/modules/entitlements/services/entitlement.services';
+import { invalidateCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
 import {
   parseCheckboxValue,
   parsePlanLimitAssignments,
@@ -28,6 +30,25 @@ async function requirePlatformAdminSession() {
   assertPlatformAdminAccess(session.platformRoleSystemKeys ?? []);
 
   return session;
+}
+
+function buildCatalogAuditInput(params: {
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  description: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'CATALOG' as const,
+    source: 'ADMIN_PANEL' as const,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    description: params.description,
+    metadata: params.metadata,
+  };
 }
 
 const createPlanCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -65,6 +86,28 @@ const createPlanCatalogActionImpl = createTxAction(async (formData: FormData) =>
     planId: plan.id,
     successMessage: `${plan.name} created successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const name = String(formData.get('name') ?? '').trim();
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.plan.create',
+        entityType: 'Plan',
+        entityId: result.planId,
+        description: `Plan ${name || key || result.planId} created.`,
+        metadata: {
+          featureCount: formData.getAll('featureIds').length,
+          isActive: parseCheckboxValue(formData, 'isActive'),
+          isPublic: parseCheckboxValue(formData, 'isPublic'),
+          key,
+          limitCount: parsePlanLimitAssignments(formData).length,
+        },
+      });
+    },
+  },
 });
 
 const updatePlanCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -108,6 +151,28 @@ const updatePlanCatalogActionImpl = createTxAction(async (formData: FormData) =>
     planId: plan.id,
     successMessage: `${plan.name} updated successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const name = String(formData.get('name') ?? '').trim();
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.plan.update',
+        entityType: 'Plan',
+        entityId: result.planId,
+        description: `Plan ${name || key || result.planId} updated.`,
+        metadata: {
+          featureCount: formData.getAll('featureIds').length,
+          isActive: parseCheckboxValue(formData, 'isActive'),
+          isPublic: parseCheckboxValue(formData, 'isPublic'),
+          key,
+          limitCount: parsePlanLimitAssignments(formData).length,
+        },
+      });
+    },
+  },
 });
 
 const togglePlanCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -128,6 +193,21 @@ const togglePlanCatalogActionImpl = createTxAction(async (formData: FormData) =>
       isActive ? 'activated' : 'deactivated'
     } successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const isActive = parseCheckboxValue(formData, 'isActive');
+
+      return buildCatalogAuditInput({
+        action: isActive ? 'catalog.plan.activate' : 'catalog.plan.deactivate',
+        entityType: 'Plan',
+        entityId: result.planId,
+        description: `Plan ${isActive ? 'activated' : 'deactivated'}.`,
+        metadata: { isActive },
+      });
+    },
+  },
 });
 
 const deletePlanCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -144,20 +224,58 @@ const deletePlanCatalogActionImpl = createTxAction(async (formData: FormData) =>
   return {
     successMessage: 'Plan deleted successfully.',
   };
+}, {
+  audit: {
+    onSuccess: ({ args }) => {
+      const formData = args[0];
+      const planId = String(formData.get('planId') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.plan.delete',
+        entityType: 'Plan',
+        entityId: planId,
+        description: 'Plan deleted.',
+      });
+    },
+  },
 });
 
 export async function createPlanCatalogAction(formData: FormData) {
-  return createPlanCatalogActionImpl(formData);
+  const response = await createPlanCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function updatePlanCatalogAction(formData: FormData) {
-  return updatePlanCatalogActionImpl(formData);
+  const response = await updatePlanCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function togglePlanCatalogAction(formData: FormData) {
-  return togglePlanCatalogActionImpl(formData);
+  const response = await togglePlanCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function deletePlanCatalogAction(formData: FormData) {
-  return deletePlanCatalogActionImpl(formData);
+  const response = await deletePlanCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }

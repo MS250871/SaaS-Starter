@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { BadgeDollarSignIcon, FileClockIcon, LifeBuoyIcon } from "lucide-react"
 
-import { AdminContentSheetTestButton } from "@/components/admin/admin-content-sheet"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,10 +39,6 @@ export default async function CustomerPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="flex justify-end">
-        <AdminContentSheetTestButton areaLabel="Customer" />
-      </div>
-
       <section className="grid gap-4 md:grid-cols-3">
         <CustomerStat
           label="Customer Context"

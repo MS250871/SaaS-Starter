@@ -6,7 +6,11 @@ import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import { Badge } from '@/components/ui/badge';
 import type { PlatformGovernanceAuditRow } from '@/modules/audit/server/platform-governance-audit-page-data';
 
-function shortEntityId(entityId: string) {
+function shortEntityId(entityId: string | null) {
+  if (!entityId) {
+    return 'N/A';
+  }
+
   return entityId.length > 12 ? `${entityId.slice(0, 8)}...` : entityId;
 }
 

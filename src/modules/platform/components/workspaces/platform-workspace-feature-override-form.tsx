@@ -125,7 +125,6 @@ export function PlatformWorkspaceFeatureOverrideForm({
       router.push(
         `/platform/workspaces/overrides/features/create?workspaceId=${response.data.workspaceId}`,
       );
-      router.refresh();
     });
   };
 

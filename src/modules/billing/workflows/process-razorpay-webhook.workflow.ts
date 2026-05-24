@@ -7,6 +7,8 @@ import type {
 } from '@/generated/prisma/client';
 import { extractAppError, throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import {
   claimWebhookEventForProcessing,
   getWebhookEventById,
@@ -326,7 +328,9 @@ async function updateSubscriptionFromWebhook(params: {
       subscriptionStatus: nextStatus,
     });
 
+    await invalidateWorkspaceEntitlementsCache(subscription.workspaceId);
     await syncWorkspaceRoutingState(subscription.workspaceId);
+    await invalidateWorkspaceBillingCaches(subscription.workspaceId);
   }
 
   if (!params.paymentEntity?.id) {

@@ -6,7 +6,7 @@ import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
+import { dispatchNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import {
   sendWorkspaceNotificationActionSchema,
   type SendWorkspaceNotificationActionInput,
@@ -52,29 +52,53 @@ const sendWorkspaceNotificationActionImpl = createTxAction(
       senderScope: 'workspace',
     });
 
-    let deliveryFailures = 0;
+    let queueFailures = 0;
 
     for (const event of result.outboxEvents) {
       try {
-        await processNotificationDeliveryOutboxEvent(event.id);
+        await dispatchNotificationDeliveryOutboxEvent(event.id);
       } catch (error) {
-        deliveryFailures += 1;
-        console.error('Workspace notification delivery failed:', error);
+        queueFailures += 1;
+        console.error('Workspace notification queue publish failed:', error);
       }
     }
 
     const successMessage =
       result.outboxEvents.length === 0
         ? `Notification sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'}.`
-        : deliveryFailures === 0
-          ? `Notification sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} and all deliveries were processed.`
-          : `Notification created for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'}, but ${deliveryFailures} delivery attempt${deliveryFailures === 1 ? '' : 's'} failed.`;
+        : queueFailures === 0
+          ? `Notification queued for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'}.`
+          : `Notification created for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'}, but ${queueFailures} delivery queue attempt${queueFailures === 1 ? '' : 's'} failed.`;
 
     return {
       successMessage,
       recipientCount: result.recipientCount,
-      deliveryFailures,
+      deliveryFailures: queueFailures,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+
+        return {
+          scope: 'WORKSPACE' as const,
+          category: 'NOTIFICATION' as const,
+          source: 'WORKSPACE_APP' as const,
+          action: 'workspace.notification.send',
+          entityType: 'Workspace',
+          description: `Workspace notification queued for ${result.recipientCount} recipient${
+            result.recipientCount === 1 ? '' : 's'
+          }.`,
+          metadata: {
+            audience: String(formData.get('audience') ?? ''),
+            deliveryChannel: String(formData.get('deliveryChannel') ?? ''),
+            deliveryFailures: result.deliveryFailures,
+            recipientCount: result.recipientCount,
+          },
+        };
+      },
+    },
   },
 );
 

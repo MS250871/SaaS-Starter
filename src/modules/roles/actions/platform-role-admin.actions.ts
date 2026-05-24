@@ -1,11 +1,9 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 import { governanceRoleActionSchema } from '@/modules/roles/role.schema';
 import { setRoleDefinitionActive } from '@/modules/roles/services/role.services';
@@ -47,30 +45,24 @@ async function requirePlatformAdminSession() {
   return session;
 }
 
-async function logRoleAdminAction(params: {
-  session: Awaited<ReturnType<typeof requirePlatformAdminSession>>;
+function buildRoleAuditInput(params: {
   action: string;
   entityId: string;
   description: string;
 }) {
-  const requestContext = getRequestContext();
-
-  await logAdminAction({
-    adminIdentityId: params.session.identityId,
-    adminEmail: null,
-    adminRole: params.session.platformRoleSystemKeys?.[0] ?? null,
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'GOVERNANCE' as const,
+    source: 'ADMIN_PANEL' as const,
     action: params.action,
     entityType: 'RoleDefinition',
     entityId: params.entityId,
     description: params.description,
-    ipAddress: requestContext.ip,
-    userAgent: requestContext.userAgent,
-    requestId: requestContext.requestId,
-  });
+  };
 }
 
 const createRoleAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
 
   const parsed = governanceRoleActionSchema.parse({
     scope: formData.get('scope'),
@@ -89,21 +81,27 @@ const createRoleAdminActionImpl = createTxAction(async (formData: FormData) => {
     permissionIds: parsePermissionIds(formData),
   });
 
-  await logRoleAdminAction({
-    session,
-    action: 'role.create',
-    entityId: role.id,
-    description: `Role definition ${role.key} created.`,
-  });
-
   return {
     roleDefinitionId: role.id,
     successMessage: `${role.name} created successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ result, args }) => {
+      const formData = args[0];
+      const roleKey = String(formData.get('key') ?? '').trim();
+
+      return buildRoleAuditInput({
+        action: 'role.create',
+        entityId: result.roleDefinitionId,
+        description: `Role definition ${roleKey} created.`,
+      });
+    },
+  },
 });
 
 const updateRoleAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
   const roleDefinitionId = String(formData.get('roleDefinitionId') ?? '').trim();
 
   if (!roleDefinitionId) {
@@ -128,22 +126,28 @@ const updateRoleAdminActionImpl = createTxAction(async (formData: FormData) => {
     permissionIds: parsePermissionIds(formData),
   });
 
-  await logRoleAdminAction({
-    session,
-    action: 'role.update',
-    entityId: role.id,
-    description: `Role definition ${role.key} updated.`,
-  });
-
   return {
     roleDefinitionId: role.id,
     successMessage: `${role.name} updated successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ result, args }) => {
+      const formData = args[0];
+      const roleKey = String(formData.get('key') ?? '').trim();
+
+      return buildRoleAuditInput({
+        action: 'role.update',
+        entityId: result.roleDefinitionId,
+        description: `Role definition ${roleKey} updated.`,
+      });
+    },
+  },
 });
 
 const toggleRoleDefinitionActiveActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const roleDefinitionId = String(formData.get('roleDefinitionId') ?? '').trim();
     const isActive =
       String(formData.get('isActive') ?? '').trim().toLowerCase() === 'true';
@@ -154,15 +158,6 @@ const toggleRoleDefinitionActiveActionImpl = createTxAction(
 
     const roleDefinition = await setRoleDefinitionActive(roleDefinitionId, isActive);
 
-    await logRoleAdminAction({
-      session,
-      action: isActive ? 'role.activate' : 'role.deactivate',
-      entityId: roleDefinition.id,
-      description: `Role definition ${roleDefinition.key} ${
-        isActive ? 'activated' : 'deactivated'
-      }.`,
-    });
-
     return {
       roleDefinitionId: roleDefinition.id,
       successMessage: `Role ${
@@ -170,11 +165,29 @@ const toggleRoleDefinitionActiveActionImpl = createTxAction(
       } successfully.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const isActive =
+          String(formData.get('isActive') ?? '').trim().toLowerCase() ===
+          'true';
+
+        return buildRoleAuditInput({
+          action: isActive ? 'role.activate' : 'role.deactivate',
+          entityId: result.roleDefinitionId,
+          description: `Role definition ${
+            isActive ? 'activated' : 'deactivated'
+          }.`,
+        });
+      },
+    },
+  },
 );
 
 const deleteRoleDefinitionAdminActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const roleDefinitionId = String(formData.get('roleDefinitionId') ?? '').trim();
 
     if (!roleDefinitionId) {
@@ -183,16 +196,25 @@ const deleteRoleDefinitionAdminActionImpl = createTxAction(
 
     await deletePlatformRoleWorkflow(roleDefinitionId);
 
-    await logRoleAdminAction({
-      session,
-      action: 'role.delete',
-      entityId: roleDefinitionId,
-      description: 'Role definition deleted.',
-    });
-
     return {
       successMessage: 'Role deleted successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args }) => {
+        const formData = args[0];
+        const roleDefinitionId = String(
+          formData.get('roleDefinitionId') ?? '',
+        ).trim();
+
+        return buildRoleAuditInput({
+          action: 'role.delete',
+          entityId: roleDefinitionId,
+          description: 'Role definition deleted.',
+        });
+      },
+    },
   },
 );
 

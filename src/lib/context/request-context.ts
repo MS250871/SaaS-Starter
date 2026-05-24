@@ -29,11 +29,14 @@ export type RequestContext = {
 
   method?: string;
   path?: string;
+  originalPath?: string;
+  search?: string;
 
   sessionClaims?: SessionClaims | null;
   session?: SessionPayload | null;
 
   prisma?: DbClient;
+  auditState?: unknown;
 
   rlsInitialized?: boolean;
 };
@@ -61,4 +64,18 @@ export function maybeGetRequestContext(): RequestContext | undefined {
 export function setPrismaInContext(prisma: DbClient) {
   const ctx = getRequestContext();
   ctx.prisma = prisma;
+}
+
+export function setRequestAuditState(value: unknown) {
+  const ctx = getRequestContext();
+  ctx.auditState = value;
+}
+
+export function getRequestAuditState<T = unknown>() {
+  return getRequestContext().auditState as T | undefined;
+}
+
+export function clearRequestAuditState() {
+  const ctx = getRequestContext();
+  delete ctx.auditState;
 }

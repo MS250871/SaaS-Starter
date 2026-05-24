@@ -1,6 +1,7 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { invalidatePermissionsCache } from '@/modules/permissions/services/permission-cache.services';
 import {
   clearWorkspaceRolePermissionOverride,
   findWorkspaceRolePermissionOverride,
@@ -15,7 +16,7 @@ export async function updateWorkspaceRolePermissionOverrideWorkflow(input: {
   permissionId: string;
   mode: 'inherit' | 'allow' | 'deny';
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const [roleDefinition, permission] = await Promise.all([
       getRoleDefinitionById(input.roleDefinitionId),
       getPermissionById(input.permissionId),
@@ -69,4 +70,8 @@ export async function updateWorkspaceRolePermissionOverrideWorkflow(input: {
       mode: input.mode,
     };
   });
+
+  await invalidatePermissionsCache();
+
+  return result;
 }

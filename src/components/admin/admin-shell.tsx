@@ -136,12 +136,19 @@ export type AdminShellUser = {
   initials: string
 }
 
+export type AdminSidebarBrand = {
+  title: string
+  compactLabel?: string
+  ariaLabel?: string
+}
+
 type AdminShellProps = {
   areaLabel: string
   breadcrumbs: AdminBreadcrumb[]
   breadcrumbOverrides?: AdminBreadcrumbOverride[]
   navGroups: AdminNavGroup[]
   user: AdminShellUser
+  sidebarBrand?: AdminSidebarBrand
   accountLinks?: AdminAccountLink[]
   topbarSettingsLinks?: AdminNavChild[]
   notificationsHref?: string
@@ -323,16 +330,29 @@ function AdminLinkPendingHint({ className }: { className?: string }) {
 function AdminSidebar({
   navGroups,
   user,
+  sidebarBrand,
   accountLinks = [],
   logoHref = "/",
 }: {
   navGroups: AdminNavGroup[]
   user: AdminShellUser
+  sidebarBrand?: AdminSidebarBrand
   accountLinks?: AdminAccountLink[]
   logoHref?: string
 }) {
   const pathname = usePathname()
   const { state, setOpen } = useSidebar()
+  const compactBrandLabel =
+    sidebarBrand?.compactLabel ??
+    sidebarBrand?.title
+      ?.split(/\s+/)
+      .map((segment) => segment.trim())
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((segment) => segment[0])
+      .join("")
+      .toUpperCase() ??
+    "S"
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -345,13 +365,33 @@ function AdminSidebar({
               size="lg"
               className="h-12 rounded-xl border-sidebar-border/70 bg-background shadow-none hover:shadow-none"
             >
-              <Link href={logoHref} aria-label="Go to workspace home">
-                <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
-                  <Logo />
-                </div>
-                <div className="hidden size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground group-data-[collapsible=icon]:flex">
-                  <span className="text-sm font-semibold">S</span>
-                </div>
+              <Link
+                href={logoHref}
+                aria-label={sidebarBrand?.ariaLabel ?? "Go to workspace home"}
+              >
+                {sidebarBrand ? (
+                  <>
+                    <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                      <span className="block truncate text-sm font-semibold text-foreground">
+                        {sidebarBrand.title}
+                      </span>
+                    </div>
+                    <div className="hidden size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground group-data-[collapsible=icon]:flex">
+                      <span className="text-sm font-semibold">
+                        {compactBrandLabel}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                      <Logo />
+                    </div>
+                    <div className="hidden size-8 items-center justify-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground group-data-[collapsible=icon]:flex">
+                      <span className="text-sm font-semibold">S</span>
+                    </div>
+                  </>
+                )}
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -589,6 +629,7 @@ export function AdminShell({
   breadcrumbOverrides = [],
   navGroups,
   user,
+  sidebarBrand,
   accountLinks,
   topbarSettingsLinks = [],
   notificationsHref = "/app/notifications",
@@ -638,13 +679,14 @@ export function AdminShell({
         <AdminSidebar
           navGroups={navGroups}
           user={user}
+          sidebarBrand={sidebarBrand}
           accountLinks={accountLinks}
           logoHref={logoHref}
         />
         <SidebarInset className="overflow-hidden bg-background ring-1 ring-border/70">
           <header className="sticky top-0 z-20 border-b border-border/80 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
             <div className="flex min-h-16 items-center gap-3 px-4 md:px-6">
-              <SidebarTrigger className="-ml-1 text-accent hover:text-accent" />
+              <SidebarTrigger className="-ml-1 border-border/70 bg-background text-foreground shadow-xs hover:bg-accent hover:text-accent-foreground" />
               <div
                 aria-hidden="true"
                 className="hidden h-4 w-px self-center bg-border/70 md:block"

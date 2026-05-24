@@ -3,7 +3,6 @@
 import { useTransition } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -40,6 +39,7 @@ export function PlatformGovernanceMembershipRowMenu({
   canManageRoles,
   assignableRoles,
   onRoleChangeSuccess,
+  onToggleSuccess,
   changeRoleAction,
   toggleAction,
 }: {
@@ -57,16 +57,20 @@ export function PlatformGovernanceMembershipRowMenu({
       roleSystemKey: string | null;
     },
   ) => void;
+  onToggleSuccess?: (
+    membershipId: string,
+    next: {
+      isActive: boolean;
+    },
+  ) => void;
   changeRoleAction: (
     formData: FormData,
   ) => Promise<ApiResponse<ChangeRoleActionResult>>;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
-  const [isRefreshing, startRefreshTransition] = useTransition();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
-  const isBusy = isPending || isRefreshing;
+  const isBusy = isPending;
   const availableRoles = assignableRoles.filter((role) => role.key !== currentRoleKey);
 
   const runToggle = () => {
@@ -82,13 +86,15 @@ export function PlatformGovernanceMembershipRowMenu({
         return;
       }
 
+      flushSync(() => {
+        onToggleSuccess?.(membershipId, {
+          isActive: !isActive,
+        });
+      });
       showActionSuccess(
         response.data.successMessage,
         'Membership access updated.',
       );
-      startRefreshTransition(() => {
-        router.refresh();
-      });
     });
   };
 
@@ -113,10 +119,6 @@ export function PlatformGovernanceMembershipRowMenu({
         });
       });
       showActionSuccess(response.data.successMessage, 'Membership role updated.');
-
-      startRefreshTransition(() => {
-        router.refresh();
-      });
     });
   };
 

@@ -11,6 +11,9 @@ export type RequestMetadata = {
 
 export async function getRequestMetadata(
   hdrs?: Headers,
+  options?: {
+    includeClientDetails?: boolean;
+  },
 ): Promise<RequestMetadata> {
   const h = hdrs ?? (await headers());
 
@@ -20,15 +23,16 @@ export async function getRequestMetadata(
   const ip = forwarded?.split(',')[0]?.trim() || realIp || undefined;
 
   const userAgent = h.get('user-agent') ?? undefined;
-
-  const parser = new UAParser(userAgent ?? '');
-  const result = parser.getResult();
+  const includeClientDetails = options?.includeClientDetails ?? false;
+  const result = includeClientDetails
+    ? new UAParser(userAgent ?? '').getResult()
+    : null;
 
   return {
     ip,
     userAgent,
-    browser: result.browser.name ?? undefined,
-    os: result.os.name ?? undefined,
-    device: result.device.type ?? 'desktop',
+    browser: result?.browser.name ?? undefined,
+    os: result?.os.name ?? undefined,
+    device: result ? result.device.type ?? 'desktop' : undefined,
   };
 }

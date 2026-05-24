@@ -1,6 +1,8 @@
 import { subscriptionCrud, subscriptionQueries } from '@/modules/billing/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import type { PaymentProvider, Prisma, SubscriptionStatus } from '@/generated/prisma/client';
+import { cacheKeys, cacheTtls } from '@/lib/cache/cache-keys';
+import { rememberRedisCache } from '@/lib/cache/redis-cache';
 import { cancelRazorpaySubscription } from '@/lib/payments/razorpay';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -38,6 +40,14 @@ export type BillingWorkspaceActiveSubscriptionPlanSummary =
       };
     };
   }>;
+
+type CachedBillingWorkspaceActiveSubscriptionPlanSummary = Omit<
+  BillingWorkspaceActiveSubscriptionPlanSummary,
+  'currentPeriodStart' | 'currentPeriodEnd'
+> & {
+  currentPeriodStart: string | Date | null;
+  currentPeriodEnd: string | Date | null;
+};
 
 export type PlatformWorkspaceActiveSubscriptionAdminSnapshot =
   Prisma.SubscriptionGetPayload<{
@@ -346,47 +356,72 @@ export async function getWorkspaceActiveSubscriptionPlanSummary(
     throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
   }
 
-  return subscriptionQueries.delegate.findFirst({
-    where: {
-      workspaceId,
-      status: {
-        in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
-      },
-    },
-    orderBy: {
-      createdAt: 'desc',
-    },
-    select: {
-      id: true,
-      status: true,
-      currentPeriodStart: true,
-      currentPeriodEnd: true,
-      providerSubscriptionId: true,
-      price: {
+  return rememberRedisCache(
+    cacheKeys.workspaceActiveSubscriptionSummary(workspaceId),
+    () =>
+      subscriptionQueries.delegate.findFirst({
+        where: {
+          workspaceId,
+          status: {
+            in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
+          },
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
         select: {
           id: true,
-          amount: true,
-          currency: true,
-          interval: true,
-          product: {
+          status: true,
+          currentPeriodStart: true,
+          currentPeriodEnd: true,
+          providerSubscriptionId: true,
+          price: {
             select: {
-              code: true,
-              name: true,
-              plan: {
+              id: true,
+              amount: true,
+              currency: true,
+              interval: true,
+              product: {
                 select: {
-                  id: true,
-                  key: true,
+                  code: true,
                   name: true,
-                  description: true,
-                  sortOrder: true,
+                  plan: {
+                    select: {
+                      id: true,
+                      key: true,
+                      name: true,
+                      description: true,
+                      sortOrder: true,
+                    },
+                  },
                 },
               },
             },
           },
         },
+      }),
+    {
+      ttlSeconds: cacheTtls.workspaceActiveSubscriptionSummary,
+      cacheNull: true,
+      parser: (raw) => {
+        if (!raw || typeof raw !== 'object') {
+          return null;
+        }
+
+        const value = raw as CachedBillingWorkspaceActiveSubscriptionPlanSummary;
+
+        return {
+          ...value,
+          currentPeriodStart: value.currentPeriodStart
+            ? new Date(value.currentPeriodStart)
+            : null,
+          currentPeriodEnd: value.currentPeriodEnd
+            ? new Date(value.currentPeriodEnd)
+            : null,
+        } as BillingWorkspaceActiveSubscriptionPlanSummary;
       },
     },
-  });
+  );
 }
 
 export async function listPlatformWorkspaceActiveSubscriptionAdminSnapshots(

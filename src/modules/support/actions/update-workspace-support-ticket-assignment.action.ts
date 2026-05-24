@@ -52,6 +52,27 @@ const updateWorkspaceSupportTicketAssignmentActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'SUPPORT',
+        source: 'WORKSPACE_APP',
+        action: result.assignedToId
+          ? 'workspace.support.ticket.assignment.update'
+          : 'workspace.support.ticket.assignment.clear',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: result.assigneeName
+          ? `Ticket assigned to ${result.assigneeName}.`
+          : 'Ticket unassigned successfully.',
+        newValue: {
+          assignedToId: result.assignedToId,
+          assigneeName: result.assigneeName,
+        },
+      }),
+    },
+  },
 );
 
 export async function updateWorkspaceSupportTicketAssignmentAction(

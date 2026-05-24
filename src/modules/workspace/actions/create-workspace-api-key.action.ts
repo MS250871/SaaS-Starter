@@ -40,6 +40,24 @@ const createWorkspaceApiKeyActionImpl = createAction(async (formData: FormData) 
     successMessage: `${result.name} created successfully.`,
     ...result,
   };
+}, {
+  audit: {
+    onSuccess: ({ result }) => ({
+      scope: 'WORKSPACE',
+      category: 'SECURITY',
+      source: 'WORKSPACE_APP',
+      action: 'workspace.apiKey.create',
+      entityType: 'ApiKey',
+      entityId: result.apiKeyId,
+      description: `Workspace API key ${result.name} created.`,
+      newValue: {
+        expiresAt: result.expiresAt,
+        keyPrefix: result.keyPrefix,
+        name: result.name,
+        scopes: result.scopes,
+      },
+    }),
+  },
 });
 
 export async function createWorkspaceApiKeyAction(formData: FormData) {

@@ -13,48 +13,107 @@ import {
   authCookiesSchema,
   verificationSessionSchema,
   sessionPayloadSchema,
-  resolvedSessionPayloadSchema,
   deviceIdSchema,
   type AuthCookies,
   type VerificationSession,
   type SessionClaims,
   type SessionPayload,
 } from './auth.schema';
-import {
-  getRequestContext,
-  maybeGetRequestContext,
-  runWithContext,
-} from '@/lib/context/request-context';
+import { getRequestContext, maybeGetRequestContext, runWithContext } from '@/lib/context/request-context';
 import { buildActorContext } from '@/lib/context/build-actor';
 import { runWithActor } from '@/lib/context/actor-context';
 import { resolveSessionContext } from '@/lib/request/resolve-session-context';
+import { shouldUseSecureCookies } from '@/lib/http/cookie-security';
 
 /* -------------------------------------------------------------------------- */
 /*                               CONFIG                                       */
 /* -------------------------------------------------------------------------- */
 
-const IS_PROD = process.env.NODE_ENV === 'production';
+async function resolveCookieSecurity() {
+  const hdrs = await headers();
+
+  return shouldUseSecureCookies({
+    forwardedProto: hdrs.get('x-forwarded-proto'),
+    origin: hdrs.get('origin'),
+    referer: hdrs.get('referer'),
+    host: hdrs.get('host'),
+  });
+}
+
+function stripSessionAccessSnapshot(
+  payload: SessionClaims | SessionPayload,
+): SessionClaims {
+  const rest = { ...payload } as Partial<SessionPayload>;
+
+  delete rest.permissions;
+  delete rest.features;
+  delete rest.limits;
+
+  return sessionPayloadSchema.parse(rest);
+}
+
+const USER_SESSION_COOKIE_NAME = 'user_session';
+const AUTH_FLOW_COOKIE_NAME = 'auth_flow';
+
+export async function buildAuthCookieDescriptor(data: AuthCookies) {
+  const secure = await resolveCookieSecurity();
+  const parsed = authCookiesSchema.parse(data);
+
+  return {
+    name: AUTH_FLOW_COOKIE_NAME,
+    value: JSON.stringify(parsed),
+    options: {
+      httpOnly: true,
+      secure,
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: AUTH_FLOW_COOKIE_MAX_AGE_SECONDS,
+    },
+  };
+}
+
+export async function buildUserSessionCookieDescriptor(
+  payload: SessionClaims | SessionPayload,
+) {
+  const secure = await resolveCookieSecurity();
+
+  const cookiePayload = stripSessionAccessSnapshot(payload);
+  const token = await encryptToken(cookiePayload);
+
+  const ttlSeconds = Math.max(
+    0,
+    Math.floor((cookiePayload.expiresAt - Date.now()) / 1000),
+  );
+
+  return {
+    name: USER_SESSION_COOKIE_NAME,
+    value: token,
+    options: {
+      httpOnly: true,
+      secure,
+      sameSite: 'lax' as const,
+      path: '/',
+      maxAge: ttlSeconds + USER_SESSION_COOKIE_BUFFER_SECONDS,
+    },
+  };
+}
 /* -------------------------------------------------------------------------- */
 /*                               AUTH FLOW COOKIES                            */
 /* -------------------------------------------------------------------------- */
 
 export async function setAuthCookies({ data }: { data: AuthCookies }) {
   const store = await cookies();
+  const descriptor = await buildAuthCookieDescriptor(data);
 
   const parsed = authCookiesSchema.parse(data); // 🔥 strict
 
-  store.set('auth_flow', JSON.stringify(parsed), {
-    httpOnly: true,
-    secure: IS_PROD,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: AUTH_FLOW_COOKIE_MAX_AGE_SECONDS,
-  });
+  void parsed;
+  store.set(descriptor.name, descriptor.value, descriptor.options);
 }
 
 export async function getAuthCookie(): Promise<AuthCookies | null> {
   const store = await cookies();
-  const raw = store.get('auth_flow')?.value;
+  const raw = store.get(AUTH_FLOW_COOKIE_NAME)?.value;
 
   if (!raw) return null;
 
@@ -79,7 +138,7 @@ export async function getAuthCookie(): Promise<AuthCookies | null> {
 
 export async function clearAuthCookie() {
   const store = await cookies();
-  store.delete('auth_flow');
+  store.delete(AUTH_FLOW_COOKIE_NAME);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -93,6 +152,7 @@ export async function setVerificationSession(
   ttlSeconds: number = VERIFICATION_SESSION_MAX_AGE_SECONDS,
 ) {
   const store = await cookies();
+  const secure = await resolveCookieSecurity();
 
   const parsed = verificationSessionSchema.parse(payload);
 
@@ -100,7 +160,7 @@ export async function setVerificationSession(
 
   store.set(VERIFY_COOKIE, token, {
     httpOnly: true,
-    secure: IS_PROD,
+    secure,
     sameSite: 'lax',
     path: '/',
     maxAge: ttlSeconds,
@@ -160,11 +220,9 @@ export async function updateVerificationSession(
 /*                      USER SESSION (ACTOR SNAPSHOT)                         */
 /* -------------------------------------------------------------------------- */
 
-const SESSION_COOKIE = 'user_session';
-
 export async function readUserSessionCookiePayload(): Promise<SessionClaims | null> {
   const store = await cookies();
-  const token = store.get(SESSION_COOKIE)?.value;
+  const token = store.get(USER_SESSION_COOKIE_NAME)?.value;
 
   if (!token) return null;
 
@@ -182,23 +240,8 @@ export async function readUserSessionCookiePayload(): Promise<SessionClaims | nu
 
 export async function setUserSession(payload: SessionClaims | SessionPayload) {
   const store = await cookies();
-
-  const parsed = sessionPayloadSchema.parse(payload);
-
-  const token = await encryptToken(parsed);
-
-  const ttlSeconds = Math.max(
-    0,
-    Math.floor((parsed.expiresAt - Date.now()) / 1000),
-  );
-
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: IS_PROD,
-    sameSite: 'lax',
-    path: '/',
-    maxAge: ttlSeconds + USER_SESSION_COOKIE_BUFFER_SECONDS,
-  });
+  const descriptor = await buildUserSessionCookieDescriptor(payload);
+  store.set(descriptor.name, descriptor.value, descriptor.options);
 }
 
 export async function getUserSession(): Promise<SessionPayload | null> {
@@ -251,12 +294,12 @@ export async function getUserSession(): Promise<SessionPayload | null> {
   const rawRequestContext = hdrs.get('x-request-context');
 
   if (!rawRequestContext) {
-    return resolvedSessionPayloadSchema.parse({
+    return {
       ...claims,
       permissions: [],
       features: [],
       limits: {},
-    });
+    };
   }
 
   const requestContext = JSON.parse(rawRequestContext);
@@ -272,7 +315,7 @@ export async function getUserSession(): Promise<SessionPayload | null> {
 
 export async function clearUserSession() {
   const store = await cookies();
-  store.delete(SESSION_COOKIE);
+  store.delete(USER_SESSION_COOKIE_NAME);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -281,12 +324,13 @@ export async function clearUserSession() {
 
 export async function setDeviceId(deviceId: string) {
   const store = await cookies();
+  const secure = await resolveCookieSecurity();
 
   const parsed = deviceIdSchema.parse(deviceId);
 
   store.set('device_id', parsed, {
     httpOnly: true,
-    secure: IS_PROD,
+    secure,
     sameSite: 'lax',
     path: '/',
     maxAge: DEVICE_ID_MAX_AGE_SECONDS,

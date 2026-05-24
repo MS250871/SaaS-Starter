@@ -1,34 +1,33 @@
 import Link from 'next/link';
-import { Logo } from './logo';
+
+import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { navItems } from '@/lib/nav/navigation.config';
 import { AuthButtons } from './auth-buttons';
-import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { LinkPendingHint } from './link-pending-hint';
+import { Logo } from './logo';
 
 export function Footer({
   isLoggedIn = false,
-  dashboardHref = "/app",
+  dashboardHref = '/app',
 }: {
-  isLoggedIn?: boolean
-  dashboardHref?: string
+  isLoggedIn?: boolean;
+  dashboardHref?: string;
 }) {
   return (
-    <footer className="border-t bg-muted/20 mt-24">
-      <div className="max-w-7xl mx-auto px-6 py-16">
-        {/* Top Grid */}
-        <div className="grid gap-10 md:grid-cols-4">
-          {/* Brand */}
+    <footer className="mt-24 border-t bg-muted/20">
+      <div className="mx-auto max-w-7xl px-6 py-16">
+        <div className="grid gap-10 md:grid-cols-[1.35fr_1fr_1fr]">
           <div className="space-y-4">
             <Logo />
-            <p className="text-sm text-muted-foreground max-w-xs">
-              A modern multi-tenant SaaS platform starter with built-in
-              authentication, theming and scalable architecture.
+            <p className="max-w-xs text-sm text-muted-foreground">
+              A multi-tenant SaaS starter with platform admin, workspace admin,
+              customer support, catalog, billing, routing, and governance
+              already built in.
             </p>
           </div>
 
-          {/* Product */}
           <div>
-            <h4 className="text-sm font-semibold mb-4">Product</h4>
+            <h4 className="mb-4 text-sm font-semibold">Product</h4>
 
             <ul className="space-y-2 text-sm text-muted-foreground">
               {navItems.map((item) => (
@@ -45,9 +44,8 @@ export function Footer({
             </ul>
           </div>
 
-          {/* Legal */}
           <div>
-            <h4 className="text-sm font-semibold mb-4">Legal</h4>
+            <h4 className="mb-4 text-sm font-semibold">Legal</h4>
 
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
@@ -73,10 +71,10 @@ export function Footer({
           </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="mt-12 pt-6 border-t flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t pt-6 md:flex-row">
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} NimbleStack. All rights reserved.
+            Copyright {new Date().getFullYear()} NimbleStack. All rights
+            reserved.
           </p>
 
           <div className="flex items-center gap-3">

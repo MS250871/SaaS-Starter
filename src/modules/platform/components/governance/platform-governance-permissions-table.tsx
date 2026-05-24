@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -16,6 +17,7 @@ export function PlatformGovernancePermissionsTable({
 }: {
   rows: PlatformGovernancePermissionRow[];
 }) {
+  const [permissionRows, setPermissionRows] = useState(rows);
   const columns: ColumnDef<PlatformGovernancePermissionRow>[] = [
     {
       accessorKey: 'key',
@@ -74,6 +76,20 @@ export function PlatformGovernancePermissionsTable({
           viewHref={`/platform/governance/permissions/${row.original.id}`}
           editHref={`/platform/governance/permissions/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(permissionId, next) => {
+            setPermissionRows((current) =>
+              current.map((entry) =>
+                entry.id === permissionId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(permissionId) => {
+            setPermissionRows((current) =>
+              current.filter((entry) => entry.id !== permissionId),
+            );
+          }}
           toggleAction={togglePermissionAdminAction}
           deleteAction={deletePermissionAdminAction}
         />
@@ -85,7 +101,7 @@ export function PlatformGovernancePermissionsTable({
     <AdminDataTable
       title="Permissions"
       columns={columns}
-      data={rows}
+      data={permissionRows}
       searchPlaceholder="Search permissions by key, name, entity, or usage"
       emptyStateTitle="No permissions found"
       emptyStateDescription="Permission definitions will appear here once the authorization catalog is seeded."

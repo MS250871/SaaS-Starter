@@ -7,6 +7,7 @@ import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { readWorkspaceSettingsCache } from '@/modules/workspace/services/workspace-cache.services';
 
 /**
  * Get settings
@@ -14,20 +15,21 @@ import { ERR } from '@/lib/errors/codes';
 export async function getWorkspaceSettings(workspaceId: string) {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
 
-  return workspaceSettingsQueries.findFirst({
-    where: { workspaceId },
-  });
+  return readWorkspaceSettingsCache(workspaceId, () =>
+    workspaceSettingsQueries.findFirst({
+      where: { workspaceId },
+    }),
+  );
 }
 
 export async function getWorkspaceThemeSnapshot(workspaceId: string) {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
 
-  return workspaceSettingsQueries.findFirst({
-    where: { workspaceId },
-    select: {
-      themes: true,
-    },
-  });
+  const settings = await getWorkspaceSettings(workspaceId);
+
+  return {
+    themes: settings?.themes ?? null,
+  };
 }
 
 /**

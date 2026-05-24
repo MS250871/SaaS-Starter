@@ -1,12 +1,12 @@
-import { RouteSegmentLoadingState } from "@/components/layout/route-segment-loading-state"
+import { RouteSegmentLoadingState } from '@/components/layout/route-segment-loading-state';
 
 export default function CustomerLoading() {
   return (
     <RouteSegmentLoadingState
-      title="Fetching fresh customer data"
-      description="Pulling the latest account activity, support updates, and workspace-linked details."
+      title="Fetching Data"
+      description="Pulling the latest data for you."
       variant="inline"
       surface="workspace"
     />
-  )
+  );
 }

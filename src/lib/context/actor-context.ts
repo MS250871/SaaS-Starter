@@ -7,10 +7,12 @@ import type {
 } from '@/modules/roles/role.types';
 
 export type ActorContext = {
-  actorType: 'identity' | 'customer' | 'system';
+  actorType: 'identity' | 'customer' | 'api_key' | 'system';
 
   identityId?: string;
   customerId?: string;
+  apiKeyId?: string;
+  apiKeyScopes?: string[];
 
   platformRole?: string;
   platformRoleKeys?: string[];

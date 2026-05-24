@@ -36,6 +36,22 @@ const addCustomerSupportTicketReplyActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'CUSTOMER',
+        category: 'SUPPORT',
+        source: 'CUSTOMER_APP',
+        action: 'customer.support.ticket.reply.create',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: `Customer reply added to ${result.title}.`,
+        metadata: {
+          messageId: result.messageId,
+        },
+      }),
+    },
+  },
 );
 
 export async function addCustomerSupportTicketReplyAction(formData: FormData) {

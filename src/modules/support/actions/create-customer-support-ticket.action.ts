@@ -37,6 +37,24 @@ const createCustomerSupportTicketActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'CUSTOMER',
+        category: 'SUPPORT',
+        source: 'CUSTOMER_APP',
+        action: 'customer.support.ticket.create',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: 'Support ticket created by customer.',
+        newValue: {
+          contextType: result.contextType,
+          priority: result.priority,
+          status: result.status,
+        },
+      }),
+    },
+  },
 );
 
 export async function createCustomerSupportTicketAction(formData: FormData) {

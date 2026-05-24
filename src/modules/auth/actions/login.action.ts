@@ -17,14 +17,22 @@ import {
 import type { AuthCookies } from '@/lib/auth/auth.schema';
 import { redirect } from 'next/navigation';
 import { loginWorkflow } from '@/modules/auth/workflows/login.workflow';
-import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
+import { dispatchOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import { buildWorkspaceSurfacePath } from '@/modules/workspace/routing';
+import {
+  buildNavErrorAudit,
+  getNavAuditState,
+  setNavAuditState,
+} from '@/modules/auth/auth-nav-audit';
+import { assertLoginRateLimit } from '@/modules/auth/auth-rate-limit';
 
 const loginActionImpl = createNavAction(async (formData: FormData) => {
   const raw = Object.fromEntries(formData.entries());
 
   const parsed: LoginActionInput = loginActionSchema.parse(raw);
   const domain: LoginDomain = loginSchema.parse(parsed);
+
+  await assertLoginRateLimit(domain.identifier);
 
   const actor = getActor();
   const requestContext = getRequestContext();
@@ -57,7 +65,23 @@ const loginActionImpl = createNavAction(async (formData: FormData) => {
 
   const result = await loginWorkflow(domain);
 
-  await processOtpOutboxEvent(result.outboxEventId);
+  setNavAuditState({
+    category: 'AUTH',
+    source: 'AUTH',
+    action: 'auth.login.challenge.create',
+    entityType: 'VerificationSession',
+    entityId: result.verificationId,
+    description: 'Login verification challenge created.',
+    metadata: {
+      entry,
+      intent: parsed.intent,
+      mode: result.mode,
+      otpPurpose: result.otpPurpose,
+      workspaceId,
+    },
+  });
+
+  await dispatchOtpOutboxEvent(result.outboxEventId);
 
   await setVerificationSession({
     verificationId: result.verificationId,
@@ -77,6 +101,17 @@ const loginActionImpl = createNavAction(async (formData: FormData) => {
   });
 
   redirect(await resolvePublicRedirectTarget(`${verifyPath}?mode=${result.mode}`));
+}, {
+  audit: {
+    onSuccess: () => getNavAuditState(),
+    onError: ({ error, state }) =>
+      buildNavErrorAudit({
+        action: 'auth.login.challenge.create',
+        description: 'Login challenge could not be created.',
+        error,
+        state: state as ReturnType<typeof getNavAuditState>,
+      }),
+  },
 });
 
 export async function loginAction(formData: FormData) {

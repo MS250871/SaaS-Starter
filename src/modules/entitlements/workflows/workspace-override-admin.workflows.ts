@@ -18,12 +18,15 @@ import {
   setWorkspaceFeatureOverride,
   setWorkspaceLimitOverride,
 } from '@/modules/entitlements/services/entitlement.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
+import { invalidateWorkspaceEntitlementOverrideCaches } from '@/modules/entitlements/services/catalog-cache.services';
 import {
   canOverrideEntitlement,
   isRoutingSensitiveFeatureKey,
   isRoutingSensitiveLimitKey,
 } from '@/modules/entitlements/override-policy';
 import { syncWorkspaceRoutingState } from '@/modules/workspace/services/workspace-routing.services';
+import { invalidateWorkspaceSurfaceCaches } from '@/modules/workspace/services/workspace-cache.services';
 
 function assertFeatureCanBeOverridden(feature: {
   name: string;
@@ -55,7 +58,7 @@ export async function saveWorkspaceFeatureOverrideWorkflow(input: {
   featureId: string;
   isEnabled: boolean;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const feature = await getFeatureById(input.featureId);
     assertFeatureCanBeOverridden(feature);
 
@@ -81,19 +84,28 @@ export async function saveWorkspaceFeatureOverrideWorkflow(input: {
       isEnabled: input.isEnabled,
     });
 
-    if (shouldSyncRouting) {
-      await syncWorkspaceRoutingState(input.workspaceId);
-    }
-
-    return override;
+    return {
+      override,
+      shouldSyncRouting,
+    };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(input.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(input.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(input.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(input.workspaceId);
+  }
+
+  return result.override;
 }
 
 export async function syncWorkspaceFeatureOverridesWorkflow(input: {
   workspaceId: string;
   enabledFeatureIds: string[];
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const [activeSubscription, features, existingOverrides] = await Promise.all([
       getWorkspaceActiveSubscriptionPlanSummary(input.workspaceId),
       listWorkspaceFeatureOverrideOptions(),
@@ -158,14 +170,23 @@ export async function syncWorkspaceFeatureOverridesWorkflow(input: {
       }
     }
 
-    if (shouldSyncRouting) {
-      await syncWorkspaceRoutingState(input.workspaceId);
-    }
-
     return {
       workspaceId: input.workspaceId,
+      shouldSyncRouting,
     };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(input.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(input.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(input.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(input.workspaceId);
+  }
+
+  return {
+    workspaceId: result.workspaceId,
+  };
 }
 
 export async function saveWorkspaceLimitOverrideWorkflow(input: {
@@ -174,7 +195,7 @@ export async function saveWorkspaceLimitOverrideWorkflow(input: {
   limitDefinitionId: string;
   valueInt: number;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const limitDefinition = await getLimitDefinitionById(input.limitDefinitionId);
     assertLimitCanBeOverridden(limitDefinition);
 
@@ -201,12 +222,21 @@ export async function saveWorkspaceLimitOverrideWorkflow(input: {
       valueInt: input.valueInt,
     });
 
-    if (shouldSyncRouting) {
-      await syncWorkspaceRoutingState(input.workspaceId);
-    }
-
-    return override;
+    return {
+      override,
+      shouldSyncRouting,
+    };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(input.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(input.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(input.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(input.workspaceId);
+  }
+
+  return result.override;
 }
 
 export async function syncWorkspaceLimitOverridesWorkflow(input: {
@@ -216,7 +246,7 @@ export async function syncWorkspaceLimitOverridesWorkflow(input: {
     valueInt: number;
   }>;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const [activeSubscription, limits, existingOverrides] = await Promise.all([
       getWorkspaceActiveSubscriptionPlanSummary(input.workspaceId),
       listWorkspaceLimitOverrideOptions(),
@@ -285,34 +315,61 @@ export async function syncWorkspaceLimitOverridesWorkflow(input: {
       }
     }
 
-    if (shouldSyncRouting) {
-      await syncWorkspaceRoutingState(input.workspaceId);
-    }
-
     return {
       workspaceId: input.workspaceId,
+      shouldSyncRouting,
     };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(input.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(input.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(input.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(input.workspaceId);
+  }
+
+  return {
+    workspaceId: result.workspaceId,
+  };
 }
 
 export async function deleteWorkspaceFeatureOverrideWorkflow(overrideId: string) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const existing = await getWorkspaceFeatureOverrideById(overrideId);
     await deleteWorkspaceFeatureOverride(existing.id);
 
-    if (isRoutingSensitiveFeatureKey(existing.feature.key)) {
-      await syncWorkspaceRoutingState(existing.workspaceId);
-    }
+    return {
+      workspaceId: existing.workspaceId,
+      shouldSyncRouting: isRoutingSensitiveFeatureKey(existing.feature.key),
+    };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(result.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(result.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(result.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(result.workspaceId);
+  }
 }
 
 export async function deleteWorkspaceLimitOverrideWorkflow(overrideId: string) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const existing = await getWorkspaceLimitOverrideById(overrideId);
     await deleteWorkspaceLimitOverride(existing.id);
 
-    if (isRoutingSensitiveLimitKey(existing.limitDefinition.key)) {
-      await syncWorkspaceRoutingState(existing.workspaceId);
-    }
+    return {
+      workspaceId: existing.workspaceId,
+      shouldSyncRouting: isRoutingSensitiveLimitKey(existing.limitDefinition.key),
+    };
   });
+
+  await invalidateWorkspaceEntitlementOverrideCaches(result.workspaceId);
+  await invalidateWorkspaceEntitlementsCache(result.workspaceId);
+
+  if (result.shouldSyncRouting) {
+    await syncWorkspaceRoutingState(result.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(result.workspaceId);
+  }
 }

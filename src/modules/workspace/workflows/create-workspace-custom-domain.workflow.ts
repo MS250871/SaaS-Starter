@@ -2,6 +2,7 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { WorkspaceDomainRoutingMode } from '@/generated/prisma/client';
 import type { ManagedWorkspaceRedirectConfig } from '@/modules/workspace/services/domain-provider.types';
 import { cleanupManagedWorkspaceDomain, provisionManagedWorkspaceDomain } from '@/modules/workspace/services/domain-provider.services';
+import { invalidateWorkspaceSurfaceCaches } from '@/modules/workspace/services/workspace-cache.services';
 import { createWorkspaceCustomDomainSetup } from '@/modules/workspace/services/domain-verification.services';
 import { syncWorkspaceRoutingState } from '@/modules/workspace/services/workspace-routing.services';
 
@@ -28,7 +29,8 @@ export async function createWorkspaceCustomDomainWorkflow(input: {
       }),
     );
 
-    await withUnitOfWork(() => syncWorkspaceRoutingState(input.workspaceId));
+    await syncWorkspaceRoutingState(input.workspaceId);
+    await invalidateWorkspaceSurfaceCaches(input.workspaceId);
 
     return result;
   } catch (error) {

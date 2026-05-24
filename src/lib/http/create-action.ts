@@ -1,8 +1,14 @@
-import {
-  withActionContext,
-  withActionTxContext,
-} from '@/lib/request/withActionContext';
+import { withActionContext } from '@/lib/request/withActionContext';
 import { handleError } from '@/lib/errors/app-error';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import type {
+  AuditInputFactoryResult,
+  MaybePromise,
+} from '@/lib/http/action-audit';
+import {
+  tryWriteAuditInputs,
+  writeAuditInputs,
+} from '@/lib/http/action-audit';
 
 type ApiSuccess<T> = {
   success: true;
@@ -21,22 +27,54 @@ type ApiError = {
 
 export type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
-type CreateActionOptions = {
+type CreateActionOptions<TArgs extends unknown[], TResult> = {
   useTransaction?: boolean;
+  audit?: {
+    onSuccess?: (
+      params: { args: TArgs; result: TResult },
+    ) => MaybePromise<AuditInputFactoryResult>;
+    onError?: (
+      params: { args: TArgs; error: ApiError['error'] },
+    ) => MaybePromise<AuditInputFactoryResult>;
+  };
 };
 
 export function createAction<TArgs extends unknown[], TResult>(
   handler: (...args: TArgs) => Promise<TResult>,
-  options?: CreateActionOptions,
+  options?: CreateActionOptions<TArgs, TResult>,
 ) {
   return async (...args: TArgs): Promise<ApiResponse<TResult>> => {
-    const runner = options?.useTransaction
-      ? withActionTxContext
-      : withActionContext;
-
-    return runner(async () => {
+    return withActionContext(async () => {
       try {
-        const result = await handler(...args);
+        const result = await (options?.useTransaction
+          ? withUnitOfWork(async () => {
+              const txResult = await handler(...args);
+
+              if (options.audit?.onSuccess) {
+                await writeAuditInputs(
+                  await options.audit.onSuccess({
+                    args,
+                    result: txResult,
+                  }),
+                );
+              }
+
+              return txResult;
+            })
+          : (async () => {
+              const value = await handler(...args);
+
+              if (options?.audit?.onSuccess) {
+                await writeAuditInputs(
+                  await options.audit.onSuccess({
+                    args,
+                    result: value,
+                  }),
+                );
+              }
+
+              return value;
+            })());
 
         return {
           success: true,
@@ -44,6 +82,16 @@ export function createAction<TArgs extends unknown[], TResult>(
         };
       } catch (e) {
         const err = handleError(e);
+
+        if (options?.audit?.onError) {
+          await tryWriteAuditInputs(
+            await options.audit.onError({
+              args,
+              error: err,
+            }),
+            'action_error',
+          );
+        }
 
         return {
           success: false,
@@ -56,6 +104,10 @@ export function createAction<TArgs extends unknown[], TResult>(
 
 export function createTxAction<TArgs extends unknown[], TResult>(
   handler: (...args: TArgs) => Promise<TResult>,
+  options?: Omit<CreateActionOptions<TArgs, TResult>, 'useTransaction'>,
 ) {
-  return createAction(handler, { useTransaction: true });
+  return createAction(handler, {
+    ...options,
+    useTransaction: true,
+  });
 }

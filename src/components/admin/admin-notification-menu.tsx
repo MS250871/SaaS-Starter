@@ -3,7 +3,6 @@
 import * as React from "react";
 import Link from "next/link";
 import { BellIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 import { LinkPendingHint } from "@/components/layout/link-pending-hint";
 import { markAllWorkspaceNotificationsReadAction } from "@/modules/notifications/actions/mark-all-workspace-notifications-read.action";
@@ -46,7 +45,6 @@ export function AdminNotificationMenu({
   href: string;
   notifications: AdminNotificationSnapshot;
 }) {
-  const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
   const [items, setItems] = React.useState(notifications.items);
@@ -76,10 +74,9 @@ export function AdminNotificationMenu({
         );
         setUnreadCount((current) => Math.max(current - 1, 0));
         setOpen(false);
-        router.refresh();
       });
     },
-    [router],
+    [],
   );
 
   const handleMarkAllRead = React.useCallback(() => {
@@ -93,9 +90,8 @@ export function AdminNotificationMenu({
       setItems((current) => current.map((item) => ({ ...item, isRead: true })));
       setUnreadCount(0);
       setOpen(false);
-      router.refresh();
     });
-  }, [router]);
+  }, []);
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>

@@ -4,12 +4,17 @@ import {
   findOutboxEventByProcessingKey,
   markOutboxEventDone,
   scheduleOutboxEventRetry,
+  setOutboxJobId,
 } from '@/modules/jobs/services/outbox-events.services';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { sendOtp } from './otp.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { hashOtp } from '@/lib/auth/auth-utils';
+import {
+  dispatchOtpDeliveryJob,
+  shouldBypassQStashDispatch,
+} from '@/modules/jobs/services/qstash-job-dispatch.services';
 
 const AUTH_SEND_OTP_EVENT = 'auth.send_otp';
 
@@ -65,6 +70,28 @@ export async function queueOtpDelivery(params: QueueOtpDeliveryParams) {
     identityId: params.identityId ?? undefined,
     customerId: params.customerId ?? undefined,
   });
+}
+
+export async function dispatchOtpOutboxEvent(outboxEventId: string) {
+  if (!outboxEventId) {
+    throwError(ERR.INVALID_INPUT, 'Outbox event ID is required');
+  }
+
+  const localJobId = `local-inline:${outboxEventId}:${Date.now()}`;
+
+  if (shouldBypassQStashDispatch()) {
+    await setOutboxJobId(outboxEventId, localJobId);
+    await processOtpOutboxEvent(outboxEventId);
+    return localJobId;
+  }
+
+  const jobId = await dispatchOtpDeliveryJob({
+    outboxEventId,
+  });
+
+  await setOutboxJobId(outboxEventId, jobId);
+
+  return jobId;
 }
 
 export async function processOtpOutboxEvent(outboxEventId: string) {

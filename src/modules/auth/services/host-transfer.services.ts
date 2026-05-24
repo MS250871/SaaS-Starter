@@ -6,6 +6,7 @@ import {
 import { decryptToken, encryptToken } from '@/lib/security/crypto';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 
 const HOST_TRANSFER_TOKEN_MAX_AGE_MS = 5 * 60 * 1000;
 
@@ -27,12 +28,18 @@ export async function issueHostTransferToken(params: {
     );
   }
 
+  const normalizedTargetHost = normalizeHostname(params.targetHost);
+
+  if (!normalizedTargetHost) {
+    throwError(ERR.INVALID_INPUT, 'targetHost must be a valid hostname.');
+  }
+
   const now = Date.now();
   const payload: HostTransferToken = {
     sessionId: params.session.sessionId,
     identityId: params.session.identityId,
     workspaceId: params.workspaceId,
-    targetHost: params.targetHost.toLowerCase(),
+    targetHost: normalizedTargetHost,
     intent: params.intent ?? undefined,
     returnPath: params.returnPath ?? undefined,
     createdAt: now,

@@ -2,6 +2,7 @@ import {
   clearRolePermissionsByRoleDefinition,
   createRolePermission,
 } from '@/modules/permissions/services/permissions.services';
+import { invalidatePermissionsCache } from '@/modules/permissions/services/permission-cache.services';
 import {
   createRoleDefinition,
   deleteRoleDefinition,
@@ -57,6 +58,8 @@ export async function createPlatformRoleWorkflow(input: {
     permissionIds: input.permissionIds,
   });
 
+  await invalidatePermissionsCache();
+
   return role;
 }
 
@@ -88,6 +91,8 @@ export async function updatePlatformRoleWorkflow(input: {
     permissionIds: input.permissionIds,
   });
 
+  await invalidatePermissionsCache();
+
   return role;
 }
 
@@ -113,4 +118,5 @@ export async function deletePlatformRoleWorkflow(roleDefinitionId: string) {
 
   await clearRolePermissionsByRoleDefinition(roleDefinitionId);
   await deleteRoleDefinition(roleDefinitionId);
+  await invalidatePermissionsCache();
 }

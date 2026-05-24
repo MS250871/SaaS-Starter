@@ -1,5 +1,6 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -9,6 +10,7 @@ import {
   deleteLimitDefinition,
   updateLimitDefinition,
 } from '@/modules/entitlements/services/entitlement.services';
+import { invalidateCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
 import {
   parseCheckboxValue,
   platformCatalogLimitActionSchema,
@@ -25,6 +27,25 @@ async function requirePlatformAdminSession() {
   assertPlatformAdminAccess(session.platformRoleSystemKeys ?? []);
 
   return session;
+}
+
+function buildCatalogAuditInput(params: {
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  description: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'CATALOG' as const,
+    source: 'ADMIN_PANEL' as const,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    description: params.description,
+    metadata: params.metadata,
+  };
 }
 
 const createLimitCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -52,6 +73,26 @@ const createLimitCatalogActionImpl = createTxAction(async (formData: FormData) =
     limitId: limit.id,
     successMessage: `${limit.name} created successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const name = String(formData.get('name') ?? '').trim();
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.limit.create',
+        entityType: 'LimitDefinition',
+        entityId: result.limitId,
+        description: `Limit ${name || key || result.limitId} created.`,
+        metadata: {
+          isActive: parseCheckboxValue(formData, 'isActive'),
+          key,
+          unit: String(formData.get('unit') ?? '').trim() || null,
+        },
+      });
+    },
+  },
 });
 
 const updateLimitCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -85,6 +126,26 @@ const updateLimitCatalogActionImpl = createTxAction(async (formData: FormData) =
     limitId: limit.id,
     successMessage: `${limit.name} updated successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const name = String(formData.get('name') ?? '').trim();
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.limit.update',
+        entityType: 'LimitDefinition',
+        entityId: result.limitId,
+        description: `Limit ${name || key || result.limitId} updated.`,
+        metadata: {
+          isActive: parseCheckboxValue(formData, 'isActive'),
+          key,
+          unit: String(formData.get('unit') ?? '').trim() || null,
+        },
+      });
+    },
+  },
 });
 
 const toggleLimitCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -105,6 +166,21 @@ const toggleLimitCatalogActionImpl = createTxAction(async (formData: FormData) =
       isActive ? 'activated' : 'deactivated'
     } successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ args, result }) => {
+      const formData = args[0];
+      const isActive = parseCheckboxValue(formData, 'isActive');
+
+      return buildCatalogAuditInput({
+        action: isActive ? 'catalog.limit.activate' : 'catalog.limit.deactivate',
+        entityType: 'LimitDefinition',
+        entityId: result.limitId,
+        description: `Limit ${isActive ? 'activated' : 'deactivated'}.`,
+        metadata: { isActive },
+      });
+    },
+  },
 });
 
 const deleteLimitCatalogActionImpl = createTxAction(async (formData: FormData) => {
@@ -121,20 +197,58 @@ const deleteLimitCatalogActionImpl = createTxAction(async (formData: FormData) =
   return {
     successMessage: 'Limit deleted successfully.',
   };
+}, {
+  audit: {
+    onSuccess: ({ args }) => {
+      const formData = args[0];
+      const limitId = String(formData.get('limitId') ?? '').trim();
+
+      return buildCatalogAuditInput({
+        action: 'catalog.limit.delete',
+        entityType: 'LimitDefinition',
+        entityId: limitId,
+        description: 'Limit deleted.',
+      });
+    },
+  },
 });
 
 export async function createLimitCatalogAction(formData: FormData) {
-  return createLimitCatalogActionImpl(formData);
+  const response = await createLimitCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function updateLimitCatalogAction(formData: FormData) {
-  return updateLimitCatalogActionImpl(formData);
+  const response = await updateLimitCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function toggleLimitCatalogAction(formData: FormData) {
-  return toggleLimitCatalogActionImpl(formData);
+  const response = await toggleLimitCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function deleteLimitCatalogAction(formData: FormData) {
-  return deleteLimitCatalogActionImpl(formData);
+  const response = await deleteLimitCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }

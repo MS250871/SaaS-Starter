@@ -2,13 +2,14 @@
 
 import { headers } from 'next/headers';
 import { createTxAction } from '@/lib/http/create-action';
+import { resolvePublicHostValue } from '@/lib/http/public-url';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { buildAbsoluteUrl } from '@/lib/url/absolute-url';
 import { assertPermission } from '@/modules/permissions/services/permissions.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
+import { dispatchNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import { getRoleDefinitionById } from '@/modules/roles/services/role.services';
 import {
   createWorkspaceInviteActionSchema,
@@ -62,14 +63,17 @@ const createWorkspaceInviteActionImpl = createTxAction(async (formData: FormData
   const roleDefinition = await getRoleDefinitionById(result.invite.roleDefinitionId);
 
   const signupUrl = buildAbsoluteUrl(result.signupPath, {
-    host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
+    host: resolvePublicHostValue({
+      host: hdrs.get('host'),
+      forwardedHost: hdrs.get('x-forwarded-host'),
+    }),
     protocol: hdrs.get('x-forwarded-proto'),
   });
 
   let emailDelivered = true;
 
-  try {
-    const notificationResult = await createWorkspaceInviteNotificationWorkflow({
+    try {
+      const notificationResult = await createWorkspaceInviteNotificationWorkflow({
       workspaceId: session.workspaceId,
       inviterIdentityId: session.identityId,
       inviteEmail: result.invite.email,
@@ -79,24 +83,24 @@ const createWorkspaceInviteActionImpl = createTxAction(async (formData: FormData
       inviterName: getInviterName(inviter ?? {}),
       expiresAt: result.invite.expiresAt,
       reused: result.reused,
-    });
+      });
 
-    for (const event of notificationResult.outboxEvents) {
-      await processNotificationDeliveryOutboxEvent(event.id);
+      for (const event of notificationResult.outboxEvents) {
+        await dispatchNotificationDeliveryOutboxEvent(event.id);
+      }
+    } catch (error) {
+      emailDelivered = false;
+      console.error('Workspace invite email queueing failed:', error);
     }
-  } catch (error) {
-    emailDelivered = false;
-    console.error('Workspace invite email delivery failed:', error);
-  }
 
   return {
     successMessage: emailDelivered
       ? result.reused
-        ? 'A pending invite already existed. Reusing the existing signup link and sending the invite email again.'
-        : 'Invite created and email sent successfully.'
+        ? 'A pending invite already existed. Reusing the existing signup link and queueing the invite email again.'
+        : 'Invite created and email queued successfully.'
       : result.reused
-        ? 'A pending invite already existed. The invite is still valid, but the email could not be sent. Use the signup link below.'
-      : 'Invite created, but the email could not be sent. Use the signup link below.',
+        ? 'A pending invite already existed. The invite is still valid, but the email could not be queued. Use the signup link below.'
+      : 'Invite created, but the email could not be queued. Use the signup link below.',
     reused: result.reused,
     emailDelivered,
     invite: {
@@ -116,6 +120,30 @@ const createWorkspaceInviteActionImpl = createTxAction(async (formData: FormData
     signupPath: result.signupPath,
     signupUrl,
   };
+}, {
+  audit: {
+    onSuccess: ({ result }) => ({
+      scope: 'WORKSPACE',
+      category: 'GOVERNANCE',
+      source: 'WORKSPACE_APP',
+      action: result.reused
+        ? 'workspace.invite.reuse'
+        : 'workspace.invite.create',
+      entityType: 'WorkspaceInvite',
+      entityId: result.invite.id,
+      description: result.reused
+        ? `Pending invite reused for ${result.invite.email}.`
+        : `Workspace invite created for ${result.invite.email}.`,
+      metadata: {
+        emailDelivered: result.emailDelivered,
+        reused: result.reused,
+        roleDefinitionId: result.invite.roleDefinitionId,
+        roleKey: result.invite.role,
+        roleName: result.invite.roleName,
+        roleSystemKey: result.invite.roleSystemKey,
+      },
+    }),
+  },
 });
 
 export async function createWorkspaceInviteAction(formData: FormData) {

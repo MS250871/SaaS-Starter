@@ -1,4 +1,4 @@
-import { withActionTxContext } from '@/lib/request/withActionContext';
+import { withActionReadContext } from '@/lib/request/withActionContext';
 import {
   countWorkspaceIdentityNotifications,
   listWorkspaceIdentityNotifications,
@@ -73,7 +73,7 @@ export async function getWorkspaceNotificationInboxData(params: {
 }
 
 export async function getWorkspaceNotificationsPageData() {
-  return withActionTxContext(async () => {
+  return withActionReadContext(async () => {
     const context = await getWorkspaceAdminSurfaceContext();
 
     if (!context.workspaceId || !context.actor.identityId) {

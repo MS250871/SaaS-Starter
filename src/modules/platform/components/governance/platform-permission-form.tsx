@@ -65,7 +65,6 @@ export function PlatformPermissionForm({
       }
 
       router.push(`/platform/governance/permissions/${response.data.permissionId}`);
-      router.refresh();
     });
   };
 

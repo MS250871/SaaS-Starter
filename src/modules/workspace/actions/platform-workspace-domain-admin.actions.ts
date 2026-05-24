@@ -64,6 +64,23 @@ const resyncPlatformWorkspaceRoutingActionImpl = createAction(
       successMessage: `Routing was resynced. Current primary host is ${snapshot.primaryHost}.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'PLATFORM',
+        category: 'ROUTING',
+        source: 'ADMIN_PANEL',
+        action: 'platform.workspace.routing.resync',
+        entityType: 'Workspace',
+        entityId: result.workspaceId,
+        description: `Workspace routing resynced to primary host ${result.primaryHost}.`,
+        newValue: {
+          primaryHost: result.primaryHost,
+          strategy: result.strategy,
+        },
+      }),
+    },
+  },
 );
 
 const createPlatformWorkspaceCustomDomainActionImpl = createAction(
@@ -85,6 +102,28 @@ const createPlatformWorkspaceCustomDomainActionImpl = createAction(
         'Custom domain added. Publish the DNS records and then refresh verification.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const domain = String(formData.get('domain') ?? '').trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'ROUTING' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'platform.workspace.domain.create',
+          entityType: 'WorkspaceDomain',
+          entityId: result.workspaceDomainId,
+          description: `Custom domain ${domain} added to workspace ${result.workspaceId}.`,
+          metadata: {
+            domain,
+            workspaceId: result.workspaceId,
+          },
+        };
+      },
+    },
+  },
 );
 
 const createPlatformWorkspaceRedirectAliasActionImpl = createAction(
@@ -105,6 +144,28 @@ const createPlatformWorkspaceRedirectAliasActionImpl = createAction(
       successMessage:
         'Redirect alias added. Publish the DNS records and then refresh verification.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const domain = String(formData.get('domain') ?? '').trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'ROUTING' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'platform.workspace.redirectAlias.create',
+          entityType: 'WorkspaceDomain',
+          entityId: result.workspaceDomainId,
+          description: `Redirect alias ${domain} added to workspace ${result.workspaceId}.`,
+          metadata: {
+            domain,
+            workspaceId: result.workspaceId,
+          },
+        };
+      },
+    },
   },
 );
 
@@ -129,6 +190,32 @@ const refreshPlatformWorkspaceDomainVerificationActionImpl = createAction(
         : 'DNS verification is still pending. Double-check the expected records and try again.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceDomainId = String(
+          formData.get('workspaceDomainId') ?? '',
+        ).trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'ROUTING' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'platform.workspace.domain.verification.refresh',
+          entityType: 'WorkspaceDomain',
+          entityId: workspaceDomainId || result.workspaceDomainId,
+          description: result.verified
+            ? 'Platform verification completed successfully for workspace domain.'
+            : 'Platform verification check for workspace domain is still pending.',
+          newValue: {
+            checkedAt: result.checkedAt,
+            verified: result.verified,
+          },
+        };
+      },
+    },
+  },
 );
 
 const setPlatformWorkspacePrimaryDomainActionImpl = createAction(
@@ -149,6 +236,32 @@ const setPlatformWorkspacePrimaryDomainActionImpl = createAction(
       primaryHost: snapshot.primaryHost,
       successMessage: `Primary route updated to ${snapshot.primaryHost}.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceDomainId = String(
+          formData.get('workspaceDomainId') ?? '',
+        ).trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'ROUTING' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'platform.workspace.domain.setPrimary',
+          entityType: 'WorkspaceDomain',
+          entityId: workspaceDomainId || result.workspaceDomainId,
+          description: `Primary workspace route updated to ${result.primaryHost}.`,
+          metadata: {
+            workspaceId: result.workspaceId,
+          },
+          newValue: {
+            primaryHost: result.primaryHost,
+          },
+        };
+      },
+    },
   },
 );
 
@@ -171,6 +284,33 @@ const deletePlatformWorkspaceDomainActionImpl = createAction(
       successMessage:
         'Domain record removed and routing was recalculated for the workspace.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceDomainId = String(
+          formData.get('workspaceDomainId') ?? '',
+        ).trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'ROUTING' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'platform.workspace.domain.delete',
+          entityType: 'WorkspaceDomain',
+          entityId: workspaceDomainId || result.workspaceDomainId,
+          description:
+            'Workspace domain deleted and routing recalculated for the workspace.',
+          metadata: {
+            workspaceId: result.workspaceId,
+          },
+          newValue: {
+            primaryHost: result.primaryHost,
+          },
+        };
+      },
+    },
   },
 );
 

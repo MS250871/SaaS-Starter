@@ -8,6 +8,8 @@ export type NavItem = {
 
 export const navItems = [
   { name: 'Home', href: '/' },
-  { name: 'How it Works', href: '/#how-it-works', anchor: true },
-  { name: 'Pricing', href: '/pricing' },
+  { name: 'Capabilities', href: '/#capabilities', anchor: true },
+  { name: 'Screens', href: '/#screens', anchor: true },
+  { name: 'Architecture', href: '/#architecture', anchor: true },
+  { name: 'Pricing Example', href: '/pricing' },
 ] satisfies NavItem[];

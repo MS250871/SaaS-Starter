@@ -4,7 +4,9 @@ import { ERR } from '@/lib/errors/codes';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
 import { attachPendingPaidBillingToWorkspaceWorkflow } from '@/modules/billing/workflows/attach-pending-paid-billing-to-workspace.workflow';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/services/role.services';
 import type { WorkspaceRoleSystemKey } from '@/modules/roles/role.types';
 import { createMembership } from '@/modules/workspace/services/membership.services';
@@ -30,7 +32,7 @@ export async function createWorkspaceWorkflow(input: {
   pendingPaymentId?: string;
   pendingSubscriptionId?: string;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const existing = await findWorkspaceBySlug(input.workspaceSlug);
 
     if (existing) {
@@ -126,12 +128,11 @@ export async function createWorkspaceWorkflow(input: {
         priceId: input.pendingPriceId,
         paymentId: input.pendingPaymentId,
         subscriptionId: input.pendingSubscriptionId,
+        skipCacheInvalidation: true,
       });
 
       subscriptionId = input.pendingSubscriptionId;
     }
-    const routing = await syncWorkspaceRoutingState(workspace.id);
-
     return {
       workspaceId: workspace.id,
       membershipId: membership.id,
@@ -140,10 +141,17 @@ export async function createWorkspaceWorkflow(input: {
       roleSystemKey: membership.roleSystemKey,
       slug: workspace.slug,
       isActive: workspace.isActive,
-      primaryDomain: routing.primaryHost,
-      routingStrategy: routing.strategy,
-      intent: routing.intent,
       subscriptionId,
     };
   });
+  await invalidateWorkspaceEntitlementsCache(result.workspaceId);
+  const routing = await syncWorkspaceRoutingState(result.workspaceId);
+  await invalidateWorkspaceBillingCaches(result.workspaceId);
+
+  return {
+    ...result,
+    primaryDomain: routing.primaryHost,
+    routingStrategy: routing.strategy,
+    intent: routing.intent,
+  };
 }

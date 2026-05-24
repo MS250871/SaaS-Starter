@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -17,6 +18,7 @@ type LimitRow = Awaited<
 >[number];
 
 export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
+  const [limitRows, setLimitRows] = useState(rows);
   const columns: ColumnDef<LimitRow>[] = [
     {
       accessorKey: 'name',
@@ -72,6 +74,20 @@ export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
           viewHref={`/platform/catalog/limits/${row.original.id}`}
           editHref={`/platform/catalog/limits/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(limitId, next) => {
+            setLimitRows((current) =>
+              current.map((entry) =>
+                entry.id === limitId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(limitId) => {
+            setLimitRows((current) =>
+              current.filter((entry) => entry.id !== limitId),
+            );
+          }}
           toggleAction={toggleLimitCatalogAction}
           deleteAction={deleteLimitCatalogAction}
         />
@@ -83,7 +99,7 @@ export function PlatformLimitsTable({ rows }: { rows: LimitRow[] }) {
     <AdminDataTable
       title="Limits"
       columns={columns}
-      data={rows}
+      data={limitRows}
       searchPlaceholder="Search limits by name, key, or unit"
       emptyStateTitle="No limits found"
       emptyStateDescription="Create the first limit definition to start governing plan quotas."

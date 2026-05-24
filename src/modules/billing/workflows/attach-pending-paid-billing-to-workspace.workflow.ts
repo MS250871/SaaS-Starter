@@ -1,6 +1,8 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import { getPriceCheckoutSnapshotById } from '@/modules/billing/services/catalog.services';
 import {
   findInvoiceByPaymentId,
@@ -20,6 +22,7 @@ export async function attachPendingPaidBillingToWorkspaceWorkflow(params: {
   paymentId: string;
   subscriptionId: string;
   priceId: string;
+  skipCacheInvalidation?: boolean;
 }) {
   if (
     !params.workspaceId ||
@@ -34,7 +37,7 @@ export async function attachPendingPaidBillingToWorkspaceWorkflow(params: {
     );
   }
 
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const [payment, subscription, priceSnapshot] = await Promise.all([
       getPaymentById(params.paymentId),
       getSubscriptionById(params.subscriptionId),
@@ -80,12 +83,18 @@ export async function attachPendingPaidBillingToWorkspaceWorkflow(params: {
       subscriptionStatus: subscription.status,
     });
 
-    await syncWorkspaceRoutingState(params.workspaceId);
-
     return {
       paymentId: payment.id,
       subscriptionId: subscription.id,
       planKey: priceSnapshot.product.plan.key,
     };
   });
+
+  if (!params.skipCacheInvalidation) {
+    await invalidateWorkspaceEntitlementsCache(params.workspaceId);
+    await syncWorkspaceRoutingState(params.workspaceId);
+    await invalidateWorkspaceBillingCaches(params.workspaceId);
+  }
+
+  return result;
 }

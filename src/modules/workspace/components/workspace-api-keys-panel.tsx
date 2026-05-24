@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -10,7 +10,6 @@ import {
   ShieldCheckIcon,
   Trash2Icon,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
 import {
   Alert,
@@ -131,24 +130,16 @@ function StatCard({
 export function WorkspaceApiKeysPanel({
   apiKeys,
   availableScopes,
-  apiKeySummary,
   canCreate,
   canRotate,
   canRevoke,
 }: {
   apiKeys: ApiKeyListItem[];
   availableScopes: WorkspaceApiKeyScope[];
-  apiKeySummary: {
-    totalKeys: number;
-    activeKeys: number;
-    revokedKeys: number;
-    expiredKeys: number;
-  };
   canCreate: boolean;
   canRotate: boolean;
   canRevoke: boolean;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,7 +147,35 @@ export function WorkspaceApiKeysPanel({
     name: string;
     value: string;
   } | null>(null);
+  const [createdApiKeys, setCreatedApiKeys] = useState<ApiKeyListItem[]>([]);
+  const [apiKeyOverrides, setApiKeyOverrides] = useState<
+    Record<string, Partial<ApiKeyListItem>>
+  >({});
   const defaultScopes = availableScopes.map((scope) => scope.key);
+  const derivedApiKeys = useMemo(() => {
+    const baseIds = new Set(apiKeys.map((apiKey) => apiKey.id));
+    const mergedCreated = createdApiKeys
+      .filter((apiKey) => !baseIds.has(apiKey.id))
+      .map((apiKey) => ({
+        ...apiKey,
+        ...(apiKeyOverrides[apiKey.id] ?? {}),
+      }));
+
+    const mergedBase = apiKeys.map((apiKey) => ({
+      ...apiKey,
+      ...(apiKeyOverrides[apiKey.id] ?? {}),
+    }));
+
+    return [...mergedCreated, ...mergedBase];
+  }, [apiKeys, apiKeyOverrides, createdApiKeys]);
+  const derivedSummary = useMemo(() => {
+    return {
+      totalKeys: derivedApiKeys.length,
+      activeKeys: derivedApiKeys.filter((apiKey) => apiKey.isActive && !apiKey.isExpired).length,
+      revokedKeys: derivedApiKeys.filter((apiKey) => !apiKey.isActive).length,
+      expiredKeys: derivedApiKeys.filter((apiKey) => apiKey.isExpired).length,
+    };
+  }, [derivedApiKeys]);
 
   const form = useForm<CreateWorkspaceApiKeyActionInput>({
     resolver: zodResolver(createWorkspaceApiKeyActionSchema),
@@ -198,7 +217,26 @@ export function WorkspaceApiKeysPanel({
         expiresAt: '',
         scopes: defaultScopes,
       });
-      router.refresh();
+      setCreatedApiKeys((current) => [
+        {
+          id: response.data.apiKeyId,
+          name: response.data.name,
+          keyPrefix: response.data.keyPrefix ?? null,
+          description: data.description ?? null,
+          scopes: data.scopes,
+          isActive: true,
+          isExpired: Boolean(
+            response.data.expiresAt &&
+              new Date(response.data.expiresAt).getTime() < Date.now(),
+          ),
+          expiresAt: response.data.expiresAt,
+          lastUsedAt: null,
+          revokedAt: null,
+          createdAt: new Date().toISOString(),
+          createdByName: 'You',
+        },
+        ...current.filter((apiKey) => apiKey.id !== response.data.apiKeyId),
+      ]);
     });
   };
 
@@ -222,7 +260,15 @@ export function WorkspaceApiKeysPanel({
         name: response.data.name,
         value: response.data.plainTextKey,
       });
-      router.refresh();
+      setApiKeyOverrides((current) => ({
+        ...current,
+        [apiKeyId]: {
+          ...(current[apiKeyId] ?? {}),
+          isActive: true,
+          keyPrefix: response.data.keyPrefix ?? null,
+          revokedAt: null,
+        },
+      }));
     });
   };
 
@@ -241,7 +287,14 @@ export function WorkspaceApiKeysPanel({
       }
 
       setFlashMessage(response.data.successMessage);
-      router.refresh();
+      setApiKeyOverrides((current) => ({
+        ...current,
+        [apiKeyId]: {
+          ...(current[apiKeyId] ?? {}),
+          isActive: false,
+          revokedAt: new Date().toISOString(),
+        },
+      }));
     });
   };
 
@@ -401,10 +454,10 @@ export function WorkspaceApiKeysPanel({
   return (
     <section className="grid gap-6">
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Total Keys" value={apiKeySummary.totalKeys} />
-        <StatCard label="Active Keys" value={apiKeySummary.activeKeys} />
-        <StatCard label="Revoked Keys" value={apiKeySummary.revokedKeys} />
-        <StatCard label="Expired Keys" value={apiKeySummary.expiredKeys} />
+        <StatCard label="Total Keys" value={derivedSummary.totalKeys} />
+        <StatCard label="Active Keys" value={derivedSummary.activeKeys} />
+        <StatCard label="Revoked Keys" value={derivedSummary.revokedKeys} />
+        <StatCard label="Expired Keys" value={derivedSummary.expiredKeys} />
       </div>
 
       {revealedSecret && (
@@ -517,7 +570,7 @@ export function WorkspaceApiKeysPanel({
         <AdminDataTable
           title="Issued Keys"
           columns={columns}
-          data={apiKeys}
+          data={derivedApiKeys}
           searchPlaceholder="Search keys by name, prefix, creator, scope, or status"
           emptyStateTitle="No API keys issued yet"
           emptyStateDescription="Issue the first workspace API key to manage integrations from this table."

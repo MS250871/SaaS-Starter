@@ -19,7 +19,6 @@ import {
   YAxis,
 } from "recharts"
 
-import { AdminContentSheetTestButton } from "@/components/admin/admin-content-sheet"
 import { Badge } from "@/components/ui/badge"
 import {
   Card,
@@ -142,10 +141,6 @@ export function WorkspaceOverviewDashboard({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
-        <AdminContentSheetTestButton areaLabel="Workspace" />
-      </div>
-
       <section className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <OverviewStatCard
           badge="6 month window"

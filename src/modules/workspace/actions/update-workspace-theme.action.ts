@@ -37,6 +37,19 @@ const updateWorkspaceThemeActionImpl = createAction(async (formData: FormData) =
     workspaceId: result.workspaceId,
     themes: result.themes,
   };
+}, {
+  audit: {
+    onSuccess: ({ result }) => ({
+      scope: 'WORKSPACE',
+      category: 'WORKSPACE',
+      source: 'WORKSPACE_APP',
+      action: 'workspace.theme.update',
+      entityType: 'Workspace',
+      entityId: result.workspaceId,
+      description: 'Workspace theme updated.',
+      newValue: result.themes,
+    }),
+  },
 });
 
 export async function updateWorkspaceThemeAction(formData: FormData) {

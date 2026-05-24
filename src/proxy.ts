@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getAuthSecurityEnv } from '@/lib/env';
 import { resolveWorkspace } from '@/lib/middleware/resolve-workspace';
 import { resolveSession } from '@/lib/middleware/resolve-session';
 
 import { injectRequestHeaders } from '@/lib/middleware/request-headers';
 import { injectActorHeaders } from '@/lib/middleware/actor-headers';
 import { handleRouteGuards } from '@/lib/middleware/route-gaurds';
+import { stripInternalContextHeaders } from '@/lib/middleware/internal-context-headers';
 import {
   resolveFreeWorkspacePath,
   resolveWorkspaceCanonicalRedirect,
 } from '@/lib/middleware/proxy-utils';
 import { WORKSPACE_PUBLIC_HOME_PATH } from '@/modules/workspace/routing';
+
+getAuthSecurityEnv();
 
 export async function proxy(req: NextRequest) {
   const freeWorkspacePath = resolveFreeWorkspacePath(req);
@@ -21,11 +25,8 @@ export async function proxy(req: NextRequest) {
       : freeWorkspacePath?.rewrittenPathname ?? req.nextUrl.pathname;
   const rewrittenUrl = req.nextUrl.clone();
   rewrittenUrl.pathname = normalizedPathname;
-
-  const res =
-    normalizedPathname !== req.nextUrl.pathname
-      ? NextResponse.rewrite(rewrittenUrl)
-      : NextResponse.next();
+  const forwardedHeaders = new Headers(req.headers);
+  stripInternalContextHeaders(forwardedHeaders);
 
   /* ---------------- SESSION ---------------- */
   const session = await resolveSession(req);
@@ -51,10 +52,15 @@ export async function proxy(req: NextRequest) {
   }
 
   /* ---------------- REQUEST CONTEXT (IMPORTANT: AFTER workspace) ---------------- */
-  await injectRequestHeaders(req, res, workspace, normalizedPathname);
+  const requestHeaderState = await injectRequestHeaders(
+    req,
+    forwardedHeaders,
+    workspace,
+    normalizedPathname,
+  );
 
   /* ---------------- ACTOR CONTEXT ---------------- */
-  injectActorHeaders(res, session);
+  injectActorHeaders(forwardedHeaders, session);
 
   /* ---------------- ROUTE GUARDS ---------------- */
   const guardResponse = handleRouteGuards(
@@ -65,11 +71,44 @@ export async function proxy(req: NextRequest) {
   );
 
   if (guardResponse) {
+    if (requestHeaderState.shouldSetDeviceCookie) {
+      guardResponse.cookies.set('device_id', requestHeaderState.deviceId, {
+        httpOnly: true,
+        secure: requestHeaderState.secureCookies,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 365 * 24 * 60 * 60,
+      });
+    }
+
     if (hasStaleSessionCookie) {
       guardResponse.cookies.delete('user_session');
     }
 
     return guardResponse;
+  }
+
+  const res =
+    normalizedPathname !== req.nextUrl.pathname
+      ? NextResponse.rewrite(rewrittenUrl, {
+          request: {
+            headers: forwardedHeaders,
+          },
+        })
+      : NextResponse.next({
+          request: {
+            headers: forwardedHeaders,
+          },
+        });
+
+  if (requestHeaderState.shouldSetDeviceCookie) {
+    res.cookies.set('device_id', requestHeaderState.deviceId, {
+      httpOnly: true,
+      secure: requestHeaderState.secureCookies,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 365 * 24 * 60 * 60,
+    });
   }
 
   if (hasStaleSessionCookie) {

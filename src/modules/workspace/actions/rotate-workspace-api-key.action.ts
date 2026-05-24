@@ -46,6 +46,23 @@ const rotateWorkspaceApiKeyActionImpl = createAction(async (formData: FormData) 
     successMessage: `${result.name} rotated successfully.`,
     ...result,
   };
+}, {
+  audit: {
+    onSuccess: ({ result }) => ({
+      scope: 'WORKSPACE',
+      category: 'SECURITY',
+      source: 'WORKSPACE_APP',
+      action: 'workspace.apiKey.rotate',
+      entityType: 'ApiKey',
+      entityId: result.apiKeyId,
+      description: `Workspace API key ${result.name} rotated.`,
+      newValue: {
+        keyPrefix: result.keyPrefix,
+        name: result.name,
+        rotated: true,
+      },
+    }),
+  },
 });
 
 export async function rotateWorkspaceApiKeyAction(formData: FormData) {

@@ -1,11 +1,9 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   getWebhookEventById,
   requeueWebhookEvent,
@@ -26,7 +24,7 @@ async function requirePlatformAdminSession() {
 
 const requeuePlatformWebhookEventActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const webhookEventId = String(formData.get('webhookEventId') ?? '').trim();
 
     if (!webhookEventId) {
@@ -36,24 +34,30 @@ const requeuePlatformWebhookEventActionImpl = createTxAction(
     const event = await getWebhookEventById(webhookEventId);
     await requeueWebhookEvent(event.id);
 
-    const requestContext = getRequestContext();
-    await logAdminAction({
-      adminIdentityId: session.identityId,
-      adminEmail: null,
-      adminRole: session.platformRoleSystemKeys?.[0] ?? null,
-      action: 'webhook.event.requeue',
-      entityType: 'WebhookEvent',
-      entityId: event.id,
-      description: `Webhook event ${event.provider}:${event.eventType} requeued.`,
-      ipAddress: requestContext.ip,
-      userAgent: requestContext.userAgent,
-      requestId: requestContext.requestId,
-    });
-
     return {
       webhookEventId: event.id,
       successMessage: 'Webhook event requeued successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const webhookEventId = String(
+          formData.get('webhookEventId') ?? '',
+        ).trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'INTEGRATION' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'webhook.event.requeue',
+          entityType: 'WebhookEvent',
+          entityId: result.webhookEventId || webhookEventId,
+          description: 'Webhook event requeued.',
+        };
+      },
+    },
   },
 );
 

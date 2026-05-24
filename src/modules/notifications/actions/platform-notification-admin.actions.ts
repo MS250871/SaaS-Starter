@@ -1,15 +1,14 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import { getNotificationDeliveryById } from '@/modules/notifications/services/notification.services';
 import {
-  processNotificationDeliveryOutboxEvent,
+  dispatchNotificationDeliveryOutboxEvent,
   replayNotificationDeliveryOutboxEvent,
 } from '@/modules/notifications/services/notification-outbox.services';
 import {
@@ -46,9 +45,28 @@ function getSenderName(params: {
   return params.email ?? 'Platform operator';
 }
 
+function buildNotificationAuditInput(params: {
+  action: string;
+  entityType: string;
+  entityId: string;
+  description: string;
+  metadata?: Prisma.InputJsonValue | null;
+}) {
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'NOTIFICATION' as const,
+    source: 'ADMIN_PANEL' as const,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    description: params.description,
+    metadata: params.metadata ?? undefined,
+  };
+}
+
 const replayPlatformNotificationDeliveryActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const deliveryId = String(formData.get('deliveryId') ?? '').trim();
 
     if (!deliveryId) {
@@ -60,24 +78,25 @@ const replayPlatformNotificationDeliveryActionImpl = createTxAction(
       `notifications:delivery:${delivery.id}`,
     );
 
-    const requestContext = getRequestContext();
-    await logAdminAction({
-      adminIdentityId: session.identityId,
-      adminEmail: null,
-      adminRole: session.platformRoleSystemKeys?.[0] ?? null,
-      action: 'notification.delivery.replay',
-      entityType: 'NotificationDelivery',
-      entityId: delivery.id,
-      description: `Notification delivery replay requested for ${delivery.channel}.`,
-      ipAddress: requestContext.ip,
-      userAgent: requestContext.userAgent,
-      requestId: requestContext.requestId,
-    });
-
     return {
       deliveryId: delivery.id,
       successMessage: 'Notification delivery replay requested successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const deliveryId = String(formData.get('deliveryId') ?? '').trim();
+
+        return buildNotificationAuditInput({
+          action: 'notification.delivery.replay',
+          entityType: 'NotificationDelivery',
+          entityId: result.deliveryId || deliveryId,
+          description: 'Notification delivery replay requested.',
+        });
+      },
+    },
   },
 );
 
@@ -109,44 +128,47 @@ const sendPlatformWorkspaceNotificationActionImpl = createTxAction(
       senderScope: 'platform',
     });
 
-    let deliveryFailures = 0;
+    let queueFailures = 0;
 
     for (const event of result.outboxEvents) {
       try {
-        await processNotificationDeliveryOutboxEvent(event.id);
+        await dispatchNotificationDeliveryOutboxEvent(event.id);
       } catch (error) {
-        deliveryFailures += 1;
-        console.error('Platform notification delivery failed:', error);
+        queueFailures += 1;
+        console.error('Platform notification queue publish failed:', error);
       }
     }
-
-    const requestContext = getRequestContext();
-    await logAdminAction({
-      adminIdentityId: session.identityId,
-      adminEmail: sender.email ?? null,
-      adminRole: session.platformRoleSystemKeys?.[0] ?? null,
-      action: 'notification.workspace.send',
-      entityType: 'Workspace',
-      entityId: workspace.id,
-      description: `Notification sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in workspace ${workspace.name}.`,
-      ipAddress: requestContext.ip,
-      userAgent: requestContext.userAgent,
-      requestId: requestContext.requestId,
-    });
 
     const successMessage =
       result.outboxEvents.length === 0
         ? `Notification sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in ${workspace.name}.`
-        : deliveryFailures === 0
-          ? `Notification sent to ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in ${workspace.name}, and all deliveries were processed.`
-          : `Notification created for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in ${workspace.name}, but ${deliveryFailures} delivery attempt${deliveryFailures === 1 ? '' : 's'} failed.`;
+        : queueFailures === 0
+          ? `Notification queued for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in ${workspace.name}.`
+          : `Notification created for ${result.recipientCount} recipient${result.recipientCount === 1 ? '' : 's'} in ${workspace.name}, but ${queueFailures} delivery queue attempt${queueFailures === 1 ? '' : 's'} failed.`;
 
     return {
       workspaceId: workspace.id,
       recipientCount: result.recipientCount,
-      deliveryFailures,
+      deliveryFailures: queueFailures,
       successMessage,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildNotificationAuditInput({
+          action: 'notification.workspace.send',
+          entityType: 'Workspace',
+          entityId: result.workspaceId,
+          description: `Notification queued for ${result.recipientCount} recipient${
+            result.recipientCount === 1 ? '' : 's'
+          }.`,
+          metadata: {
+            deliveryFailures: result.deliveryFailures,
+            recipientCount: result.recipientCount,
+          },
+        }),
+    },
   },
 );
 

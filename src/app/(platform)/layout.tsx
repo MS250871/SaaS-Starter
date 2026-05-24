@@ -57,6 +57,7 @@ export default async function PlatformLayout({
   const navGroups = filterPlatformNavGroupsByPermissions(
     platformNavGroups,
     actor.permissions ?? [],
+    actor.platformRoleSystemKeys ?? [],
   )
 
   return (

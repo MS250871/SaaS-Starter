@@ -38,6 +38,31 @@ const importWorkspaceCustomerCsvActionImpl = createTxAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const fileName = String(formData.get('fileName') ?? '').trim() || null;
+
+        return {
+          scope: 'WORKSPACE' as const,
+          category: 'CUSTOMER' as const,
+          source: 'WORKSPACE_APP' as const,
+          action: 'workspace.customer.importCsv',
+          entityType: 'Workspace',
+          description: `${result.summary.importedRows} customer(s) imported from CSV.`,
+          metadata: {
+            errorRows: result.summary.errorRows,
+            existingRows: result.summary.existingRows,
+            fileName,
+            importedRows: result.summary.importedRows,
+            skippedRows: result.summary.skippedRows,
+            totalRows: result.summary.totalRows,
+          },
+        };
+      },
+    },
+  },
 );
 
 export async function importWorkspaceCustomerCsvAction(formData: FormData) {

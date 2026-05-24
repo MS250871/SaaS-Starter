@@ -9,6 +9,8 @@ import {
 type BuildActorContextParams = {
   identityId?: string
   customerId?: string
+  apiKeyId?: string
+  apiKeyScopes?: string[]
   platformRole?: string
   platformRoleKeys?: string[]
   platformRoleSystemKeys?: string[]
@@ -56,11 +58,14 @@ export function buildActorContext(
 
   if (params.identityId) actorType = "identity"
   if (params.customerId) actorType = "customer"
+  if (params.apiKeyId) actorType = "api_key"
 
   return {
     actorType,
     identityId: params.identityId,
     customerId: params.customerId,
+    apiKeyId: params.apiKeyId,
+    apiKeyScopes: params.apiKeyScopes ?? [],
     platformRole: primaryPlatformRole,
     platformRoleKeys,
     platformRoleSystemKeys,

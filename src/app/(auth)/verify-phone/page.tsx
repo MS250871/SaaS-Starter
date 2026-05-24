@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { PlatformAuthShell } from '@/modules/auth/components/platform-auth-shell';
 import { VerifyForm } from '@/modules/auth/components/verify-form';
 import { WorkspaceAuthShell } from '@/modules/auth/components/workspace-auth-shell';
@@ -5,6 +6,10 @@ import { getWorkspaceAuthPageData } from '@/modules/workspace/server/workspace-a
 
 export default async function VerifyPhonePage() {
   const workspaceAuth = await getWorkspaceAuthPageData();
+
+  if (workspaceAuth?.canonicalRedirectUrl) {
+    redirect(workspaceAuth.canonicalRedirectUrl);
+  }
 
   const form = (
     <VerifyForm

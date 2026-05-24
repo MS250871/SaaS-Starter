@@ -1,11 +1,9 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   getOutboxEventById,
   requeueOutboxEvent,
@@ -26,7 +24,7 @@ async function requirePlatformAdminSession() {
 
 const requeuePlatformOutboxEventActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const outboxEventId = String(formData.get('outboxEventId') ?? '').trim();
 
     if (!outboxEventId) {
@@ -36,24 +34,28 @@ const requeuePlatformOutboxEventActionImpl = createTxAction(
     const event = await getOutboxEventById(outboxEventId);
     await requeueOutboxEvent(event.id);
 
-    const requestContext = getRequestContext();
-    await logAdminAction({
-      adminIdentityId: session.identityId,
-      adminEmail: null,
-      adminRole: session.platformRoleSystemKeys?.[0] ?? null,
-      action: 'outbox.event.requeue',
-      entityType: 'OutboxEvent',
-      entityId: event.id,
-      description: `Outbox event ${event.eventType} requeued.`,
-      ipAddress: requestContext.ip,
-      userAgent: requestContext.userAgent,
-      requestId: requestContext.requestId,
-    });
-
     return {
       outboxEventId: event.id,
       successMessage: 'Outbox event requeued successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const outboxEventId = String(formData.get('outboxEventId') ?? '').trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'INTEGRATION' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'outbox.event.requeue',
+          entityType: 'OutboxEvent',
+          entityId: result.outboxEventId || outboxEventId,
+          description: 'Outbox event requeued.',
+        };
+      },
+    },
   },
 );
 

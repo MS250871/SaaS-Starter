@@ -1,9 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { randomUUID } from '@/lib/auth/auth-utils';
 import { getRequestMetadata } from '@/lib/http/request-metadata';
 import { ensureDeviceIdValue } from '@/lib/auth/auth-utils';
-
-const IS_PROD = process.env.NODE_ENV === 'production';
+import { shouldUseSecureCookies } from '@/lib/http/cookie-security';
 
 type WorkspaceContext = {
   workspaceId: string;
@@ -13,31 +12,43 @@ type WorkspaceContext = {
   strategy?: string;
 };
 
+export type RequestHeaderInjectionResult = {
+  deviceId: string;
+  shouldSetDeviceCookie: boolean;
+  secureCookies: boolean;
+};
+
 export async function injectRequestHeaders(
   req: NextRequest,
-  res: NextResponse,
+  headers: Headers,
   workspace?: WorkspaceContext | null,
   pathOverride?: string,
-) {
+): Promise<RequestHeaderInjectionResult> {
+  const resolvedPath = pathOverride ?? req.nextUrl.pathname;
+  const secureCookies = shouldUseSecureCookies({
+    forwardedProto: req.headers.get('x-forwarded-proto'),
+    origin: req.headers.get('origin'),
+    referer: req.headers.get('referer'),
+    host: req.headers.get('host'),
+  });
+
   /* ---------------- REQUEST ID ---------------- */
   const requestId = randomUUID();
 
   /* ---------------- DEVICE ID ---------------- */
   const existingDeviceId = req.cookies.get('device_id')?.value;
   const deviceId = ensureDeviceIdValue(existingDeviceId);
-
-  if (!existingDeviceId || existingDeviceId !== deviceId) {
-    res.cookies.set('device_id', deviceId, {
-      httpOnly: true,
-      secure: IS_PROD,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 365 * 24 * 60 * 60,
-    });
-  }
+  const shouldSetDeviceCookie =
+    !existingDeviceId || existingDeviceId !== deviceId;
 
   /* ---------------- METADATA ---------------- */
-  const metadata = await getRequestMetadata(req.headers);
+  const metadata = await getRequestMetadata(req.headers, {
+    includeClientDetails:
+      resolvedPath === '/login' ||
+      resolvedPath === '/signup' ||
+      resolvedPath === '/verify-otp' ||
+      resolvedPath === '/create-workspace',
+  });
 
   /* ---------------- FULL CONTEXT ---------------- */
   const context = {
@@ -62,9 +73,17 @@ export async function injectRequestHeaders(
     deviceId,
 
     method: req.method,
-    path: pathOverride ?? req.nextUrl.pathname,
+    path: resolvedPath,
+    originalPath: req.nextUrl.pathname,
+    search: req.nextUrl.search,
   };
 
   /* ---------------- SINGLE HEADER ---------------- */
-  res.headers.set('x-request-context', JSON.stringify(context));
+  headers.set('x-request-context', JSON.stringify(context));
+
+  return {
+    deviceId,
+    shouldSetDeviceCookie,
+    secureCookies,
+  };
 }

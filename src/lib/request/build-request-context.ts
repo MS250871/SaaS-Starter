@@ -25,12 +25,18 @@ function readCookieValue(cookieHeader: string | null, key: string) {
 export async function buildRequestContextFromRequest(
   req: Request,
 ): Promise<RequestContext> {
-  const metadata = await getRequestMetadata(req.headers)
   const cookieHeader = req.headers.get('cookie')
   const deviceId = ensureDeviceIdValue(
     readCookieValue(cookieHeader, 'device_id'),
   )
   const url = new URL(req.url)
+  const metadata = await getRequestMetadata(req.headers, {
+    includeClientDetails:
+      url.pathname === '/login' ||
+      url.pathname === '/signup' ||
+      url.pathname === '/verify-otp' ||
+      url.pathname === '/create-workspace',
+  })
 
   return {
     requestId: randomUUID(),
@@ -42,5 +48,7 @@ export async function buildRequestContextFromRequest(
     deviceId,
     method: req.method,
     path: url.pathname,
+    originalPath: url.pathname,
+    search: url.search,
   }
 }

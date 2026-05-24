@@ -142,3 +142,15 @@ export const otpSchema = z.object({
   mode: z.enum(['email', 'phone']),
 });
 export type OtpSchema = z.infer<typeof otpSchema>;
+
+/* =========================================================
+   POST-LOGIN WORKSPACE SELECTION
+========================================================= */
+
+export const selectWorkspaceActionSchema = z.object({
+  workspaceId: z.string().uuid('Invalid workspace selection'),
+});
+
+export type SelectWorkspaceActionInput = z.input<
+  typeof selectWorkspaceActionSchema
+>;

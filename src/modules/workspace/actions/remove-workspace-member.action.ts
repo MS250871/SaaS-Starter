@@ -39,6 +39,23 @@ const removeWorkspaceMemberActionImpl = createAction(
       currentWorkspaceRoleKey: session.workspaceRoleKey ?? session.workspaceRole,
     });
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'GOVERNANCE',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.membership.remove',
+        entityType: 'WorkspaceMembership',
+        entityId: result.membershipId,
+        description: 'Workspace member removed.',
+        metadata: {
+          identityId: result.identityId,
+          workspaceId: result.workspaceId,
+        },
+      }),
+    },
+  },
 );
 
 export async function removeWorkspaceMemberAction(formData: FormData) {

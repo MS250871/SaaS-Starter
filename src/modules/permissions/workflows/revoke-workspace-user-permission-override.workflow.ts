@@ -1,4 +1,5 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { invalidatePermissionsCache } from '@/modules/permissions/services/permission-cache.services';
 import {
   getWorkspaceUserPermissionOverride,
   revokePermission,
@@ -9,7 +10,7 @@ export async function revokeWorkspaceUserPermissionOverrideWorkflow(input: {
   userPermissionId: string;
   revokedById?: string;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const override = await getWorkspaceUserPermissionOverride(
       input.workspaceId,
       input.userPermissionId,
@@ -28,4 +29,8 @@ export async function revokeWorkspaceUserPermissionOverrideWorkflow(input: {
         'Workspace member',
     };
   });
+
+  await invalidatePermissionsCache();
+
+  return result;
 }

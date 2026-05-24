@@ -54,7 +54,6 @@ export function PlatformWorkspaceDomainDetailControls({
 
       if (options?.redirectOnSuccess) {
         router.push(afterDeleteHref);
-        router.refresh();
         return;
       }
 

@@ -10,12 +10,18 @@ import {
   getAuthCookie,
   getVerificationSession,
 } from '@/lib/auth/auth-cookies';
-import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
+import { dispatchOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import { resendOtpWorkflow } from '@/modules/auth/workflows/resend.workflow';
 import {
   buildWorkspaceLoginPath,
   buildWorkspaceSignupPath,
 } from '@/modules/workspace/routing';
+import {
+  buildNavErrorAudit,
+  getNavAuditState,
+  setNavAuditState,
+} from '@/modules/auth/auth-nav-audit';
+import { assertOtpResendRateLimit } from '@/modules/auth/auth-rate-limit';
 
 async function redirectForExpiredVerification(): Promise<never> {
   const auth = await getAuthCookie();
@@ -107,11 +113,39 @@ const resendActionImpl = createNavAction(async () => {
     return redirectForExpiredVerification();
   }
 
+  await assertOtpResendRateLimit(verificationSession.verificationId);
+
   const result = await resendOtpWorkflow({
     verificationSession,
   });
 
-  await processOtpOutboxEvent(result.outboxEventId);
+  setNavAuditState({
+    category: 'AUTH',
+    source: 'AUTH',
+    action: 'auth.otp.resend',
+    entityType: 'VerificationSession',
+    entityId: verificationSession.verificationId,
+    description: 'Verification OTP resent.',
+    metadata: {
+      mode: verificationSession.mode,
+      otpPurpose: verificationSession.otpPurpose,
+      step: verificationSession.step,
+    },
+  });
+
+  await dispatchOtpOutboxEvent(result.outboxEventId);
+}, {
+  audit: {
+    onSuccess: () => getNavAuditState(),
+    onError: ({ error, state }) =>
+      buildNavErrorAudit({
+        action: 'auth.otp.resend',
+        description: 'Verification OTP could not be resent.',
+        error,
+        state: state as ReturnType<typeof getNavAuditState>,
+        entityType: 'VerificationSession',
+      }),
+  },
 });
 
 export async function resendAction() {

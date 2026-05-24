@@ -1,5 +1,6 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -21,6 +22,25 @@ import {
 
 function parseCheckboxValue(formData: FormData, key: string) {
   return formData.get(key) === 'on' || formData.get(key) === 'true';
+}
+
+function buildEntitlementAuditInput(params: {
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  description: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'ENTITLEMENT' as const,
+    source: 'ADMIN_PANEL' as const,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    description: params.description,
+    metadata: params.metadata,
+  };
 }
 
 async function requirePlatformOverridePermission(required: string) {
@@ -61,6 +81,28 @@ const createWorkspaceFeatureOverrideActionImpl = createTxAction(
       successMessage: 'Feature override saved successfully.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceId = String(formData.get('workspaceId') ?? '').trim();
+        const featureId = String(formData.get('featureId') ?? '').trim();
+        const isEnabled = parseCheckboxValue(formData, 'isEnabled');
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.featureOverride.create',
+          entityType: 'WorkspaceFeatureOverride',
+          entityId: result.overrideId,
+          description: `Feature override created for workspace ${workspaceId}.`,
+          metadata: {
+            featureId,
+            isEnabled,
+            workspaceId,
+          },
+        });
+      },
+    },
+  },
 );
 
 const syncWorkspaceFeatureOverridesActionImpl = createTxAction(
@@ -84,6 +126,26 @@ const syncWorkspaceFeatureOverridesActionImpl = createTxAction(
       workspaceId: result.workspaceId,
       successMessage: 'Workspace feature overrides updated successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const enabledFeatureIds = formData.getAll('featureIds').map(String);
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.featureOverride.sync',
+          entityType: 'Workspace',
+          entityId: result.workspaceId,
+          description: `Workspace feature overrides synced for workspace ${result.workspaceId}.`,
+          metadata: {
+            enabledFeatureCount: enabledFeatureIds.length,
+            enabledFeatureIds,
+            workspaceId: result.workspaceId,
+          },
+        });
+      },
+    },
   },
 );
 
@@ -115,6 +177,28 @@ const updateWorkspaceFeatureOverrideActionImpl = createTxAction(
       successMessage: 'Feature override updated successfully.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceId = String(formData.get('workspaceId') ?? '').trim();
+        const featureId = String(formData.get('featureId') ?? '').trim();
+        const isEnabled = parseCheckboxValue(formData, 'isEnabled');
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.featureOverride.update',
+          entityType: 'WorkspaceFeatureOverride',
+          entityId: result.overrideId,
+          description: `Feature override updated for workspace ${workspaceId}.`,
+          metadata: {
+            featureId,
+            isEnabled,
+            workspaceId,
+          },
+        });
+      },
+    },
+  },
 );
 
 const deleteWorkspaceFeatureOverrideActionImpl = createTxAction(
@@ -130,6 +214,21 @@ const deleteWorkspaceFeatureOverrideActionImpl = createTxAction(
     return {
       successMessage: 'Feature override deleted successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args }) => {
+        const formData = args[0];
+        const overrideId = String(formData.get('overrideId') ?? '').trim();
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.featureOverride.delete',
+          entityType: 'WorkspaceFeatureOverride',
+          entityId: overrideId,
+          description: 'Feature override deleted.',
+        });
+      },
+    },
   },
 );
 
@@ -153,6 +252,30 @@ const createWorkspaceLimitOverrideActionImpl = createTxAction(
       overrideId: override.id,
       successMessage: 'Limit override saved successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceId = String(formData.get('workspaceId') ?? '').trim();
+        const limitDefinitionId = String(
+          formData.get('limitDefinitionId') ?? '',
+        ).trim();
+        const valueInt = String(formData.get('valueInt') ?? '').trim();
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.limitOverride.create',
+          entityType: 'WorkspaceLimitOverride',
+          entityId: result.overrideId,
+          description: `Limit override created for workspace ${workspaceId}.`,
+          metadata: {
+            limitDefinitionId,
+            valueInt,
+            workspaceId,
+          },
+        });
+      },
+    },
   },
 );
 
@@ -183,6 +306,30 @@ const updateWorkspaceLimitOverrideActionImpl = createTxAction(
       overrideId: override.id,
       successMessage: 'Limit override updated successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceId = String(formData.get('workspaceId') ?? '').trim();
+        const limitDefinitionId = String(
+          formData.get('limitDefinitionId') ?? '',
+        ).trim();
+        const valueInt = String(formData.get('valueInt') ?? '').trim();
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.limitOverride.update',
+          entityType: 'WorkspaceLimitOverride',
+          entityId: result.overrideId,
+          description: `Limit override updated for workspace ${workspaceId}.`,
+          metadata: {
+            limitDefinitionId,
+            valueInt,
+            workspaceId,
+          },
+        });
+      },
+    },
   },
 );
 
@@ -224,6 +371,26 @@ const syncWorkspaceLimitOverridesActionImpl = createTxAction(
       successMessage: 'Workspace limit overrides updated successfully.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const limitDefinitionIds = formData.getAll('limitDefinitionIds').map(String);
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.limitOverride.sync',
+          entityType: 'Workspace',
+          entityId: result.workspaceId,
+          description: `Workspace limit overrides synced for workspace ${result.workspaceId}.`,
+          metadata: {
+            limitDefinitionCount: limitDefinitionIds.length,
+            limitDefinitionIds,
+            workspaceId: result.workspaceId,
+          },
+        });
+      },
+    },
+  },
 );
 
 const deleteWorkspaceLimitOverrideActionImpl = createTxAction(
@@ -239,6 +406,21 @@ const deleteWorkspaceLimitOverrideActionImpl = createTxAction(
     return {
       successMessage: 'Limit override deleted successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args }) => {
+        const formData = args[0];
+        const overrideId = String(formData.get('overrideId') ?? '').trim();
+
+        return buildEntitlementAuditInput({
+          action: 'workspace.limitOverride.delete',
+          entityType: 'WorkspaceLimitOverride',
+          entityId: overrideId,
+          description: 'Limit override deleted.',
+        });
+      },
+    },
   },
 );
 

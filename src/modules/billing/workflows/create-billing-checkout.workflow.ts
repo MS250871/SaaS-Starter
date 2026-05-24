@@ -13,6 +13,7 @@ import { ERR } from '@/lib/errors/codes';
 import type { BillingInterval, Prisma } from '@/generated/prisma/client';
 import { resolveWorkspaceSurfaceRedirect } from '@/modules/auth/workflows/post-login.workflow';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
 import {
   type PriceCheckoutSnapshot,
   getPriceCheckoutSnapshotById,
@@ -36,6 +37,8 @@ import {
   calculateProratedUpgradeDelta,
   calculateUnusedSubscriptionValue,
 } from '@/modules/billing/services/proration.services';
+import { invalidateCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import type {
   CreateBillingCheckoutActionInput,
   BillingCheckoutMode,
@@ -199,6 +202,7 @@ async function ensureProviderPlanId(priceSnapshot: PriceCheckoutSnapshot) {
   await withUnitOfWork(() =>
     updatePriceProviderPriceId(priceSnapshot.id, providerPlan.id),
   );
+  await invalidateCatalogCache();
 
   return providerPlan.id;
 }
@@ -486,9 +490,10 @@ async function createSubscriptionCheckout(
             periodEnd: nextPeriodEnd.toISOString(),
           },
         });
-
-        await syncWorkspaceRoutingState(context.workspaceId!);
       });
+      await invalidateWorkspaceEntitlementsCache(context.workspaceId!);
+      await syncWorkspaceRoutingState(context.workspaceId!);
+      await invalidateWorkspaceBillingCaches(context.workspaceId!);
 
       await recordPaymentAttempt({
         paymentId: localPayment.id,

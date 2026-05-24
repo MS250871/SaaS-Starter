@@ -49,6 +49,24 @@ const updateWorkspaceRolePermissionOverrideActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'GOVERNANCE',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.rolePermissionOverride.update',
+        entityType: 'RoleDefinition',
+        entityId: result.roleDefinitionId,
+        description: `Role permission override updated for ${result.roleName}.`,
+        metadata: {
+          mode: result.mode,
+          permissionId: result.permissionId,
+          permissionKey: result.permissionKey,
+        },
+      }),
+    },
+  },
 );
 
 export async function updateWorkspaceRolePermissionOverrideAction(

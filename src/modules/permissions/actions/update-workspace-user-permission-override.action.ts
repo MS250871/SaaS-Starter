@@ -50,6 +50,25 @@ const updateWorkspaceUserPermissionOverrideActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'GOVERNANCE',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.userPermissionOverride.update',
+        entityType: 'UserPermission',
+        entityId: result.userPermissionId,
+        description: `Direct ${result.effect.toLowerCase()} override saved for ${result.memberName}.`,
+        metadata: {
+          effect: result.effect,
+          identityId: result.identityId,
+          permissionId: result.permissionId,
+          permissionKey: result.permissionKey,
+        },
+      }),
+    },
+  },
 );
 
 export async function updateWorkspaceUserPermissionOverrideAction(

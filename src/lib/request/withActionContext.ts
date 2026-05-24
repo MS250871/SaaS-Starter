@@ -34,3 +34,7 @@ export async function withActionContext<T>(handler: () => Promise<T>) {
 export async function withActionTxContext<T>(handler: () => Promise<T>) {
   return withActionContext(() => withUnitOfWork(handler));
 }
+
+export async function withActionReadContext<T>(handler: () => Promise<T>) {
+  return withActionContext(() => withUnitOfWork(handler));
+}

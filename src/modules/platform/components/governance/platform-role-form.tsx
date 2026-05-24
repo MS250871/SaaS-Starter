@@ -68,7 +68,6 @@ export function PlatformRoleForm({
       }
 
       router.push(`/platform/governance/roles/${response.data.roleDefinitionId}`);
-      router.refresh();
     });
   };
 

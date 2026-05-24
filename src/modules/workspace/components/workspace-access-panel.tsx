@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { KeyRoundIcon, ShieldIcon, UserCogIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   AlertDialog,
@@ -140,7 +139,6 @@ export function WorkspaceAccessPanel({
   };
   canManageAccess: boolean;
 }) {
-  const router = useRouter();
   const [isRoleUpdatePending, startRoleUpdateTransition] = useTransition();
   const [isUserUpdatePending, startUserUpdateTransition] = useTransition();
   const [roleMessage, setRoleMessage] = useState<string | null>(null);
@@ -208,6 +206,17 @@ export function WorkspaceAccessPanel({
       ),
     [filteredMemberOverrides],
   );
+  const derivedRoleOverrideCount = useMemo(
+    () =>
+      Object.values(roleOverrideModes).reduce(
+        (count, overridesForRole) =>
+          count +
+          Object.values(overridesForRole).filter((mode) => mode !== 'inherit')
+            .length,
+        0,
+      ),
+    [roleOverrideModes],
+  );
 
   const applyRoleOverrideChange = (
     roleDefinitionId: string,
@@ -250,7 +259,6 @@ export function WorkspaceAccessPanel({
       }
 
       setRoleMessage(response.data.successMessage);
-      router.refresh();
     });
   };
 
@@ -309,7 +317,6 @@ export function WorkspaceAccessPanel({
         ];
       });
       setUserMessage(response.data.successMessage);
-      router.refresh();
     });
   };
 
@@ -333,7 +340,6 @@ export function WorkspaceAccessPanel({
         current.filter((override) => override.id !== userPermissionId),
       );
       setUserMessage(response.data.successMessage);
-      router.refresh();
     });
   };
 
@@ -350,7 +356,7 @@ export function WorkspaceAccessPanel({
         />
         <StatCard
           label="Role Overrides"
-          value={accessSummary.roleOverrideCount}
+          value={derivedRoleOverrideCount}
         />
         <StatCard
           label="Direct Overrides"

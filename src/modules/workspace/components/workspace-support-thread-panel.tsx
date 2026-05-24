@@ -135,7 +135,6 @@ function TicketStatusSelect({
   disabled: boolean;
   onUpdated?: (nextStatus: string) => void;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -157,7 +156,6 @@ function TicketStatusSelect({
 
           onUpdated?.(response.data.status);
           showActionSuccess(response.data.successMessage, 'Ticket status updated.');
-          router.refresh();
         });
       }}
     >
@@ -190,7 +188,6 @@ function TicketAssigneeSelect({
     assigneeName: string | null;
   }) => void;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -220,7 +217,6 @@ function TicketAssigneeSelect({
             response.data.successMessage,
             'Ticket assignment updated.',
           );
-          router.refresh();
         });
       }}
     >
@@ -298,6 +294,7 @@ export function WorkspaceSupportThreadPanel({
 
     startReplyTransition(async () => {
       const submittedMessage = replyMessage.trim();
+      const hasAttachments = replyFiles.length > 0;
       const formData = new FormData();
       formData.append('ticketId', ticketState.id);
       formData.append('message', submittedMessage);
@@ -313,28 +310,32 @@ export function WorkspaceSupportThreadPanel({
       }
 
       showActionSuccess(response.data.successMessage, 'Reply added.');
-      setTicketState((current) =>
-        current
-          ? {
-              ...current,
-              updatedAt: new Date().toISOString(),
-              messageCount: current.messageCount + 1,
-              conversationItems: [
-                ...current.conversationItems,
-                buildOptimisticThreadEntry({
-                  id: response.data.messageId,
-                  kind: 'reply',
-                  message: submittedMessage,
-                  senderScope: 'workspace',
-                }),
-              ],
-            }
-          : current,
-      );
+      if (!hasAttachments) {
+        setTicketState((current) =>
+          current
+            ? {
+                ...current,
+                updatedAt: new Date().toISOString(),
+                messageCount: current.messageCount + 1,
+                conversationItems: [
+                  ...current.conversationItems,
+                  buildOptimisticThreadEntry({
+                    id: response.data.messageId,
+                    kind: 'reply',
+                    message: submittedMessage,
+                    senderScope: 'workspace',
+                  }),
+                ],
+              }
+            : current,
+        );
+      }
       setReplyMessage('');
       setReplyFiles([]);
       setReplyFileInputKey((current) => current + 1);
-      router.refresh();
+      if (hasAttachments) {
+        router.refresh();
+      }
     });
   };
 
@@ -345,6 +346,7 @@ export function WorkspaceSupportThreadPanel({
 
     startNoteTransition(async () => {
       const submittedMessage = internalNote.trim();
+      const hasAttachments = noteFiles.length > 0;
       const formData = new FormData();
       formData.append('ticketId', ticketState.id);
       formData.append('message', submittedMessage);
@@ -360,28 +362,32 @@ export function WorkspaceSupportThreadPanel({
       }
 
       showActionSuccess(response.data.successMessage, 'Internal note added.');
-      setTicketState((current) =>
-        current
-          ? {
-              ...current,
-              updatedAt: new Date().toISOString(),
-              messageCount: current.messageCount + 1,
-              internalNotes: [
-                ...current.internalNotes,
-                buildOptimisticThreadEntry({
-                  id: response.data.messageId,
-                  kind: 'internal_note',
-                  message: submittedMessage,
-                  senderScope: 'workspace',
-                }),
-              ],
-            }
-          : current,
-      );
+      if (!hasAttachments) {
+        setTicketState((current) =>
+          current
+            ? {
+                ...current,
+                updatedAt: new Date().toISOString(),
+                messageCount: current.messageCount + 1,
+                internalNotes: [
+                  ...current.internalNotes,
+                  buildOptimisticThreadEntry({
+                    id: response.data.messageId,
+                    kind: 'internal_note',
+                    message: submittedMessage,
+                    senderScope: 'workspace',
+                  }),
+                ],
+              }
+            : current,
+        );
+      }
       setInternalNote('');
       setNoteFiles([]);
       setNoteFileInputKey((current) => current + 1);
-      router.refresh();
+      if (hasAttachments) {
+        router.refresh();
+      }
     });
   };
 

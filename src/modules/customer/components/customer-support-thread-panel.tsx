@@ -141,6 +141,7 @@ export function CustomerSupportThreadPanel({
 
     startReplyTransition(async () => {
       const submittedMessage = replyMessage.trim();
+      const hasAttachments = replyFiles.length > 0;
       const formData = new FormData();
       formData.append('ticketId', ticketState.id);
       formData.append('message', submittedMessage);
@@ -156,26 +157,30 @@ export function CustomerSupportThreadPanel({
       }
 
       showActionSuccess(response.data.successMessage, 'Reply added.');
-      setTicketState((current) =>
-        current
-          ? {
-              ...current,
-              updatedAt: new Date().toISOString(),
-              messageCount: current.messageCount + 1,
-              conversationItems: [
-                ...current.conversationItems,
-                buildOptimisticThreadEntry({
-                  id: response.data.messageId,
-                  message: submittedMessage,
-                }),
-              ],
-            }
-          : current,
-      );
+      if (!hasAttachments) {
+        setTicketState((current) =>
+          current
+            ? {
+                ...current,
+                updatedAt: new Date().toISOString(),
+                messageCount: current.messageCount + 1,
+                conversationItems: [
+                  ...current.conversationItems,
+                  buildOptimisticThreadEntry({
+                    id: response.data.messageId,
+                    message: submittedMessage,
+                  }),
+                ],
+              }
+            : current,
+        );
+      }
       setReplyMessage('');
       setReplyFiles([]);
       setReplyFileInputKey((current) => current + 1);
-      router.refresh();
+      if (hasAttachments) {
+        router.refresh();
+      }
     });
   };
 

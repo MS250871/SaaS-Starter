@@ -1,12 +1,11 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import { governancePermissionActionSchema } from '@/modules/permissions/permission.schema';
+import { invalidatePermissionsCache } from '@/modules/permissions/services/permission-cache.services';
 import {
   createPermission,
   deletePermission,
@@ -32,30 +31,24 @@ async function requirePlatformAdminSession() {
   return session;
 }
 
-async function logPermissionAdminAction(params: {
-  session: Awaited<ReturnType<typeof requirePlatformAdminSession>>;
+function buildPermissionAuditInput(params: {
   action: string;
   entityId: string;
   description: string;
 }) {
-  const requestContext = getRequestContext();
-
-  await logAdminAction({
-    adminIdentityId: params.session.identityId,
-    adminEmail: null,
-    adminRole: params.session.platformRoleSystemKeys?.[0] ?? null,
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'GOVERNANCE' as const,
+    source: 'ADMIN_PANEL' as const,
     action: params.action,
     entityType: 'Permission',
     entityId: params.entityId,
     description: params.description,
-    ipAddress: requestContext.ip,
-    userAgent: requestContext.userAgent,
-    requestId: requestContext.requestId,
-  });
+  };
 }
 
 const createPermissionAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
 
   const parsed = governancePermissionActionSchema.parse({
     key: formData.get('key'),
@@ -73,21 +66,27 @@ const createPermissionAdminActionImpl = createTxAction(async (formData: FormData
     isActive: parsed.isActive,
   });
 
-  await logPermissionAdminAction({
-    session,
-    action: 'permission.create',
-    entityId: permission.id,
-    description: `Permission ${permission.key} created.`,
-  });
-
   return {
     permissionId: permission.id,
     successMessage: `${permission.key} created successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ result, args }) => {
+      const formData = args[0];
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildPermissionAuditInput({
+        action: 'permission.create',
+        entityId: result.permissionId,
+        description: `Permission ${key} created.`,
+      });
+    },
+  },
 });
 
 const updatePermissionAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
   const permissionId = String(formData.get('permissionId') ?? '').trim();
 
   if (!permissionId) {
@@ -110,21 +109,27 @@ const updatePermissionAdminActionImpl = createTxAction(async (formData: FormData
     isActive: parsed.isActive,
   });
 
-  await logPermissionAdminAction({
-    session,
-    action: 'permission.update',
-    entityId: permission.id,
-    description: `Permission ${permission.key} updated.`,
-  });
-
   return {
     permissionId: permission.id,
     successMessage: `${permission.key} updated successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ result, args }) => {
+      const formData = args[0];
+      const key = String(formData.get('key') ?? '').trim();
+
+      return buildPermissionAuditInput({
+        action: 'permission.update',
+        entityId: result.permissionId,
+        description: `Permission ${key} updated.`,
+      });
+    },
+  },
 });
 
 const togglePermissionAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
   const permissionId = String(formData.get('permissionId') ?? '').trim();
 
   if (!permissionId) {
@@ -134,23 +139,31 @@ const togglePermissionAdminActionImpl = createTxAction(async (formData: FormData
   const isActive = parseCheckboxValue(formData, 'isActive');
   const permission = await setPermissionActive(permissionId, isActive);
 
-  await logPermissionAdminAction({
-    session,
-    action: isActive ? 'permission.activate' : 'permission.deactivate',
-    entityId: permission.id,
-    description: `Permission ${permission.key} ${isActive ? 'activated' : 'deactivated'}.`,
-  });
-
   return {
     permissionId: permission.id,
     successMessage: `${permission.key} ${
       isActive ? 'activated' : 'deactivated'
     } successfully.`,
   };
+}, {
+  audit: {
+    onSuccess: ({ result, args }) => {
+      const formData = args[0];
+      const isActive = parseCheckboxValue(formData, 'isActive');
+
+      return buildPermissionAuditInput({
+        action: isActive ? 'permission.activate' : 'permission.deactivate',
+        entityId: result.permissionId,
+        description: `Permission ${
+          isActive ? 'activated' : 'deactivated'
+        }.`,
+      });
+    },
+  },
 });
 
 const deletePermissionAdminActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
+  await requirePlatformAdminSession();
   const permissionId = String(formData.get('permissionId') ?? '').trim();
 
   if (!permissionId) {
@@ -172,30 +185,60 @@ const deletePermissionAdminActionImpl = createTxAction(async (formData: FormData
 
   await deletePermission(permissionId);
 
-  await logPermissionAdminAction({
-    session,
-    action: 'permission.delete',
-    entityId: permissionId,
-    description: `Permission ${permission.key} deleted.`,
-  });
-
   return {
     successMessage: 'Permission deleted successfully.',
   };
+}, {
+  audit: {
+    onSuccess: ({ args }) => {
+      const formData = args[0];
+      const permissionId = String(formData.get('permissionId') ?? '').trim();
+
+      return buildPermissionAuditInput({
+        action: 'permission.delete',
+        entityId: permissionId,
+        description: 'Permission deleted.',
+      });
+    },
+  },
 });
 
 export async function createPermissionAdminAction(formData: FormData) {
-  return createPermissionAdminActionImpl(formData);
+  const response = await createPermissionAdminActionImpl(formData);
+
+  if (response.success) {
+    await invalidatePermissionsCache();
+  }
+
+  return response;
 }
 
 export async function updatePermissionAdminAction(formData: FormData) {
-  return updatePermissionAdminActionImpl(formData);
+  const response = await updatePermissionAdminActionImpl(formData);
+
+  if (response.success) {
+    await invalidatePermissionsCache();
+  }
+
+  return response;
 }
 
 export async function togglePermissionAdminAction(formData: FormData) {
-  return togglePermissionAdminActionImpl(formData);
+  const response = await togglePermissionAdminActionImpl(formData);
+
+  if (response.success) {
+    await invalidatePermissionsCache();
+  }
+
+  return response;
 }
 
 export async function deletePermissionAdminAction(formData: FormData) {
-  return deletePermissionAdminActionImpl(formData);
+  const response = await deletePermissionAdminActionImpl(formData);
+
+  if (response.success) {
+    await invalidatePermissionsCache();
+  }
+
+  return response;
 }

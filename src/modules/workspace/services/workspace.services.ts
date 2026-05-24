@@ -3,6 +3,7 @@ import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { readWorkspaceAdminSurfaceWorkspaceCache } from '@/modules/workspace/services/workspace-cache.services';
 
 export type PlatformWorkspaceAdminSnapshot = Prisma.WorkspaceGetPayload<{
   select: {
@@ -302,18 +303,22 @@ export async function workspaceExistsByDomain(domain: string) {
 export async function getWorkspaceAdminSurfaceWorkspace(workspaceId: string) {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID required');
 
-  const workspace = await workspaceQueries.findFirst({
-    where: {
-      id: workspaceId,
-      isActive: true,
-    },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      defaultDomain: true,
-    },
-  });
+  const workspace = await readWorkspaceAdminSurfaceWorkspaceCache(
+    workspaceId,
+    () =>
+      workspaceQueries.findFirst({
+        where: {
+          id: workspaceId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          defaultDomain: true,
+        },
+      }),
+  );
 
   if (!workspace) throwError(ERR.NOT_FOUND, 'Workspace not found');
 

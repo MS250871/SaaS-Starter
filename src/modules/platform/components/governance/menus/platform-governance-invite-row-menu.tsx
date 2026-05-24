@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react';
 import { flushSync } from 'react-dom';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -60,11 +59,9 @@ export function PlatformGovernanceInviteRowMenu({
   ) => Promise<ApiResponse<ChangeInviteRoleActionResult>>;
   revokeAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
-  const [isRefreshing, startRefreshTransition] = useTransition();
   const [isRunning, startActionTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
-  const isPending = isRunning || isRefreshing;
+  const isPending = isRunning;
   const availableRoles = assignableRoles.filter((role) => role.key !== currentRoleKey);
   const hasRoleChange = canManageRoles && availableRoles.length > 0;
   const hasAnyAction = canRevoke || hasRoleChange;
@@ -85,9 +82,6 @@ export function PlatformGovernanceInviteRowMenu({
         onRevokeSuccess?.(inviteId);
       });
       showActionSuccess(response.data.successMessage, 'Invite revoked.');
-      startRefreshTransition(() => {
-        router.refresh();
-      });
     });
   };
 
@@ -112,10 +106,6 @@ export function PlatformGovernanceInviteRowMenu({
         });
       });
       showActionSuccess(response.data.successMessage, 'Invite role updated.');
-
-      startRefreshTransition(() => {
-        router.refresh();
-      });
     });
   };
 

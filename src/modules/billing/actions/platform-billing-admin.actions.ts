@@ -1,11 +1,10 @@
 'use server'
 
 import { getUserSession } from '@/lib/auth/auth-cookies'
-import { getRequestContext } from '@/lib/context/request-context'
 import { ERR } from '@/lib/errors/codes'
 import { throwError } from '@/lib/errors/app-error'
 import { createTxAction } from '@/lib/http/create-action'
-import { logAdminAction } from '@/modules/audit/services/audit.services'
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services'
 import {
   platformBillingCancelSubscriptionActionSchema,
   platformBillingRefundPaymentActionSchema,
@@ -48,32 +47,26 @@ async function requirePlatformBillingSession(requiredPermission: string) {
   return session
 }
 
-async function logBillingAdminAction(params: {
-  session: Awaited<ReturnType<typeof requirePlatformBillingSession>>
+function buildBillingAuditInput(params: {
   action: string
   entityType: string
   entityId: string
   description: string
 }) {
-  const requestContext = getRequestContext()
-
-  await logAdminAction({
-    adminIdentityId: params.session.identityId,
-    adminEmail: null,
-    adminRole: params.session.platformRoleSystemKeys?.[0] ?? null,
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'BILLING' as const,
+    source: 'ADMIN_PANEL' as const,
     action: params.action,
     entityType: params.entityType,
     entityId: params.entityId,
     description: params.description,
-    ipAddress: requestContext.ip,
-    userAgent: requestContext.userAgent,
-    requestId: requestContext.requestId,
-  })
+  }
 }
 
 const schedulePlatformSubscriptionCancellationActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformBillingSession('platformBilling.update')
+    await requirePlatformBillingSession('platformBilling.update')
 
     const parsed = platformBillingCancelSubscriptionActionSchema.parse({
       subscriptionId: formData.get('subscriptionId'),
@@ -82,25 +75,30 @@ const schedulePlatformSubscriptionCancellationActionImpl = createTxAction(
     const subscription =
       await schedulePlatformSubscriptionCancellationWorkflow(parsed)
 
-    await logBillingAdminAction({
-      session,
-      action: 'subscription.cancel.schedule',
-      entityType: 'Subscription',
-      entityId: subscription.id,
-      description: 'Subscription scheduled to cancel at the current period end.',
-    })
-
     return {
       subscriptionId: subscription.id,
+      workspaceId: subscription.workspaceId ?? null,
       successMessage:
         'Subscription scheduled to cancel at the end of the current billing period.',
     }
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildBillingAuditInput({
+          action: 'subscription.cancel.schedule',
+          entityType: 'Subscription',
+          entityId: result.subscriptionId,
+          description:
+            'Subscription scheduled to cancel at the current period end.',
+        }),
+    },
   },
 )
 
 const refundPlatformPaymentActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformBillingSession('platformBilling.refund')
+    await requirePlatformBillingSession('platformBilling.refund')
 
     const parsed = platformBillingRefundPaymentActionSchema.parse({
       paymentId: formData.get('paymentId'),
@@ -111,25 +109,40 @@ const refundPlatformPaymentActionImpl = createTxAction(
 
     const refund = await refundPlatformPaymentWorkflow(parsed)
 
-    await logBillingAdminAction({
-      session,
-      action: 'payment.refund.create',
-      entityType: 'Refund',
-      entityId: refund.id,
-      description: `Refund created for payment ${refund.paymentId}.`,
-    })
-
     return {
       refundId: refund.id,
       successMessage: 'Refund request submitted successfully.',
     }
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0]
+        const paymentId = String(formData.get('paymentId') ?? '').trim()
+
+        return buildBillingAuditInput({
+          action: 'payment.refund.create',
+          entityType: 'Refund',
+          entityId: result.refundId,
+          description: `Refund created for payment ${paymentId}.`,
+        })
+      },
+    },
   },
 )
 
 export async function schedulePlatformSubscriptionCancellationAction(
   formData: FormData,
 ) {
-  return schedulePlatformSubscriptionCancellationActionImpl(formData)
+  const response = await schedulePlatformSubscriptionCancellationActionImpl(
+    formData,
+  )
+
+  if (response.success && response.data.workspaceId) {
+    await invalidateWorkspaceBillingCaches(response.data.workspaceId)
+  }
+
+  return response
 }
 
 export async function refundPlatformPaymentAction(formData: FormData) {

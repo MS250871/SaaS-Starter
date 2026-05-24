@@ -1,5 +1,6 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
@@ -9,6 +10,7 @@ import {
   deleteProduct,
   updateProduct,
 } from '@/modules/billing/services/catalog.services';
+import { invalidateCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
 import {
   parseCheckboxValue,
   parseNullableUuid,
@@ -26,6 +28,25 @@ async function requirePlatformAdminSession() {
   assertPlatformAdminAccess(session.platformRoleSystemKeys ?? []);
 
   return session;
+}
+
+function buildCatalogAuditInput(params: {
+  action: string;
+  entityType: string;
+  entityId?: string | null;
+  description: string;
+  metadata?: Prisma.InputJsonValue;
+}) {
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'CATALOG' as const,
+    source: 'ADMIN_PANEL' as const,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    description: params.description,
+    metadata: params.metadata,
+  };
 }
 
 const createProductCatalogActionImpl = createTxAction(
@@ -54,6 +75,28 @@ const createProductCatalogActionImpl = createTxAction(
       productId: product.id,
       successMessage: `${product.name} created successfully.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const name = String(formData.get('name') ?? '').trim();
+        const code = String(formData.get('code') ?? '').trim();
+
+        return buildCatalogAuditInput({
+          action: 'catalog.product.create',
+          entityType: 'Product',
+          entityId: result.productId,
+          description: `Product ${name || code || result.productId} created.`,
+          metadata: {
+            code,
+            isActive: parseCheckboxValue(formData, 'isActive'),
+            planId: parseNullableUuid(formData.get('planId')) ?? null,
+            type: String(formData.get('type') ?? '').trim(),
+          },
+        });
+      },
+    },
   },
 );
 
@@ -90,6 +133,28 @@ const updateProductCatalogActionImpl = createTxAction(
       successMessage: `${product.name} updated successfully.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const name = String(formData.get('name') ?? '').trim();
+        const code = String(formData.get('code') ?? '').trim();
+
+        return buildCatalogAuditInput({
+          action: 'catalog.product.update',
+          entityType: 'Product',
+          entityId: result.productId,
+          description: `Product ${name || code || result.productId} updated.`,
+          metadata: {
+            code,
+            isActive: parseCheckboxValue(formData, 'isActive'),
+            planId: parseNullableUuid(formData.get('planId')) ?? null,
+            type: String(formData.get('type') ?? '').trim(),
+          },
+        });
+      },
+    },
+  },
 );
 
 const toggleProductCatalogActionImpl = createTxAction(
@@ -112,6 +177,22 @@ const toggleProductCatalogActionImpl = createTxAction(
       } successfully.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const isActive = parseCheckboxValue(formData, 'isActive');
+
+        return buildCatalogAuditInput({
+          action: isActive ? 'catalog.product.activate' : 'catalog.product.deactivate',
+          entityType: 'Product',
+          entityId: result.productId,
+          description: `Product ${isActive ? 'activated' : 'deactivated'}.`,
+          metadata: { isActive },
+        });
+      },
+    },
+  },
 );
 
 const deleteProductCatalogActionImpl = createTxAction(
@@ -130,20 +211,59 @@ const deleteProductCatalogActionImpl = createTxAction(
       successMessage: 'Product deleted successfully.',
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args }) => {
+        const formData = args[0];
+        const productId = String(formData.get('productId') ?? '').trim();
+
+        return buildCatalogAuditInput({
+          action: 'catalog.product.delete',
+          entityType: 'Product',
+          entityId: productId,
+          description: 'Product deleted.',
+        });
+      },
+    },
+  },
 );
 
 export async function createProductCatalogAction(formData: FormData) {
-  return createProductCatalogActionImpl(formData);
+  const response = await createProductCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function updateProductCatalogAction(formData: FormData) {
-  return updateProductCatalogActionImpl(formData);
+  const response = await updateProductCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function toggleProductCatalogAction(formData: FormData) {
-  return toggleProductCatalogActionImpl(formData);
+  const response = await toggleProductCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }
 
 export async function deleteProductCatalogAction(formData: FormData) {
-  return deleteProductCatalogActionImpl(formData);
+  const response = await deleteProductCatalogActionImpl(formData);
+
+  if (response.success) {
+    await invalidateCatalogCache();
+  }
+
+  return response;
 }

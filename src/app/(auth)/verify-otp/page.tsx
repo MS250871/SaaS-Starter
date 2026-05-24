@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { PlatformAuthShell } from '@/modules/auth/components/platform-auth-shell';
 import { VerifyForm } from '@/modules/auth/components/verify-form';
 import { WorkspaceAuthShell } from '@/modules/auth/components/workspace-auth-shell';
@@ -13,6 +14,10 @@ async function VerifyOtpPage({
   const resolvedSearchParams = await searchParams;
   const mode = (resolvedSearchParams.mode as Mode) || 'email';
   const workspaceAuth = await getWorkspaceAuthPageData();
+
+  if (workspaceAuth?.canonicalRedirectUrl) {
+    redirect(workspaceAuth.canonicalRedirectUrl);
+  }
 
   const form = (
     <VerifyForm

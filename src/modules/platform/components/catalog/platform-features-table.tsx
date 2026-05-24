@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -17,6 +18,7 @@ type FeatureRow = Awaited<
 >[number];
 
 export function PlatformFeaturesTable({ rows }: { rows: FeatureRow[] }) {
+  const [featureRows, setFeatureRows] = useState(rows);
   const columns: ColumnDef<FeatureRow>[] = [
     {
       accessorKey: 'name',
@@ -71,6 +73,20 @@ export function PlatformFeaturesTable({ rows }: { rows: FeatureRow[] }) {
           viewHref={`/platform/catalog/features/${row.original.id}`}
           editHref={`/platform/catalog/features/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(featureId, next) => {
+            setFeatureRows((current) =>
+              current.map((entry) =>
+                entry.id === featureId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(featureId) => {
+            setFeatureRows((current) =>
+              current.filter((entry) => entry.id !== featureId),
+            );
+          }}
           toggleAction={toggleFeatureCatalogAction}
           deleteAction={deleteFeatureCatalogAction}
         />
@@ -82,7 +98,7 @@ export function PlatformFeaturesTable({ rows }: { rows: FeatureRow[] }) {
     <AdminDataTable
       title="Features"
       columns={columns}
-      data={rows}
+      data={featureRows}
       searchPlaceholder="Search features by name, key, or category"
       emptyStateTitle="No features found"
       emptyStateDescription="Create the first feature to start shaping plan capabilities."

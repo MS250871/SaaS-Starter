@@ -39,6 +39,19 @@ const markWorkspaceNotificationReadActionImpl = createTxAction(
       notificationId: notification.id,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE' as const,
+        category: 'NOTIFICATION' as const,
+        source: 'WORKSPACE_APP' as const,
+        action: 'workspace.notification.read',
+        entityType: 'Notification',
+        entityId: result.notificationId,
+        description: 'Workspace notification marked as read.',
+      }),
+    },
+  },
 );
 
 export async function markWorkspaceNotificationReadAction(formData: FormData) {

@@ -47,6 +47,7 @@ export function PlatformSupportTicketInternalNotesPanel({
 
     startNoteTransition(async () => {
       const submittedMessage = internalNote.trim();
+      const hasAttachments = noteFiles.length > 0;
       const formData = new FormData();
       formData.set('ticketId', ticketId);
       formData.set('message', submittedMessage);
@@ -59,16 +60,20 @@ export function PlatformSupportTicketInternalNotesPanel({
         return;
       }
 
-      onNoteAdded?.({
-        id: response.data.messageId,
-        message: submittedMessage,
-        createdAt: new Date().toISOString(),
-      });
+      if (!hasAttachments) {
+        onNoteAdded?.({
+          id: response.data.messageId,
+          message: submittedMessage,
+          createdAt: new Date().toISOString(),
+        });
+      }
       showActionSuccess(response.data.successMessage, 'Internal note added.');
       setInternalNote('');
       setNoteFiles([]);
       setNoteInputKey((current) => current + 1);
-      router.refresh();
+      if (hasAttachments) {
+        router.refresh();
+      }
     });
   };
 

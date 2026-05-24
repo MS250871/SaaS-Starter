@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import Razorpay from 'razorpay';
 
+import { getRazorpayEnv } from '@/lib/env';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 
@@ -53,12 +54,11 @@ let razorpayClient: Razorpay | null = null;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 function getRazorpayKeyId() {
+  const env = getRazorpayEnv();
   const liveKey =
-    process.env.RAZORPAY_API_KEY ?? process.env.NEXT_PUBLIC_RAZORPAY_API_KEY ?? null;
+    env.RAZORPAY_API_KEY ?? env.NEXT_PUBLIC_RAZORPAY_API_KEY ?? null;
   const testKey =
-    process.env.RAZORPAY_TEST_API_KEY ??
-    process.env.NEXT_PUBLIC_RAZORPAY_TEST_API_KEY ??
-    null;
+    env.RAZORPAY_TEST_API_KEY ?? env.NEXT_PUBLIC_RAZORPAY_TEST_API_KEY ?? null;
 
   if (IS_PROD) {
     return liveKey ?? testKey;
@@ -68,8 +68,9 @@ function getRazorpayKeyId() {
 }
 
 function getRazorpayKeySecret() {
-  const liveSecret = process.env.RAZORPAY_API_SECRET ?? null;
-  const testSecret = process.env.RAZORPAY_TEST_API_SECRET ?? null;
+  const env = getRazorpayEnv();
+  const liveSecret = env.RAZORPAY_API_SECRET ?? null;
+  const testSecret = env.RAZORPAY_TEST_API_SECRET ?? null;
 
   if (IS_PROD) {
     return liveSecret ?? testSecret;
@@ -79,7 +80,7 @@ function getRazorpayKeySecret() {
 }
 
 function getRazorpayWebhookSecret() {
-  return process.env.RAZORPAY_WEBHOOK_SECRET ?? null;
+  return getRazorpayEnv().RAZORPAY_WEBHOOK_SECRET;
 }
 
 function buildHmacSignature(payload: string, secret: string) {

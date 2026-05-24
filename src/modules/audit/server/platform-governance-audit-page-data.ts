@@ -40,13 +40,13 @@ function formatIdentityName(params: {
 
 export type PlatformGovernanceAuditRow = {
   id: string;
-  adminIdentityId: string;
+  adminIdentityId: string | null;
   adminDisplayName: string;
   adminEmail: string | null;
   adminRole: string | null;
   action: string;
   entityType: string;
-  entityId: string;
+  entityId: string | null;
   workspaceLabel: string;
   severityLabel: string;
   sourceLabel: string;
@@ -61,10 +61,12 @@ export async function getPlatformGovernanceAuditPageData() {
 
     const rows: PlatformGovernanceAuditRow[] = logs.map((log) => ({
       id: log.id,
-      adminIdentityId: log.adminIdentity.id,
-      adminDisplayName: formatIdentityName(log.adminIdentity),
-      adminEmail: log.adminIdentity.email ?? log.adminEmail ?? null,
-      adminRole: log.adminRole ?? null,
+      adminIdentityId: log.actorIdentity?.id ?? null,
+      adminDisplayName: log.actorIdentity
+        ? formatIdentityName(log.actorIdentity)
+        : log.actorEmail ?? 'System',
+      adminEmail: log.actorIdentity?.email ?? log.actorEmail ?? null,
+      adminRole: log.actorPlatformRole ?? null,
       action: log.action,
       entityType: log.entityType,
       entityId: log.entityId,

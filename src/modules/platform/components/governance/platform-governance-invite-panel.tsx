@@ -1,9 +1,8 @@
 'use client';
 
-import { type FormEvent, useMemo, useState, useTransition } from 'react';
+import { type FormEvent, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { CopyIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 import {
   Alert,
@@ -67,14 +66,12 @@ export function PlatformGovernanceInvitePanel({
   invites: PlatformGovernanceInviteRow[];
   onInviteCreated: (invite: PlatformGovernanceInviteRow) => void;
 }) {
-  const router = useRouter();
-  const [isRefreshing, startRefreshTransition] = useTransition();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [email, setEmail] = useState('');
   const [roleKey, setRoleKey] = useState(assignableRoles[0]?.key ?? '');
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const isPending = isSubmitting || isRefreshing;
+  const isPending = isSubmitting;
 
   const selectedRole = useMemo(
     () => assignableRoles.find((role) => role.key === roleKey) ?? null,
@@ -123,9 +120,6 @@ export function PlatformGovernanceInvitePanel({
       setEmail('');
       setRoleKey(assignableRoles[0]?.key ?? '');
       setIsSubmitting(false);
-      startRefreshTransition(() => {
-        router.refresh();
-      });
     })();
   };
 

@@ -1,11 +1,9 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   hasPermission,
 } from '@/modules/permissions/services/permissions.services';
@@ -48,26 +46,20 @@ async function requirePlatformSupportSession() {
   return session;
 }
 
-async function logSupportAdminAction(params: {
-  session: Awaited<ReturnType<typeof requirePlatformSupportSession>>;
+function buildSupportAuditInput(params: {
   action: string;
   entityId: string;
   description: string;
 }) {
-  const requestContext = getRequestContext();
-
-  await logAdminAction({
-    adminIdentityId: params.session.identityId,
-    adminEmail: null,
-    adminRole: params.session.platformRoleSystemKeys?.[0] ?? null,
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'SUPPORT' as const,
+    source: 'ADMIN_PANEL' as const,
     action: params.action,
     entityType: 'SupportTicket',
     entityId: params.entityId,
     description: params.description,
-    ipAddress: requestContext.ip,
-    userAgent: requestContext.userAgent,
-    requestId: requestContext.requestId,
-  });
+  };
 }
 
 function assertCanReplyToSupportTicket(permissions: string[]) {
@@ -124,18 +116,21 @@ const createPlatformSupportTicketActionImpl = createTxAction(
       attachmentFiles: getSupportAttachmentFiles(formData),
     });
 
-    await logSupportAdminAction({
-      session,
-      action: 'support.ticket.create',
-      entityId: result.ticketId,
-      description: `Platform escalation created for workspace ${result.workspaceName}.`,
-    });
-
     return {
       ticketId: result.ticketId,
       workspaceId: result.workspaceId,
       successMessage: `Platform escalation created for ${result.workspaceName}.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildSupportAuditInput({
+          action: 'support.ticket.create',
+          entityId: result.ticketId,
+          description: result.successMessage,
+        }),
+    },
   },
 );
 
@@ -160,18 +155,21 @@ const updatePlatformSupportTicketStatusActionImpl = createTxAction(
       status,
     });
 
-    await logSupportAdminAction({
-      session,
-      action: 'support.ticket.status.update',
-      entityId: result.ticketId,
-      description: `Support ticket status updated to ${result.status}.`,
-    });
-
     return {
       ticketId: result.ticketId,
       status: result.status,
       successMessage: `Ticket status updated to ${result.status}.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildSupportAuditInput({
+          action: 'support.ticket.status.update',
+          entityId: result.ticketId,
+          description: `Support ticket status updated to ${result.status}.`,
+        }),
+    },
   },
 );
 
@@ -200,17 +198,6 @@ const updatePlatformSupportTicketAssignmentActionImpl = createTxAction(
           : assignedToIdRaw,
     });
 
-    await logSupportAdminAction({
-      session,
-      action: result.assignedToId
-        ? 'support.ticket.assignment.update'
-        : 'support.ticket.assignment.clear',
-      entityId: result.ticketId,
-      description: result.assigneeName
-        ? `Support ticket assigned to ${result.assigneeName}.`
-        : 'Support ticket unassigned.',
-    });
-
     return {
       ticketId: result.ticketId,
       assignedToId: result.assignedToId,
@@ -219,6 +206,20 @@ const updatePlatformSupportTicketAssignmentActionImpl = createTxAction(
         ? `Ticket assigned to ${result.assigneeName}.`
         : 'Ticket unassigned successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildSupportAuditInput({
+          action: result.assignedToId
+            ? 'support.ticket.assignment.update'
+            : 'support.ticket.assignment.clear',
+          entityId: result.ticketId,
+          description: result.assigneeName
+            ? `Support ticket assigned to ${result.assigneeName}.`
+            : 'Support ticket unassigned.',
+        }),
+    },
   },
 );
 
@@ -238,18 +239,21 @@ const addPlatformSupportTicketReplyActionImpl = createTxAction(
       attachmentFiles: getSupportAttachmentFiles(formData),
     });
 
-    await logSupportAdminAction({
-      session,
-      action: 'support.ticket.reply.create',
-      entityId: result.ticketId,
-      description: `Platform reply added to support ticket ${result.title}.`,
-    });
-
     return {
       ticketId: result.ticketId,
       messageId: result.messageId,
       successMessage: `Reply added to ${result.title}.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildSupportAuditInput({
+          action: 'support.ticket.reply.create',
+          entityId: result.ticketId,
+          description: result.successMessage,
+        }),
+    },
   },
 );
 
@@ -269,18 +273,21 @@ const addPlatformSupportTicketInternalNoteActionImpl = createTxAction(
       attachmentFiles: getSupportAttachmentFiles(formData),
     });
 
-    await logSupportAdminAction({
-      session,
-      action: 'support.ticket.internal-note.create',
-      entityId: result.ticketId,
-      description: `Platform internal note added to support ticket ${result.title}.`,
-    });
-
     return {
       ticketId: result.ticketId,
       messageId: result.messageId,
       successMessage: `Internal note added to ${result.title}.`,
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildSupportAuditInput({
+          action: 'support.ticket.internal-note.create',
+          entityId: result.ticketId,
+          description: result.successMessage,
+        }),
+    },
   },
 );
 

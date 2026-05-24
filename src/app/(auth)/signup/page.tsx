@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { PlatformAuthShell } from '@/modules/auth/components/platform-auth-shell';
 import { SignupForm } from '@/modules/auth/components/signup-form';
 import { WorkspaceAuthShell } from '@/modules/auth/components/workspace-auth-shell';
@@ -11,6 +12,11 @@ export default async function SignupPage({
 }) {
   const resolvedSearchParams = await searchParams;
   const workspaceAuth = await getWorkspaceAuthPageData();
+
+  if (workspaceAuth?.canonicalRedirectUrl) {
+    redirect(workspaceAuth.canonicalRedirectUrl);
+  }
+
   const intent =
     (resolvedSearchParams.intent as AuthCookies['intent']) || 'free';
   const invite = resolvedSearchParams.invite as string | undefined;

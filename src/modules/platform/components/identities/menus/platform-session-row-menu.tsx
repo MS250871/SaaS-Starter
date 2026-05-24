@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,14 +23,15 @@ export function PlatformSessionRowMenu({
   sessionId,
   identityHref,
   canRevoke,
+  onRevokeSuccess,
   revokeAction,
 }: {
   sessionId: string;
   identityHref: string;
   canRevoke: boolean;
+  onRevokeSuccess?: (sessionId: string) => void;
   revokeAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -47,8 +47,8 @@ export function PlatformSessionRowMenu({
         return;
       }
 
+      onRevokeSuccess?.(sessionId);
       showActionSuccess(response.data.successMessage, 'Session revoked.');
-      router.refresh();
     });
   };
 

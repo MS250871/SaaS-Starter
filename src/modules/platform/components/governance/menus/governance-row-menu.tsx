@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -29,6 +28,8 @@ export function GovernanceRowMenu({
   isActive,
   canToggle = true,
   canDelete = true,
+  onToggleSuccess,
+  onDeleteSuccess,
   toggleAction,
   deleteAction,
 }: {
@@ -40,10 +41,16 @@ export function GovernanceRowMenu({
   isActive: boolean;
   canToggle?: boolean;
   canDelete?: boolean;
+  onToggleSuccess?: (
+    entityId: string,
+    next: {
+      isActive: boolean;
+    },
+  ) => void;
+  onDeleteSuccess?: (entityId: string) => void;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
   deleteAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -60,8 +67,10 @@ export function GovernanceRowMenu({
         return;
       }
 
+      onToggleSuccess?.(entityId, {
+        isActive: !isActive,
+      });
       showActionSuccess(response.data.successMessage, `${entityLabel} updated.`);
-      router.refresh();
     });
   };
 
@@ -85,8 +94,8 @@ export function GovernanceRowMenu({
         return;
       }
 
+      onDeleteSuccess?.(entityId);
       showActionSuccess(response.data.successMessage, `${entityLabel} deleted.`);
-      router.refresh();
     });
   };
 

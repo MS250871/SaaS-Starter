@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -17,6 +18,7 @@ type PlanRow = Awaited<
 >[number];
 
 export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
+  const [planRows, setPlanRows] = useState(rows);
   const columns: ColumnDef<PlanRow>[] = [
     {
       accessorKey: 'name',
@@ -90,6 +92,20 @@ export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
           viewHref={`/platform/catalog/plans/${row.original.id}`}
           editHref={`/platform/catalog/plans/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(planId, next) => {
+            setPlanRows((current) =>
+              current.map((entry) =>
+                entry.id === planId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(planId) => {
+            setPlanRows((current) =>
+              current.filter((entry) => entry.id !== planId),
+            );
+          }}
           toggleAction={togglePlanCatalogAction}
           deleteAction={deletePlanCatalogAction}
         />
@@ -101,7 +117,7 @@ export function PlatformPlansTable({ rows }: { rows: PlanRow[] }) {
     <AdminDataTable
       title="Plans"
       columns={columns}
-      data={rows}
+      data={planRows}
       searchPlaceholder="Search plans by name, key, pricing, or status"
       emptyStateTitle="No plans found"
       emptyStateDescription="Create the first plan to start shaping the commercial catalog."

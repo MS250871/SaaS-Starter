@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -17,6 +18,7 @@ type ProductRow = Awaited<
 >[number];
 
 export function PlatformProductsTable({ rows }: { rows: ProductRow[] }) {
+  const [productRows, setProductRows] = useState(rows);
   const columns: ColumnDef<ProductRow>[] = [
     {
       accessorKey: 'name',
@@ -76,6 +78,20 @@ export function PlatformProductsTable({ rows }: { rows: ProductRow[] }) {
           viewHref={`/platform/catalog/products/${row.original.id}`}
           editHref={`/platform/catalog/products/${row.original.id}/edit`}
           isActive={row.original.isActive}
+          onToggleSuccess={(productId, next) => {
+            setProductRows((current) =>
+              current.map((entry) =>
+                entry.id === productId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(productId) => {
+            setProductRows((current) =>
+              current.filter((entry) => entry.id !== productId),
+            );
+          }}
           toggleAction={toggleProductCatalogAction}
           deleteAction={deleteProductCatalogAction}
         />
@@ -87,7 +103,7 @@ export function PlatformProductsTable({ rows }: { rows: ProductRow[] }) {
     <AdminDataTable
       title="Products"
       columns={columns}
-      data={rows}
+      data={productRows}
       searchPlaceholder="Search products by name, code, plan, or type"
       emptyStateTitle="No products found"
       emptyStateDescription="Create the first product to connect plans to billing offers."

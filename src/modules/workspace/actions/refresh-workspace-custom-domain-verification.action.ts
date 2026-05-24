@@ -52,6 +52,32 @@ const refreshWorkspaceCustomDomainVerificationActionImpl = createAction(
       checkedAt: result.checkedAt,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const workspaceDomainId = String(
+          formData.get('workspaceDomainId') ?? '',
+        ).trim();
+
+        return {
+          scope: 'WORKSPACE' as const,
+          category: 'ROUTING' as const,
+          source: 'WORKSPACE_APP' as const,
+          action: 'workspace.domain.verification.refresh',
+          entityType: 'WorkspaceDomain',
+          entityId: workspaceDomainId || result.workspaceDomainId,
+          description: result.verified
+            ? 'Workspace custom domain verification completed successfully.'
+            : 'Workspace custom domain verification check is still pending.',
+          newValue: {
+            checkedAt: result.checkedAt,
+            verified: result.verified,
+          },
+        };
+      },
+    },
+  },
 );
 
 export async function refreshWorkspaceCustomDomainVerificationAction(

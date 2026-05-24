@@ -15,6 +15,7 @@ import {
   setVerificationSession,
   setUserSession,
 } from '@/lib/auth/auth-cookies';
+import { resolvePublicHostname } from '@/lib/http/public-url';
 import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 import { otpSchema } from '@/modules/auth/schema';
 import { verifyWorkflow } from '@/modules/auth/workflows/verify.workflow';
@@ -26,11 +27,17 @@ import {
   buildHostTransferPath,
   issueHostTransferToken,
 } from '@/modules/auth/services/host-transfer.services';
-import { processOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
+import { dispatchOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
 import {
   buildWorkspaceLoginPath,
   buildWorkspaceSignupPath,
 } from '@/modules/workspace/routing';
+import {
+  buildNavErrorAudit,
+  getNavAuditState,
+  setNavAuditState,
+} from '@/modules/auth/auth-nav-audit';
+import { assertOtpVerifyRateLimit } from '@/modules/auth/auth-rate-limit';
 
 async function redirectForExpiredVerification(): Promise<never> {
   const auth = await getAuthCookie();
@@ -125,12 +132,28 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
     return redirectForExpiredVerification();
   }
 
+  await assertOtpVerifyRateLimit(verificationSession.verificationId);
+
   const currentSession = await getUserSession();
 
   const result = await verifyWorkflow({
     otp: parsed.otp,
     verificationSession,
     currentSession,
+  });
+
+  setNavAuditState({
+    category: 'AUTH',
+    source: 'AUTH',
+    action: 'auth.otp.verify',
+    entityType: 'VerificationSession',
+    entityId: verificationSession.verificationId,
+    description: 'Verification OTP accepted.',
+    metadata: {
+      mode: parsed.mode,
+      otpPurpose: verificationSession.otpPurpose,
+      sessionEstablished: Boolean(result.sessionPayload),
+    },
   });
 
   await clearVerificationSession();
@@ -163,7 +186,7 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
       }
 
       if (postLoginResult.meta?.outboxEventId) {
-        await processOtpOutboxEvent(postLoginResult.meta.outboxEventId);
+        await dispatchOtpOutboxEvent(postLoginResult.meta.outboxEventId);
       }
 
       redirect(await resolvePublicRedirectTarget(postLoginResult.redirectTo));
@@ -172,14 +195,15 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
     if ('finalSession' in postLoginResult && postLoginResult.finalSession) {
       if (postLoginResult.finalSession.workspaceId && postLoginResult.redirectTo) {
         const hdrs = await headers();
-        const currentHost = normalizeHostname(
-          hdrs.get('x-forwarded-host') ?? hdrs.get('host') ?? '',
-        );
+        const currentHost = resolvePublicHostname({
+          host: hdrs.get('host'),
+          forwardedHost: hdrs.get('x-forwarded-host'),
+        });
         const canonicalHost = await resolveWorkspaceCanonicalSurfaceHost(
           postLoginResult.finalSession.workspaceId,
         );
 
-        if (canonicalHost && currentHost !== canonicalHost) {
+        if (canonicalHost && currentHost !== normalizeHostname(canonicalHost)) {
           const token = await issueHostTransferToken({
             session: postLoginResult.finalSession,
             workspaceId: postLoginResult.finalSession.workspaceId,
@@ -206,6 +230,18 @@ const verifyActionImpl = createNavAction(async (formData: FormData) => {
   }
 
   redirect(await resolvePublicRedirectTarget(result.redirectTo));
+}, {
+  audit: {
+    onSuccess: () => getNavAuditState(),
+    onError: ({ error, state }) =>
+      buildNavErrorAudit({
+        action: 'auth.otp.verify',
+        description: 'Verification failed.',
+        error,
+        state: state as ReturnType<typeof getNavAuditState>,
+        entityType: 'VerificationSession',
+      }),
+  },
 });
 
 export async function verifyAction(formData: FormData) {

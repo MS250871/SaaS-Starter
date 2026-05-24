@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,14 +23,20 @@ export function PlatformIdentityRowMenu({
   identityId,
   viewHref,
   isActive,
+  onToggleSuccess,
   toggleAction,
 }: {
   identityId: string;
   viewHref: string;
   isActive: boolean;
+  onToggleSuccess?: (
+    identityId: string,
+    next: {
+      isActive: boolean;
+    },
+  ) => void;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -48,11 +53,13 @@ export function PlatformIdentityRowMenu({
         return;
       }
 
+      onToggleSuccess?.(identityId, {
+        isActive: !isActive,
+      });
       showActionSuccess(
         response.data.successMessage,
         'Identity access was updated.',
       );
-      router.refresh();
     });
   };
 

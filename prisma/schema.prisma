@@ -94,7 +94,12 @@ enum PermissionEffect {
 
 enum AuditSource {
   ADMIN_PANEL
+  WORKSPACE_APP
+  CUSTOMER_APP
+  AUTH
   API
+  WEBHOOK
+  JOB
   SYSTEM
 }
 
@@ -102,6 +107,43 @@ enum AuditSeverity {
   INFO
   WARNING
   ERROR
+}
+
+enum AuditScope {
+  PLATFORM
+  WORKSPACE
+  CUSTOMER
+  SYSTEM
+}
+
+enum AuditActorType {
+  IDENTITY
+  CUSTOMER
+  API_KEY
+  SYSTEM
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+enum AuditCategory {
+  AUTH
+  GOVERNANCE
+  CATALOG
+  BILLING
+  WORKSPACE
+  CUSTOMER
+  SUPPORT
+  NOTIFICATION
+  ROUTING
+  MEDIA
+  INTEGRATION
+  ENTITLEMENT
+  SECURITY
+  SYSTEM
 }
 
 enum Gender {
@@ -306,7 +348,7 @@ model Workspace {
   invoices      Invoice[]
 
   // audit / webhooks
-  adminAuditLogs AdminAuditLog[]
+  auditEvents AuditEvent[]
 
   webhookEvents   WebhookEvent[]
   outboxEvents    OutboxEvent[]
@@ -495,7 +537,7 @@ model Identity {
   permissions        UserPermission[]  @relation("UserPermissions")
   permissionsGranted UserPermission[]  @relation("PermissionGrantedBy")
   permissionsRevoked UserPermission[]  @relation("PermissionRevokedBy")
-  adminAuditLogs     AdminAuditLog[]
+  auditActorEvents   AuditEvent[]      @relation("AuditActorIdentity")
   invites            WorkspaceInvite[]
   apiKeys            ApiKey[]
 
@@ -575,6 +617,8 @@ model Customer {
   invoices        Invoice[]
   supportTickets  SupportTicket[]        @relation("CreatedCustomerTickets")
   supportMessages SupportTicketMessage[]
+  auditActorEvents   AuditEvent[]        @relation("AuditActorCustomer")
+  auditSubjectEvents AuditEvent[]        @relation("AuditSubjectCustomer")
 
   webhookEvents   WebhookEvent[]
   outboxEvents    OutboxEvent[]
@@ -610,6 +654,8 @@ model ApiKey {
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+
+  auditActorEvents AuditEvent[] @relation("AuditActorApiKey")
 
   @@index([workspaceId, isActive])
   @@index([workspaceId, createdAt])
@@ -679,6 +725,8 @@ model Session {
   lastSeenAt DateTime? @map("last_seen_at")
 
   createdAt DateTime @default(now()) @map("created_at")
+
+  auditEvents AuditEvent[] @relation("AuditSession")
 
   @@index([identityId, isActive, createdAt])
   @@index([workspaceId, isActive, createdAt])
@@ -823,41 +871,74 @@ model UserPermission {
   @@index([identityId, workspaceId, effect])
 }
 
-// Admin audit logs
-model AdminAuditLog {
+model AuditEvent {
   id String @id @default(uuid()) @db.Uuid
 
-  adminIdentityId String   @map("admin_identity_id") @db.Uuid
-  adminIdentity   Identity @relation(fields: [adminIdentityId], references: [id])
+  scope    AuditScope
+  category AuditCategory
+  source   AuditSource   @default(ADMIN_PANEL)
+  outcome  AuditOutcome  @default(SUCCESS)
+  severity AuditSeverity @default(INFO)
+
+  action     String
+  entityType String  @map("entity_type")
+  entityId   String? @map("entity_id")
+
+  description String?
+  reason      String?
 
   workspaceId String?    @map("workspace_id") @db.Uuid
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
 
-  adminEmail String? @map("admin_email")
-  adminRole  String? @map("admin_role")
+  customerId String?   @map("customer_id") @db.Uuid
+  customer   Customer? @relation("AuditSubjectCustomer", fields: [customerId], references: [id])
 
-  action     String
-  entityType String @map("entity_type")
-  entityId   String @map("entity_id") @db.Uuid
+  actorType AuditActorType @map("actor_type")
 
-  description String?
-  oldValue    Json?   @map("old_value")
-  newValue    Json?   @map("new_value")
+  actorIdentityId String?   @map("actor_identity_id") @db.Uuid
+  actorIdentity   Identity? @relation("AuditActorIdentity", fields: [actorIdentityId], references: [id])
 
-  ipAddress String? @map("ip_address")
-  userAgent String? @map("user_agent")
-  requestId String? @map("request_id")
+  actorCustomerId String?   @map("actor_customer_id") @db.Uuid
+  actorCustomer   Customer? @relation("AuditActorCustomer", fields: [actorCustomerId], references: [id])
 
-  source   AuditSource   @default(ADMIN_PANEL)
-  severity AuditSeverity @default(INFO)
+  actorApiKeyId String?  @map("actor_api_key_id") @db.Uuid
+  actorApiKey   ApiKey?  @relation("AuditActorApiKey", fields: [actorApiKeyId], references: [id])
+
+  sessionId String?  @map("session_id") @db.Uuid
+  session   Session? @relation("AuditSession", fields: [sessionId], references: [id])
+
+  actorEmail         String? @map("actor_email")
+  actorName          String? @map("actor_name")
+  actorPlatformRole  String? @map("actor_platform_role")
+  actorWorkspaceRole String? @map("actor_workspace_role")
+
+  requestId     String? @map("request_id")
+  ipAddress     String? @map("ip_address")
+  userAgent     String? @map("user_agent")
+  requestPath   String? @map("request_path")
+  requestMethod String? @map("request_method")
+
+  oldValue Json? @map("old_value")
+  newValue Json? @map("new_value")
+  metadata Json?
 
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([adminIdentityId])
-  @@index([entityType, entityId])
-  @@index([workspaceId, createdAt])
   @@index([createdAt])
-  @@index([severity])
+  @@index([scope, createdAt])
+  @@index([category, createdAt])
+  @@index([source, createdAt])
+  @@index([outcome, createdAt])
+  @@index([severity, createdAt])
+  @@index([workspaceId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([actorIdentityId, createdAt])
+  @@index([actorCustomerId, createdAt])
+  @@index([actorApiKeyId, createdAt])
+  @@index([sessionId])
+  @@index([requestId])
 }
 
 // Support / notifications / pages / blogs placeholders (kept from original)

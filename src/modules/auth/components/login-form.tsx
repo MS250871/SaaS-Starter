@@ -178,11 +178,11 @@ export function LoginForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
-      <Card className={cn('pt-0', cardClassName)}>
+      <Card className={cardClassName}>
         <CardHeader>
           {!hideTopBrand ? (
             <>
-              <div className="mx-auto pt-6 pb-2">
+              <div className="mx-auto pb-2">
                 <Logo />
               </div>
 

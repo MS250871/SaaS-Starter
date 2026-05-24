@@ -97,6 +97,33 @@ export type WorkspaceNotificationRecipientMember = Prisma.MembershipGetPayload<{
   }
 }>
 
+export type IdentityWorkspaceSelectOption = Prisma.MembershipGetPayload<{
+  select: {
+    id: true
+    workspaceId: true
+    roleKey: true
+    roleSystemKey: true
+    isActive: true
+    workspace: {
+      select: {
+        id: true
+        name: true
+        slug: true
+        defaultDomain: true
+        isActive: true
+      }
+    }
+    roleDefinition: {
+      select: {
+        id: true
+        name: true
+        key: true
+        hierarchyRank: true
+      }
+    }
+  }
+}>
+
 export type MembershipWorkspaceSnapshot = Prisma.MembershipGetPayload<{
   select: {
     id: true
@@ -294,6 +321,54 @@ export async function listIdentityMemberships(identityId: string) {
     where: { identityId },
     orderBy: { createdAt: "desc" },
   })
+}
+
+export async function listIdentityWorkspaceSelectOptions(
+  identityId: string,
+): Promise<IdentityWorkspaceSelectOption[]> {
+  if (!identityId) {
+    throwError(ERR.INVALID_INPUT, "identityId required")
+  }
+
+  const memberships = await membershipQueries.delegate.findMany({
+    where: {
+      identityId,
+      isActive: true,
+      workspace: {
+        is: {
+          isActive: true,
+        },
+      },
+    },
+    select: {
+      id: true,
+      workspaceId: true,
+      roleKey: true,
+      roleSystemKey: true,
+      isActive: true,
+      workspace: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          defaultDomain: true,
+          isActive: true,
+        },
+      },
+      roleDefinition: {
+        select: {
+          id: true,
+          name: true,
+          key: true,
+          hierarchyRank: true,
+        },
+      },
+    },
+  })
+
+  return memberships.sort((a, b) =>
+    a.workspace.name.localeCompare(b.workspace.name),
+  ) as IdentityWorkspaceSelectOption[]
 }
 
 export async function isIdentityMemberOfWorkspace(

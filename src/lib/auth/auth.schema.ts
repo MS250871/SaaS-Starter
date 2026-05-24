@@ -105,6 +105,9 @@ export const sessionPayloadSchema = z.object({
   expiresAt: z.number(),
 
   version: z.number().optional(),
+  permissions: z.array(z.string()).optional(),
+  features: z.array(z.string()).optional(),
+  limits: z.record(z.string(), z.number()).optional(),
 });
 
 export const sessionAccessSchema = z.object({

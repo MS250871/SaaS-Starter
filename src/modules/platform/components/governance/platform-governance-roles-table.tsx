@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -16,6 +17,7 @@ export function PlatformGovernanceRolesTable({
 }: {
   rows: PlatformGovernanceRoleRow[];
 }) {
+  const [roleRows, setRoleRows] = useState(rows);
   const columns: ColumnDef<PlatformGovernanceRoleRow>[] = [
     {
       accessorKey: 'name',
@@ -96,6 +98,20 @@ export function PlatformGovernanceRolesTable({
           isActive={row.original.isActive}
           canToggle={!row.original.isSystem}
           canDelete={!row.original.isSystem}
+          onToggleSuccess={(roleDefinitionId, next) => {
+            setRoleRows((current) =>
+              current.map((entry) =>
+                entry.id === roleDefinitionId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
+          onDeleteSuccess={(roleDefinitionId) => {
+            setRoleRows((current) =>
+              current.filter((entry) => entry.id !== roleDefinitionId),
+            );
+          }}
           toggleAction={toggleRoleDefinitionActiveAction}
           deleteAction={deleteRoleDefinitionAdminAction}
         />
@@ -107,7 +123,7 @@ export function PlatformGovernanceRolesTable({
     <AdminDataTable
       title="Roles"
       columns={columns}
-      data={rows}
+      data={roleRows}
       searchPlaceholder="Search roles by name, key, scope, or system flag"
       emptyStateTitle="No roles found"
       emptyStateDescription="Role definitions will appear here once the authorization catalog is seeded."

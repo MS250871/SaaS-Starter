@@ -9,6 +9,7 @@ type PlatformAuthShellMode =
   | 'signup'
   | 'payment'
   | 'create-workspace'
+  | 'select-workspace'
   | 'verify-email'
   | 'verify-phone';
 
@@ -22,13 +23,13 @@ const shellCopy: Record<
 > = {
   login: {
     eyebrow: 'Platform access',
-    headline: 'Step back into your platform workspace.',
+    headline: 'Welcome back to your workspace.',
     description:
       'Manage billing, domains, workspaces, invites, and operations from one polished control layer built for teams that scale.',
   },
   signup: {
     eyebrow: 'Workspace owner signup',
-    headline: 'Launch your next workspace with a strong operational base.',
+    headline: 'Launch your own workspace.',
     description:
       'Create your owner account, set up the first workspace, and move from branding to delivery without stitching tools together.',
   },
@@ -43,6 +44,12 @@ const shellCopy: Record<
     headline: 'Name the workspace and make the front door real.',
     description:
       'This is where the owner onboarding turns into a live workspace URL, ready for your team, billing, branding, and learner-facing site.',
+  },
+  'select-workspace': {
+    eyebrow: 'Choose your workspace',
+    headline: 'Pick the workspace you want to enter.',
+    description:
+      'Your account can access more than one workspace. Choose the one you want to manage right now and we will take you straight into the correct admin surface.',
   },
   'verify-email': {
     eyebrow: 'Secure account setup',
@@ -83,11 +90,9 @@ export function PlatformAuthShell({
   const copy = shellCopy[mode];
 
   return (
-    <main
-      className="relative min-h-svh overflow-hidden bg-background text-foreground transition-colors"
-    >
+    <main className="relative min-h-svh overflow-hidden bg-background text-foreground transition-colors">
       <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,rgba(15,23,42,0.03),transparent_22rem)] dark:bg-[linear-gradient(to_bottom,rgba(255,255,255,0.04),transparent_22rem)]" />
-      <div className="absolute inset-x-0 top-0 -z-10 h-[28rem] bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.05),transparent_32%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.04),transparent_22%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_32%),radial-gradient(circle_at_top_right,rgba(255,255,255,0.03),transparent_22%)]" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-112 bg-[radial-gradient(circle_at_top_left,rgba(15,23,42,0.05),transparent_32%),radial-gradient(circle_at_top_right,rgba(15,23,42,0.04),transparent_22%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.05),transparent_32%),radial-gradient(circle_at_top_right,rgba(255,255,255,0.03),transparent_22%)]" />
 
       <div className="mx-auto flex min-h-svh max-w-7xl flex-col px-6 py-6 md:px-10">
         <div className="flex items-center justify-between gap-4">

@@ -11,7 +11,6 @@ export default async function WorkspaceApiKeysPage() {
     workspaceId,
     apiKeys,
     availableScopes,
-    apiKeySummary,
   } = await getWorkspaceApiKeysPageData();
 
   if (!workspaceId) {
@@ -28,7 +27,6 @@ export default async function WorkspaceApiKeysPage() {
     <WorkspaceApiKeysPanel
       apiKeys={apiKeys}
       availableScopes={availableScopes}
-      apiKeySummary={apiKeySummary}
       canCreate={hasPermission(actor.permissions, 'apiKey.create')}
       canRotate={hasAnyPermission(actor.permissions, [
         'apiKey.rotate',

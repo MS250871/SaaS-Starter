@@ -1,8 +1,11 @@
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
+import { redirect } from "next/navigation"
 
 import { AdminShell, type AdminNavGroup } from "@/components/admin/admin-shell"
+import { resolvePublicHostValue } from "@/lib/http/public-url"
 import { readActorContext } from "@/lib/request/read-actor-context"
-import { withActionTxContext } from "@/lib/request/withActionContext"
+import { withActionReadContext } from "@/lib/request/withActionContext"
+import { resolveWorkspaceCanonicalRequestRedirect } from "@/modules/workspace/services/workspace-canonical.services"
 import { getWorkspaceThemeSnapshot } from "@/modules/workspace/services/setting.services"
 import { buildWorkspaceThemeStyle } from "@/modules/workspace/theme"
 
@@ -44,7 +47,25 @@ export default async function CustomerLayout({
 }) {
   const cookieStore = await cookies()
   const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
-  const { actor, session } = await readActorContext()
+  const { actor, session, requestContext } = await readActorContext()
+  const hdrs = await headers()
+
+  if (actor.workspaceId && requestContext?.path) {
+    const canonicalRedirectUrl = await resolveWorkspaceCanonicalRequestRedirect({
+      workspaceId: actor.workspaceId,
+      currentHost: resolvePublicHostValue({
+        host: hdrs.get("host"),
+        forwardedHost: hdrs.get("x-forwarded-host"),
+      }),
+      currentPath: requestContext.path,
+      visiblePath: requestContext.originalPath,
+      search: requestContext.search,
+    })
+
+    if (canonicalRedirectUrl) {
+      redirect(canonicalRedirectUrl)
+    }
+  }
 
   let themes: unknown = undefined
   const userName = getDisplayName({
@@ -54,7 +75,7 @@ export default async function CustomerLayout({
   })
 
   if (actor.workspaceId) {
-    const settings = await withActionTxContext(() =>
+    const settings = await withActionReadContext(() =>
       getWorkspaceThemeSnapshot(actor.workspaceId!),
     )
 

@@ -4,12 +4,12 @@ import {
 } from '@/lib/auth/auth.schema';
 
 function readJsonArray(raw: string | null) {
-  if (!raw) return [] as string[];
+  if (!raw) return undefined;
 
   try {
     return JSON.parse(raw) as string[];
   } catch {
-    return [] as string[];
+    return undefined;
   }
 }
 
@@ -43,7 +43,9 @@ export function readSessionClaimsFromHeaders(
       getHeader('x-workspace-role-system-key') ?? undefined,
     platformRoleIds: readJsonArray(getHeader('x-platform-role-ids')),
     platformRoleKeys:
-      platformRoleKeys.length > 0 ? platformRoleKeys : legacyPlatformRoles,
+      (platformRoleKeys?.length ?? 0) > 0
+        ? platformRoleKeys
+        : legacyPlatformRoles,
     platformRoleSystemKeys: readJsonArray(
       getHeader('x-platform-role-system-keys'),
     ),
@@ -59,9 +61,6 @@ export function readSessionClaimsFromHeaders(
     isActive: getHeader('x-session-active') !== 'false',
     createdAt: Number(getHeader('x-session-created-at') ?? Date.now()),
     expiresAt: Number(getHeader('x-session-expires-at') ?? 0),
-    version: getHeader('x-session-version')
-      ? Number(getHeader('x-session-version'))
-      : undefined,
   });
 
   if (!parsed.success) {

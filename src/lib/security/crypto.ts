@@ -1,4 +1,6 @@
-const AUTH_SECRET = process.env.AUTH_SECRET || 'dev-secret-key';
+import { getAuthSecurityEnv } from '@/lib/env';
+
+const { AUTH_SECRET } = getAuthSecurityEnv();
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

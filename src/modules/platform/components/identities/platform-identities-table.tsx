@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -13,6 +14,7 @@ export function PlatformIdentitiesTable({
 }: {
   rows: PlatformIdentityRow[];
 }) {
+  const [identityRows, setIdentityRows] = useState(rows);
   const columns: ColumnDef<PlatformIdentityRow>[] = [
     {
       accessorKey: 'displayName',
@@ -87,6 +89,15 @@ export function PlatformIdentitiesTable({
           identityId={row.original.id}
           viewHref={`/platform/identities/${row.original.id}`}
           isActive={row.original.isActive}
+          onToggleSuccess={(identityId, next) => {
+            setIdentityRows((current) =>
+              current.map((entry) =>
+                entry.id === identityId
+                  ? { ...entry, isActive: next.isActive }
+                  : entry,
+              ),
+            );
+          }}
           toggleAction={togglePlatformIdentityActiveAction}
         />
       ),
@@ -97,7 +108,7 @@ export function PlatformIdentitiesTable({
     <AdminDataTable
       title="Identities"
       columns={columns}
-      data={rows}
+      data={identityRows}
       searchPlaceholder="Search identities by name, email, phone, or operator status"
       emptyStateTitle="No identities found"
       emptyStateDescription="Identities will appear here as soon as authentication records are created."

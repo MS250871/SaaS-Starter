@@ -49,6 +49,31 @@ const togglePlatformIdentityActiveActionImpl = createTxAction(
       } successfully.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const isActive =
+          String(formData.get('isActive') ?? '').trim().toLowerCase() ===
+          'true';
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'SECURITY' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: isActive
+            ? 'platform.identity.activate'
+            : 'platform.identity.deactivate',
+          entityType: 'Identity',
+          entityId: result.identityId,
+          description: result.successMessage,
+          newValue: {
+            isActive,
+          },
+        };
+      },
+    },
+  },
 );
 
 const revokePlatformSessionActionImpl = createTxAction(
@@ -67,6 +92,19 @@ const revokePlatformSessionActionImpl = createTxAction(
       sessionId: session.id,
       successMessage: 'Session revoked successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'PLATFORM',
+        category: 'SECURITY',
+        source: 'ADMIN_PANEL',
+        action: 'platform.session.revoke',
+        entityType: 'Session',
+        entityId: result.sessionId,
+        description: result.successMessage,
+      }),
+    },
   },
 );
 

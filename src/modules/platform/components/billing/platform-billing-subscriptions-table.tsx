@@ -1,8 +1,7 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { MoreHorizontalIcon } from 'lucide-react'
 import type { ColumnDef } from '@tanstack/react-table'
 
@@ -26,10 +25,11 @@ type ActionResult = {
 
 function SubscriptionRowActions({
   row,
+  onScheduleCancellationSuccess,
 }: {
   row: PlatformBillingSubscriptionRow
+  onScheduleCancellationSuccess?: (subscriptionId: string) => void
 }) {
-  const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const { showActionError, showActionSuccess } = useActionToast()
 
@@ -50,7 +50,7 @@ function SubscriptionRowActions({
         response.data.successMessage,
         'Subscription cancellation was scheduled.',
       )
-      router.refresh()
+      onScheduleCancellationSuccess?.(row.id)
     })
   }
 
@@ -81,6 +81,7 @@ export function PlatformBillingSubscriptionsTable({
 }: {
   rows: PlatformBillingSubscriptionRow[]
 }) {
+  const [subscriptionRows, setSubscriptionRows] = useState(rows)
   const columns: ColumnDef<PlatformBillingSubscriptionRow>[] = [
     {
       accessorKey: 'planName',
@@ -172,7 +173,20 @@ export function PlatformBillingSubscriptionsTable({
       id: 'actions',
       header: 'Actions',
       enableSorting: false,
-      cell: ({ row }) => <SubscriptionRowActions row={row.original} />,
+      cell: ({ row }) => (
+        <SubscriptionRowActions
+          row={row.original}
+          onScheduleCancellationSuccess={(subscriptionId) => {
+            setSubscriptionRows((current) =>
+              current.map((entry) =>
+                entry.id === subscriptionId
+                  ? { ...entry, cancelAtPeriodEnd: true }
+                  : entry,
+              ),
+            )
+          }}
+        />
+      ),
     },
   ]
 
@@ -180,7 +194,7 @@ export function PlatformBillingSubscriptionsTable({
     <AdminDataTable
       title="Subscriptions"
       columns={columns}
-      data={rows}
+      data={subscriptionRows}
       searchPlaceholder="Search subscriptions by plan, workspace, owner, product code, or provider id"
       emptyStateTitle="No subscriptions found"
       emptyStateDescription="Subscriptions will appear here once paid or trial billing starts."

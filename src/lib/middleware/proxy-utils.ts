@@ -49,6 +49,16 @@ export function isRootWorkspaceHost(host: string, rootHost: string) {
   return host === rootHost || isLocalRootHostAlias(host, rootHost);
 }
 
+export function isReservedWorkspaceSlug(slug: string | null | undefined) {
+  if (!slug) {
+    return false;
+  }
+
+  return reservedWorkspaceSlugs.includes(
+    slug.toLowerCase() as (typeof reservedWorkspaceSlugs)[number],
+  );
+}
+
 export function getSubdomains(host: string) {
   const parts = host.split('.');
 
@@ -59,47 +69,44 @@ export function getSubdomains(host: string) {
   return parts;
 }
 
-export function extractApiKey(req: NextRequest): string | null {
-  return (
-    req.headers.get('x-api-key') ||
-    req.headers.get('authorization')?.replace('Bearer ', '') ||
-    null
-  );
-}
-
-export function resolveFreeWorkspacePath(req: NextRequest) {
-  const rootHost = getRootDomainHost();
-  // console.log('root host:' + rootHost);
-  const host = normalizeHostname(getHostname(req));
-  // console.log('request host:' + host);
+export function resolveFreeWorkspacePathFromValues(params: {
+  host: string;
+  rootHost: string;
+  pathname: string;
+}) {
+  const host = normalizeHostname(params.host);
+  const rootHost = normalizeHostname(params.rootHost);
 
   if (!isRootWorkspaceHost(host, rootHost)) {
     return null;
   }
 
-  const segments = req.nextUrl.pathname.split('/').filter(Boolean);
+  const segments = params.pathname.split('/').filter(Boolean);
   const slug = segments[0]?.toLowerCase();
 
   if (!slug) {
     return null;
   }
 
-  if (
-    reservedWorkspaceSlugs.includes(
-      slug as (typeof reservedWorkspaceSlugs)[number],
-    )
-  ) {
+  if (isReservedWorkspaceSlug(slug)) {
     return null;
   }
 
   const remaining = segments.slice(1).join('/');
   const rewrittenPathname = remaining ? `/${remaining}` : WORKSPACE_PUBLIC_HOME_PATH;
-  // console.log('re-written pathname:' + rewrittenPathname);
 
   return {
     slug,
     rewrittenPathname,
   };
+}
+
+export function resolveFreeWorkspacePath(req: NextRequest) {
+  return resolveFreeWorkspacePathFromValues({
+    host: getHostname(req),
+    rootHost: getRootDomainHost(),
+    pathname: req.nextUrl.pathname,
+  });
 }
 
 export function isPublicRoute(pathname: string) {
@@ -118,7 +125,7 @@ export function isProtectedRoute(pathname: string) {
   );
 }
 
-type WorkspaceRoutingContext = {
+export type WorkspaceRoutingContext = {
   workspaceId: string;
   slug?: string;
   isActive?: boolean;

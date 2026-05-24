@@ -9,7 +9,6 @@ import {
   FileUpIcon,
   UploadIcon,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 
 import {
   Alert,
@@ -103,7 +102,6 @@ export function WorkspaceCustomerBulkCreatePanel({
   basePath: string;
   workspaceSlug: string;
 }) {
-  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isPending, startTransition] = useTransition();
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
@@ -192,8 +190,6 @@ export function WorkspaceCustomerBulkCreatePanel({
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
-
-      router.refresh();
     });
   };
 

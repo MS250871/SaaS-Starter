@@ -2,8 +2,13 @@ import { outboxEventCrud, outboxEventQueries } from '@/modules/jobs/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import type { Prisma } from '@/generated/prisma/client';
 import type { OutboxStatus } from '@/generated/prisma/client';
-import { throwError } from '@/lib/errors/app-error';
+import { extractAppError, throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import {
+  dispatchOutboxEventJob,
+  shouldBypassQStashDispatch,
+} from '@/modules/jobs/services/qstash-job-dispatch.services';
+import { withUnitOfWork } from '@/lib/context/unit-of-work';
 
 const MAX_OUTBOX_ATTEMPTS = 10;
 const DEFAULT_OUTBOX_RETRY_BASE_MS = 60_000; // 1 min
@@ -318,7 +323,7 @@ export async function scheduleOutboxEventRetry(
 ) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Outbox event ID is required');
 
-  const event = attempts ? await getOutboxEventById(id) : null;
+  const event = attempts == null ? await getOutboxEventById(id) : null;
   const currentAttempts = attempts ?? event?.attempts ?? 0;
 
   if (currentAttempts >= MAX_OUTBOX_ATTEMPTS) {
@@ -329,14 +334,42 @@ export async function scheduleOutboxEventRetry(
   const nextRetryAt = new Date(Date.now() + delayMs);
 
   try {
-    return await outboxEventCrud.update(id, {
+    const updatedEvent = await outboxEventCrud.update(id, {
       status: 'FAILED' as OutboxStatus,
       lockedAt: null,
       lastError: error,
       nextRetryAt,
+      jobId: null,
       processedAt: null,
     } as UpdateInput<'OutboxEvent'>);
+
+    if (shouldBypassQStashDispatch()) {
+      return updatedEvent;
+    }
+
+    try {
+      const jobId = await dispatchOutboxEventJob({
+        eventType: updatedEvent.eventType,
+        outboxEventId: updatedEvent.id,
+        scheduledAt: nextRetryAt,
+      });
+
+      return await outboxEventCrud.update(id, {
+        jobId,
+      } as UpdateInput<'OutboxEvent'>);
+    } catch (dispatchError) {
+      await outboxEventCrud.update(id, {
+        nextRetryAt: null,
+        jobId: null,
+      } as UpdateInput<'OutboxEvent'>);
+
+      throw dispatchError;
+    }
   } catch (e) {
+    if (extractAppError(e)) {
+      throw e;
+    }
+
     throwError(ERR.DB_ERROR, 'Failed to schedule outbox retry', undefined, e);
   }
 }
@@ -420,9 +453,11 @@ export async function setOutboxJobId(id: string, jobId: string) {
     throwError(ERR.INVALID_INPUT, 'id and jobId are required');
   }
 
-  return updateOutboxEvent(id, {
-    jobId,
-  } as UpdateInput<'OutboxEvent'>);
+  return withUnitOfWork(() =>
+    updateOutboxEvent(id, {
+      jobId,
+    } as UpdateInput<'OutboxEvent'>),
+  );
 }
 
 export type PlatformOutboxEventAdminSnapshot = Prisma.OutboxEventGetPayload<{

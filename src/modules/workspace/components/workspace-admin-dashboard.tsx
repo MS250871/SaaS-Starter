@@ -316,7 +316,6 @@ export function WorkspaceTeamPanel({
   canRemoveMembers: boolean;
   actorMembershipId?: string;
 }) {
-  const router = useRouter();
   const [isInvitePending, startInviteTransition] = useTransition();
   const [isRemovePending, startRemoveTransition] = useTransition();
   const [formMessage, setFormMessage] = useState<string | null>(null);
@@ -365,7 +364,6 @@ export function WorkspaceTeamPanel({
         email: '',
         roleKey: assignableRoles[0]?.key ?? '',
       });
-      router.refresh();
     });
   };
 
@@ -391,7 +389,6 @@ export function WorkspaceTeamPanel({
       );
       setRemoveMessage(response.data.successMessage);
       setRemovingMembershipId(null);
-      router.refresh();
     });
   };
 

@@ -116,6 +116,7 @@ export function WorkspaceNotificationsPanel({
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const [locallyReadIds, setLocallyReadIds] = useState<Set<string>>(() => new Set());
 
   const form = useForm<SendWorkspaceNotificationActionInput>({
     resolver: zodResolver(sendWorkspaceNotificationActionSchema),
@@ -145,6 +146,25 @@ export function WorkspaceNotificationsPanel({
   const recipientOptions = useMemo(
     () => (audience === 'customer' ? customerRecipients : workspaceRecipients),
     [audience, customerRecipients, workspaceRecipients],
+  );
+  const inboxItems = useMemo(
+    () =>
+      inboxNotifications.map((notification) =>
+        locallyReadIds.has(notification.id)
+          ? { ...notification, isRead: true }
+          : notification,
+      ),
+    [inboxNotifications, locallyReadIds],
+  );
+  const summary = useMemo(
+    () => ({
+      ...inboxSummary,
+      unreadCount: inboxItems.reduce(
+        (count, notification) => count + (notification.isRead ? 0 : 1),
+        0,
+      ),
+    }),
+    [inboxItems, inboxSummary],
   );
 
   async function onSubmit(values: SendWorkspaceNotificationActionInput) {
@@ -193,7 +213,11 @@ export function WorkspaceNotificationsPanel({
         return;
       }
 
-      router.refresh();
+      setLocallyReadIds((current) => {
+        const next = new Set(current);
+        next.add(notificationId);
+        return next;
+      });
     });
   }
 
@@ -209,7 +233,9 @@ export function WorkspaceNotificationsPanel({
       }
 
       setMessage(response.data.successMessage);
-      router.refresh();
+      setLocallyReadIds(
+        () => new Set(inboxNotifications.map((notification) => notification.id)),
+      );
     });
   }
 
@@ -218,11 +244,11 @@ export function WorkspaceNotificationsPanel({
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <InfoCard
           label="My Inbox"
-          value={inboxSummary.totalCount}
+          value={summary.totalCount}
         />
         <InfoCard
           label="Unread"
-          value={inboxSummary.unreadCount}
+          value={summary.unreadCount}
         />
         <InfoCard
           label="Workspace Members"
@@ -430,7 +456,7 @@ export function WorkspaceNotificationsPanel({
       <Card className="border-border/70 bg-background/85">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <CardTitle>My Inbox</CardTitle>
-          {inboxSummary.unreadCount > 0 ? (
+          {summary.unreadCount > 0 ? (
             <Button
               type="button"
               variant="outline"
@@ -443,12 +469,12 @@ export function WorkspaceNotificationsPanel({
           ) : null}
         </CardHeader>
         <CardContent className="space-y-3">
-          {inboxNotifications.length === 0 ? (
+          {inboxItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 px-4 py-8 text-center text-sm text-muted-foreground">
               Your inbox is empty right now.
             </div>
           ) : (
-            inboxNotifications.map((notification) => (
+            inboxItems.map((notification) => (
               <div
                 key={notification.id}
                 className={cn(

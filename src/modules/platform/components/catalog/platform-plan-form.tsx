@@ -73,7 +73,6 @@ export function PlatformPlanForm({
       }
 
       router.push(`/platform/catalog/plans/${response.data.planId}`);
-      router.refresh();
     });
   };
 

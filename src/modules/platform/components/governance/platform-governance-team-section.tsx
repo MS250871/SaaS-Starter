@@ -66,6 +66,18 @@ export function PlatformGovernanceTeamSection({
             ),
           );
         }}
+        onMembershipToggled={(membershipId, next) => {
+          setMembershipRows((current) =>
+            current.map((row) =>
+              row.id === membershipId
+                ? {
+                    ...row,
+                    isActive: next.isActive,
+                  }
+                : row,
+            ),
+          );
+        }}
       />
 
       <PlatformGovernanceInvitesTable

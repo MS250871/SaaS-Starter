@@ -1,5 +1,5 @@
 import { AdminNotificationMenu } from "@/components/admin/admin-notification-menu";
-import { withActionTxContext } from "@/lib/request/withActionContext";
+import { withActionReadContext } from "@/lib/request/withActionContext";
 
 import { getWorkspaceNotificationInboxData } from "./workspace-notifications-page-data";
 
@@ -14,7 +14,7 @@ export async function WorkspaceNotificationMenuSlot({
   workspaceId: string;
   identityId: string;
 }) {
-  const inboxData = await withActionTxContext(() =>
+  const inboxData = await withActionReadContext(() =>
     getWorkspaceNotificationInboxData({
       workspaceId,
       identityId,

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
-  clearAuthCookie,
-  clearVerificationSession,
-  setUserSession,
+  buildUserSessionCookieDescriptor,
 } from '@/lib/auth/auth-cookies';
+import { runWithActor } from '@/lib/context/actor-context';
 import { withRequestContext } from '@/lib/request/withRequestContext';
 import { getRequestContext } from '@/lib/context/request-context';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
@@ -19,6 +18,14 @@ import {
   type IdentitySessionSnapshot,
 } from '@/modules/auth/workflows/post-login.workflow';
 import { buildWorkspaceLoginPath } from '@/modules/workspace/routing';
+
+const systemTransferActor = {
+  actorType: 'system' as const,
+  permissions: [],
+  features: [],
+  limits: {},
+  isPlatformAdmin: true,
+};
 
 function buildLoginRedirectPath(params: {
   workspaceId?: string | null;
@@ -83,11 +90,12 @@ export async function GET(req: NextRequest) {
     const requestContext = getRequestContext();
     const requestHost = getHostname(req);
     const requestPort = requestHost.split(':')[1] ?? req.nextUrl.port;
+    const targetHost = transfer ? normalizeHostname(transfer.targetHost) : null;
     const buildTargetUrl = (path: string) => {
       const url = new URL(path, req.url);
 
-      if (transfer?.targetHost) {
-        url.hostname = transfer.targetHost;
+      if (targetHost) {
+        url.hostname = targetHost;
         url.port = requestPort;
       }
 
@@ -100,9 +108,9 @@ export async function GET(req: NextRequest) {
 
     const currentHost = normalizeHostname(requestHost);
 
-    if (currentHost !== transfer.targetHost) {
+    if (targetHost && currentHost !== targetHost) {
       const redirectUrl = new URL(buildHostTransferPath(token), req.url);
-      redirectUrl.hostname = transfer.targetHost;
+      redirectUrl.hostname = targetHost;
       redirectUrl.port = requestPort;
 
       const response = NextResponse.redirect(redirectUrl);
@@ -112,7 +120,9 @@ export async function GET(req: NextRequest) {
       return response;
     }
 
-    const currentSession = await withUnitOfWork(() => findSessionById(transfer.sessionId));
+    const currentSession = await runWithActor(systemTransferActor, () =>
+      withUnitOfWork(() => findSessionById(transfer.sessionId)),
+    );
 
     if (
       !currentSession ||
@@ -140,22 +150,35 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    const finalSession = await buildFinalSessionWorkflow({
-      identitySession: buildSessionSnapshot(currentSession),
-      workspaceId: transfer.workspaceId,
-    });
-
-    await setUserSession(finalSession);
-    await clearAuthCookie();
-    await clearVerificationSession();
+    const finalSession = await runWithActor(systemTransferActor, () =>
+      buildFinalSessionWorkflow({
+        identitySession: buildSessionSnapshot(currentSession),
+        workspaceId: transfer.workspaceId,
+      }),
+    );
 
     const redirectTarget =
       transfer.returnPath ??
-      (await resolveWorkspaceSurfaceRedirect({
-        workspaceId: transfer.workspaceId,
-        fallbackPath: '/app',
-      }));
+      (await runWithActor(systemTransferActor, () =>
+        resolveWorkspaceSurfaceRedirect({
+          workspaceId: transfer.workspaceId,
+          fallbackPath: '/app',
+        }),
+      ));
 
-    return NextResponse.redirect(new URL(redirectTarget, buildTargetUrl('/')));
+    const response = NextResponse.redirect(
+      new URL(redirectTarget, buildTargetUrl('/')),
+    );
+    const sessionCookie = await buildUserSessionCookieDescriptor(finalSession);
+
+    response.cookies.set(
+      sessionCookie.name,
+      sessionCookie.value,
+      sessionCookie.options,
+    );
+    response.cookies.delete('auth_flow');
+    response.cookies.delete('verify_session');
+
+    return response;
   });
 }

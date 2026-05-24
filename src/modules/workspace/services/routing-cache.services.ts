@@ -1,4 +1,5 @@
-import { redis } from '@/lib/redis';
+import { cacheKeys, cacheTtls } from '@/lib/cache/cache-keys';
+import { deleteRedisCache, setRedisCache } from '@/lib/cache/redis-cache';
 
 type WorkspaceRoutingCachePayload = {
   workspaceId: string;
@@ -32,7 +33,9 @@ export async function cacheWorkspaceSlug(
     return;
   }
 
-  await redis.set(`slug:${slug}`, payload);
+  await setRedisCache(cacheKeys.routingSlug(slug), payload, {
+    ttlSeconds: cacheTtls.routing,
+  });
 }
 
 export async function cacheWorkspaceDomain(
@@ -43,7 +46,9 @@ export async function cacheWorkspaceDomain(
     return;
   }
 
-  await redis.set(`domain:${domain.toLowerCase()}`, payload);
+  await setRedisCache(cacheKeys.routingDomain(domain), payload, {
+    ttlSeconds: cacheTtls.routing,
+  });
 }
 
 export async function clearWorkspaceSlugCache(slug: string) {
@@ -51,7 +56,7 @@ export async function clearWorkspaceSlugCache(slug: string) {
     return;
   }
 
-  await redis.del(`slug:${slug}`);
+  await deleteRedisCache(cacheKeys.routingSlug(slug));
 }
 
 export async function clearWorkspaceDomainCache(domain: string) {
@@ -59,5 +64,5 @@ export async function clearWorkspaceDomainCache(domain: string) {
     return;
   }
 
-  await redis.del(`domain:${domain.toLowerCase()}`);
+  await deleteRedisCache(cacheKeys.routingDomain(domain));
 }

@@ -12,6 +12,11 @@ import {
 } from '@/lib/auth/auth-cookies';
 import { logoutWorkflow } from '@/modules/auth/workflows/logout.workflow';
 import { buildWorkspaceLoginPath } from '@/modules/workspace/routing';
+import {
+  buildNavErrorAudit,
+  getNavAuditState,
+  setNavAuditState,
+} from '@/modules/auth/auth-nav-audit';
 
 const logoutActionImpl = createNavAction(async () => {
   const session = await getUserSession();
@@ -19,6 +24,14 @@ const logoutActionImpl = createNavAction(async () => {
 
   await logoutWorkflow({
     sessionId: session?.sessionId,
+  });
+
+  setNavAuditState({
+    category: 'AUTH',
+    action: 'auth.logout',
+    entityType: 'Session',
+    entityId: session?.sessionId ?? null,
+    description: 'Session logged out.',
   });
 
   await clearAuthCookie();
@@ -40,6 +53,18 @@ const logoutActionImpl = createNavAction(async () => {
   }
 
   redirect(await resolvePublicRedirectTarget('/login'));
+}, {
+  audit: {
+    onSuccess: () => getNavAuditState(),
+    onError: ({ error, state }) =>
+      buildNavErrorAudit({
+        action: 'auth.logout',
+        description: 'Logout failed.',
+        error,
+        state: state as ReturnType<typeof getNavAuditState>,
+        entityType: 'Session',
+      }),
+  },
 });
 
 export async function logoutAction() {

@@ -65,7 +65,6 @@ export function PlatformProductForm({
       }
 
       router.push(`/platform/catalog/products/${response.data.productId}`);
-      router.refresh();
     });
   };
 

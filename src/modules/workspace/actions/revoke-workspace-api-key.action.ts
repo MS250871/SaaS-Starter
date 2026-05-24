@@ -47,6 +47,23 @@ const revokeWorkspaceApiKeyActionImpl = createAction(async (formData: FormData) 
     successMessage: `${result.name} revoked successfully.`,
     ...result,
   };
+}, {
+  audit: {
+    onSuccess: ({ result }) => ({
+      scope: 'WORKSPACE',
+      category: 'SECURITY',
+      source: 'WORKSPACE_APP',
+      action: 'workspace.apiKey.revoke',
+      entityType: 'ApiKey',
+      entityId: result.apiKeyId,
+      description: `Workspace API key ${result.name} revoked.`,
+      newValue: {
+        isActive: false,
+        name: result.name,
+        revoked: true,
+      },
+    }),
+  },
 });
 
 export async function revokeWorkspaceApiKeyAction(formData: FormData) {

@@ -1,12 +1,12 @@
-import { RouteSegmentLoadingState } from "@/components/layout/route-segment-loading-state"
+import { RouteSegmentLoadingState } from '@/components/layout/route-segment-loading-state';
 
 export default function WorkspaceLoading() {
   return (
     <RouteSegmentLoadingState
-      title="Fetching fresh workspace data"
-      description="Pulling the latest people, routing, billing, and support data for this workspace."
+      title="Fetching Data"
+      description="Pulling the latest data for this workspace."
       variant="inline"
       surface="workspace"
     />
-  )
+  );
 }

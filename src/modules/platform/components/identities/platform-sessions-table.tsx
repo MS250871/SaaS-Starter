@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { AdminDataTable } from '@/components/data-table/admin-data-table';
@@ -13,6 +14,7 @@ export function PlatformSessionsTable({
 }: {
   rows: PlatformSessionRow[];
 }) {
+  const [sessionRows, setSessionRows] = useState(rows);
   const columns: ColumnDef<PlatformSessionRow>[] = [
     {
       accessorKey: 'displayName',
@@ -68,6 +70,19 @@ export function PlatformSessionsTable({
           sessionId={row.original.id}
           identityHref={`/platform/identities/${row.original.identityId}`}
           canRevoke={row.original.isActive}
+          onRevokeSuccess={(sessionId) => {
+            setSessionRows((current) =>
+              current.map((entry) =>
+                entry.id === sessionId
+                  ? {
+                      ...entry,
+                      isActive: false,
+                      statusLabel: 'Ended / Revoked',
+                    }
+                  : entry,
+              ),
+            );
+          }}
           revokeAction={revokePlatformSessionAction}
         />
       ),
@@ -78,7 +93,7 @@ export function PlatformSessionsTable({
     <AdminDataTable
       title="Sessions"
       columns={columns}
-      data={rows}
+      data={sessionRows}
       searchPlaceholder="Search sessions by identity, context, role, or device"
       emptyStateTitle="No sessions found"
       emptyStateDescription="Sessions will appear here as soon as users sign in."

@@ -13,11 +13,6 @@ import {
 } from '@/modules/workspace/services/domains.services';
 import type { ManagedWorkspaceDomainState } from '@/modules/workspace/services/domain-provider.types';
 import {
-  buildWorkspaceRoutingCachePayload,
-  cacheWorkspaceDomain,
-  clearWorkspaceDomainCache,
-} from '@/modules/workspace/services/routing-cache.services';
-import {
   getWorkspaceSettings,
   updateWorkspaceConfig,
 } from '@/modules/workspace/services/setting.services';
@@ -289,28 +284,12 @@ async function applyManagedDomainStateToWorkspace(params: {
     }),
   });
 
-  if (params.managedState.redirectTarget) {
-    await clearWorkspaceDomainCache(params.domain);
-  } else if (params.managedState.verified) {
+  if (!params.managedState.redirectTarget && params.managedState.verified) {
     if (params.isPrimary) {
       await updateWorkspace(params.workspaceId, {
         defaultDomain: params.domain,
       });
     }
-
-    await cacheWorkspaceDomain(
-      params.domain,
-      buildWorkspaceRoutingCachePayload({
-        workspaceId: params.workspace.id,
-        slug: params.workspace.slug,
-        isActive: params.workspace.isActive,
-        primaryDomain: params.isPrimary
-          ? params.domain
-          : params.workspace.defaultDomain,
-      }),
-    );
-  } else {
-    await clearWorkspaceDomainCache(params.domain);
   }
 
   return {
@@ -414,26 +393,12 @@ export async function createWorkspaceCustomDomainSetup(params: {
     }),
   });
 
-  if (isRedirectAlias) {
-    await clearWorkspaceDomainCache(domain);
-  } else if (params.managedState.verified) {
+  if (!isRedirectAlias && params.managedState.verified) {
     if (requestedPrimary) {
       await updateWorkspace(params.workspaceId, {
         defaultDomain: domain,
       });
     }
-
-    await cacheWorkspaceDomain(
-      domain,
-      buildWorkspaceRoutingCachePayload({
-        workspaceId: workspace.id,
-        slug: workspace.slug,
-        isActive: workspace.isActive,
-        primaryDomain: requestedPrimary ? domain : workspace.defaultDomain,
-      }),
-    );
-  } else {
-    await clearWorkspaceDomainCache(domain);
   }
 
   return {

@@ -37,6 +37,7 @@ export function PlatformSupportTicketReplyComposer({
 
     startReplyTransition(async () => {
       const submittedMessage = replyMessage.trim();
+      const hasAttachments = replyFiles.length > 0;
       const formData = new FormData();
       formData.set('ticketId', ticketId);
       formData.set('message', submittedMessage);
@@ -49,16 +50,20 @@ export function PlatformSupportTicketReplyComposer({
         return;
       }
 
-      onReplyAdded?.({
-        id: response.data.messageId,
-        message: submittedMessage,
-        createdAt: new Date().toISOString(),
-      });
+      if (!hasAttachments) {
+        onReplyAdded?.({
+          id: response.data.messageId,
+          message: submittedMessage,
+          createdAt: new Date().toISOString(),
+        });
+      }
       showActionSuccess(response.data.successMessage, 'Reply added.');
       setReplyMessage('');
       setReplyFiles([]);
       setReplyInputKey((current) => current + 1);
-      router.refresh();
+      if (hasAttachments) {
+        router.refresh();
+      }
     });
   };
 

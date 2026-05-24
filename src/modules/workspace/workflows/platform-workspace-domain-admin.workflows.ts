@@ -2,6 +2,7 @@ import { WorkspaceDomainType } from '@/generated/prisma/client';
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { invalidateWorkspaceSurfaceCaches } from '@/modules/workspace/services/workspace-cache.services';
 import { cleanupManagedWorkspaceDomain } from '@/modules/workspace/services/domain-provider.services';
 import {
   deleteWorkspaceDomain,
@@ -33,7 +34,9 @@ function assertWorkspaceCanUseCustomDomains(params: {
 export async function resyncPlatformWorkspaceRoutingWorkflow(input: {
   workspaceId: string;
 }) {
-  return withUnitOfWork(() => syncWorkspaceRoutingState(input.workspaceId));
+  const result = await syncWorkspaceRoutingState(input.workspaceId);
+  await invalidateWorkspaceSurfaceCaches(input.workspaceId);
+  return result;
 }
 
 export async function createPlatformWorkspaceCustomDomainWorkflow(input: {
@@ -149,7 +152,9 @@ export async function setPlatformWorkspacePrimaryDomainWorkflow(input: {
     setPrimaryWorkspaceDomain(input.workspaceDomainId, domain.workspaceId),
   );
 
-  return withUnitOfWork(() => syncWorkspaceRoutingState(domain.workspaceId));
+  const result = await syncWorkspaceRoutingState(domain.workspaceId);
+  await invalidateWorkspaceSurfaceCaches(domain.workspaceId);
+  return result;
 }
 
 export async function deletePlatformWorkspaceDomainWorkflow(input: {
@@ -168,5 +173,7 @@ export async function deletePlatformWorkspaceDomainWorkflow(input: {
 
   await withUnitOfWork(() => deleteWorkspaceDomain(input.workspaceDomainId));
 
-  return withUnitOfWork(() => syncWorkspaceRoutingState(domain.workspaceId));
+  const result = await syncWorkspaceRoutingState(domain.workspaceId);
+  await invalidateWorkspaceSurfaceCaches(domain.workspaceId);
+  return result;
 }

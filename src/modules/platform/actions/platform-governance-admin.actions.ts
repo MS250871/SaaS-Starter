@@ -1,14 +1,13 @@
 'use server';
 
+import type { Prisma } from '@/generated/prisma/client';
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
 import { headers } from 'next/headers';
 import { getIdentityDisplayProfile } from '@/modules/auth/services/identity.services';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
-import { processNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
+import { dispatchNotificationDeliveryOutboxEvent } from '@/modules/notifications/services/notification-outbox.services';
 import { createPlatformInviteNotificationWorkflow } from '@/modules/notifications/workflows/create-platform-invite-notification.workflow';
 import { assertPlatformAdminAccess } from '@/modules/platform/platform-admin-access';
 import {
@@ -75,32 +74,28 @@ async function requirePlatformAdminSession() {
   return session;
 }
 
-async function logGovernanceAction(params: {
-  session: Awaited<ReturnType<typeof requirePlatformAdminSession>>;
+function buildGovernanceAuditInput(params: {
   action: string;
   entityType: string;
   entityId: string;
   description: string;
+  metadata?: Prisma.InputJsonValue | null;
 }) {
-  const requestContext = getRequestContext();
-
-  await logAdminAction({
-    adminIdentityId: params.session.identityId,
-    adminEmail: null,
-    adminRole: params.session.platformRoleSystemKeys?.[0] ?? null,
+  return {
+    scope: 'PLATFORM' as const,
+    category: 'GOVERNANCE' as const,
+    source: 'ADMIN_PANEL' as const,
     action: params.action,
     entityType: params.entityType,
     entityId: params.entityId,
     description: params.description,
-    ipAddress: requestContext.ip,
-    userAgent: requestContext.userAgent,
-    requestId: requestContext.requestId,
-  });
+    metadata: params.metadata ?? undefined,
+  };
 }
 
 const togglePlatformMembershipActiveActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
 
     const membershipId = String(formData.get('membershipId') ?? '').trim();
     const isActive =
@@ -114,16 +109,6 @@ const togglePlatformMembershipActiveActionImpl = createTxAction(
       ? await activatePlatformMembership(membershipId)
       : await deactivatePlatformMembership(membershipId);
 
-    await logGovernanceAction({
-      session,
-      action: isActive
-        ? 'platform.membership.activate'
-        : 'platform.membership.deactivate',
-      entityType: 'PlatformMembership',
-      entityId: membership.id,
-      description: `Platform membership ${isActive ? 'activated' : 'deactivated'}.`,
-    });
-
     return {
       membershipId: membership.id,
       successMessage: `Platform membership ${
@@ -131,204 +116,271 @@ const togglePlatformMembershipActiveActionImpl = createTxAction(
       } successfully.`,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const isActive =
+          String(formData.get('isActive') ?? '').trim().toLowerCase() ===
+          'true';
+
+        return buildGovernanceAuditInput({
+          action: isActive
+            ? 'platform.membership.activate'
+            : 'platform.membership.deactivate',
+          entityType: 'PlatformMembership',
+          entityId: result.membershipId,
+          description: `Platform membership ${
+            isActive ? 'activated' : 'deactivated'
+          }.`,
+        });
+      },
+    },
+  },
 );
 
-const createPlatformInviteActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
-  const raw = Object.fromEntries(formData.entries());
-  const parsed: CreatePlatformInviteActionInput =
-    createPlatformInviteActionSchema.parse(raw);
-  const inviteInput: CreatePlatformInviteDomain =
-    createPlatformInviteSchema.parse(parsed);
-  const hdrs = await headers();
+const createPlatformInviteActionImpl = createTxAction(
+  async (formData: FormData) => {
+    const session = await requirePlatformAdminSession();
+    const raw = Object.fromEntries(formData.entries());
+    const parsed: CreatePlatformInviteActionInput =
+      createPlatformInviteActionSchema.parse(raw);
+    const inviteInput: CreatePlatformInviteDomain =
+      createPlatformInviteSchema.parse(parsed);
+    const hdrs = await headers();
 
-  const [result, inviter] = await Promise.all([
-    createPlatformInviteWorkflow({
-      invitedById: session.identityId,
-      invite: inviteInput,
-    }),
-    getIdentityDisplayProfile(session.identityId),
-  ]);
-  const roleDefinition = await getRoleDefinitionById(result.invite.roleDefinitionId);
+    const [result, inviter] = await Promise.all([
+      createPlatformInviteWorkflow({
+        invitedById: session.identityId,
+        invite: inviteInput,
+      }),
+      getIdentityDisplayProfile(session.identityId),
+    ]);
+    const roleDefinition = await getRoleDefinitionById(
+      result.invite.roleDefinitionId,
+    );
 
-  const signupUrl = buildAbsoluteUrl(result.signupPath, {
-    host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
-    protocol: hdrs.get('x-forwarded-proto'),
-  });
-
-  let emailDelivered = true;
-
-  try {
-    const notificationResult = await createPlatformInviteNotificationWorkflow({
-      inviterIdentityId: session.identityId,
-      inviteEmail: result.invite.email,
-      signupUrl,
-      roleName: roleDefinition.name ?? result.invite.roleKey,
-      inviterName: getInviterName(inviter ?? {}),
-      expiresAt: result.invite.expiresAt,
-      reused: result.reused,
+    const signupUrl = buildAbsoluteUrl(result.signupPath, {
+      host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
+      protocol: hdrs.get('x-forwarded-proto'),
     });
 
-    for (const event of notificationResult.outboxEvents) {
-      await processNotificationDeliveryOutboxEvent(event.id);
+    let emailDelivered = true;
+
+    try {
+      const notificationResult = await createPlatformInviteNotificationWorkflow({
+        inviterIdentityId: session.identityId,
+        inviteEmail: result.invite.email,
+        signupUrl,
+        roleName: roleDefinition.name ?? result.invite.roleKey,
+        inviterName: getInviterName(inviter ?? {}),
+        expiresAt: result.invite.expiresAt,
+        reused: result.reused,
+      });
+
+      for (const event of notificationResult.outboxEvents) {
+        await dispatchNotificationDeliveryOutboxEvent(event.id);
+      }
+    } catch (error) {
+      emailDelivered = false;
+      console.error('Platform invite email queueing failed:', error);
     }
-  } catch (error) {
-    emailDelivered = false;
-    console.error('Platform invite email delivery failed:', error);
-  }
 
-  await logGovernanceAction({
-    session,
-    action: result.reused ? 'platform.invite.reuse' : 'platform.invite.create',
-    entityType: 'PlatformInvite',
-    entityId: result.invite.id,
-    description: result.reused
-      ? `Existing platform invite reused for ${result.invite.email}.`
-      : `Platform invite created for ${result.invite.email}.`,
-  });
-
-  return {
-    inviteId: result.invite.id,
+    return {
+      inviteId: result.invite.id,
     successMessage: emailDelivered
       ? result.reused
-        ? 'A pending platform invite already existed. Reusing the existing signup link and sending the invite email again.'
-        : 'Platform invite created and email sent successfully.'
-      : result.reused
-        ? 'A pending platform invite already existed. The invite is still valid, but the email could not be sent. Use the signup link below.'
-        : 'Platform invite created, but the email could not be sent. Use the signup link below.',
-    reused: result.reused,
-    emailDelivered,
-    signupPath: result.signupPath,
-    signupUrl,
-    invite: {
-      id: result.invite.id,
-      email: result.invite.email,
-      roleName: roleDefinition.name ?? result.invite.roleKey,
-      roleKey: result.invite.roleKey,
-      roleSystemKey: result.invite.roleSystemKey ?? null,
-      status: result.invite.status,
+          ? 'A pending platform invite already existed. Reusing the existing signup link and queueing the invite email again.'
+          : 'Platform invite created and email queued successfully.'
+        : result.reused
+          ? 'A pending platform invite already existed. The invite is still valid, but the email could not be queued. Use the signup link below.'
+          : 'Platform invite created, but the email could not be queued. Use the signup link below.',
+      reused: result.reused,
+      emailDelivered,
       signupPath: result.signupPath,
-      expiresAt: result.invite.expiresAt?.toISOString() ?? null,
-      createdAt: result.invite.createdAt.toISOString(),
-    },
-  };
-});
-
-const revokePlatformInviteActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
-
-  const inviteId = String(formData.get('inviteId') ?? '').trim();
-
-  if (!inviteId) {
-    throwError(ERR.INVALID_INPUT, 'Platform invite ID is required');
-  }
-
-  const invite = await revokePlatformInvite(inviteId);
-
-  await logGovernanceAction({
-    session,
-    action: 'platform.invite.revoke',
-    entityType: 'PlatformInvite',
-    entityId: invite.id,
-    description: `Platform invite for ${invite.email} revoked.`,
-  });
-
-  return {
-    inviteId: invite.id,
-    successMessage: 'Platform invite revoked successfully.',
-  };
-});
-
-const changePlatformInviteRoleActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
-  const raw = Object.fromEntries(formData.entries());
-  const parsed: ChangePlatformInviteRoleActionInput =
-    changePlatformInviteRoleActionSchema.parse(raw);
-  const input: ChangePlatformInviteRoleDomain =
-    changePlatformInviteRoleSchema.parse(parsed);
-
-  const currentInvite = await getPlatformInviteById(input.inviteId);
-
-  if (currentInvite.status !== 'PENDING') {
-    throwError(ERR.INVALID_INPUT, 'Only pending platform invites can change role');
-  }
-
-  const invite = await updatePlatformInviteRole(input.inviteId, {
-    roleKey: input.roleKey,
-  });
-  const roleDefinition = await getRoleDefinitionById(invite.roleDefinitionId);
-  const hdrs = await headers();
-  const signupUrl = buildAbsoluteUrl(buildPlatformInviteSignupPath(currentInvite.token), {
-    host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
-    protocol: hdrs.get('x-forwarded-proto'),
-  });
-  const inviter = await getIdentityDisplayProfile(session.identityId);
-
-  try {
-    const notificationResult = await createPlatformInviteNotificationWorkflow({
-      inviterIdentityId: session.identityId,
-      inviteEmail: invite.email,
       signupUrl,
-      roleName: roleDefinition.name ?? invite.roleKey,
-      inviterName: getInviterName(inviter ?? {}),
-      expiresAt: currentInvite.expiresAt,
-      updated: true,
-    });
+      invite: {
+        id: result.invite.id,
+        email: result.invite.email,
+        roleName: roleDefinition.name ?? result.invite.roleKey,
+        roleKey: result.invite.roleKey,
+        roleSystemKey: result.invite.roleSystemKey ?? null,
+        status: result.invite.status,
+        signupPath: result.signupPath,
+        expiresAt: result.invite.expiresAt?.toISOString() ?? null,
+        createdAt: result.invite.createdAt.toISOString(),
+      },
+    };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildGovernanceAuditInput({
+          action: result.reused
+            ? 'platform.invite.reuse'
+            : 'platform.invite.create',
+          entityType: 'PlatformInvite',
+          entityId: result.inviteId,
+          description: result.reused
+            ? `Existing platform invite reused for ${result.invite.email}.`
+            : `Platform invite created for ${result.invite.email}.`,
+          metadata: {
+            emailDelivered: result.emailDelivered,
+            roleKey: result.invite.roleKey,
+            roleSystemKey: result.invite.roleSystemKey,
+            reused: result.reused,
+          },
+        }),
+    },
+  },
+);
 
-    for (const event of notificationResult.outboxEvents) {
-      await processNotificationDeliveryOutboxEvent(event.id);
+const revokePlatformInviteActionImpl = createTxAction(
+  async (formData: FormData) => {
+    await requirePlatformAdminSession();
+
+    const inviteId = String(formData.get('inviteId') ?? '').trim();
+
+    if (!inviteId) {
+      throwError(ERR.INVALID_INPUT, 'Platform invite ID is required');
     }
-  } catch (error) {
-    console.error('Platform invite role update email delivery failed:', error);
-  }
 
-  await logGovernanceAction({
-    session,
-    action: 'platform.invite.changeRole',
-    entityType: 'PlatformInvite',
-    entityId: invite.id,
-    description: `Platform invite for ${invite.email} moved to role ${roleDefinition.name}.`,
-  });
+    const invite = await revokePlatformInvite(inviteId);
 
-  return {
-    inviteId: invite.id,
-    successMessage: 'Platform invite role updated successfully.',
-    roleName: roleDefinition.name ?? invite.roleKey,
-    roleKey: invite.roleKey,
-    roleSystemKey: invite.roleSystemKey ?? null,
-  };
-});
+    return {
+      inviteId: invite.id,
+      successMessage: 'Platform invite revoked successfully.',
+    };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildGovernanceAuditInput({
+          action: 'platform.invite.revoke',
+          entityType: 'PlatformInvite',
+          entityId: result.inviteId,
+          description: 'Platform invite revoked.',
+        }),
+    },
+  },
+);
 
-const changePlatformMembershipRoleActionImpl = createTxAction(async (formData: FormData) => {
-  const session = await requirePlatformAdminSession();
-  const raw = Object.fromEntries(formData.entries());
-  const parsed: ChangePlatformMembershipRoleActionInput =
-    changePlatformMembershipRoleActionSchema.parse(raw);
-  const input: ChangePlatformMembershipRoleDomain =
-    changePlatformMembershipRoleSchema.parse(parsed);
+const changePlatformInviteRoleActionImpl = createTxAction(
+  async (formData: FormData) => {
+    const session = await requirePlatformAdminSession();
+    const raw = Object.fromEntries(formData.entries());
+    const parsed: ChangePlatformInviteRoleActionInput =
+      changePlatformInviteRoleActionSchema.parse(raw);
+    const input: ChangePlatformInviteRoleDomain =
+      changePlatformInviteRoleSchema.parse(parsed);
 
-  const currentMembership = await getPlatformMembershipById(input.membershipId);
-  const membership = await updatePlatformMembershipRole(input.membershipId, {
-    roleKey: input.roleKey,
-  });
-  const roleDefinition = await getRoleDefinitionById(membership.roleDefinitionId);
+    const currentInvite = await getPlatformInviteById(input.inviteId);
 
-  await logGovernanceAction({
-    session,
-    action: 'platform.membership.changeRole',
-    entityType: 'PlatformMembership',
-    entityId: membership.id,
-    description: `Platform membership for ${currentMembership.identityId} moved to role ${roleDefinition.name}.`,
-  });
+    if (currentInvite.status !== 'PENDING') {
+      throwError(
+        ERR.INVALID_INPUT,
+        'Only pending platform invites can change role',
+      );
+    }
 
-  return {
-    membershipId: membership.id,
-    successMessage: 'Platform membership role updated successfully.',
-    roleName: roleDefinition.name ?? membership.roleKey,
-    roleKey: membership.roleKey,
-    roleSystemKey: membership.roleSystemKey ?? null,
-  };
-});
+    const invite = await updatePlatformInviteRole(input.inviteId, {
+      roleKey: input.roleKey,
+    });
+    const roleDefinition = await getRoleDefinitionById(invite.roleDefinitionId);
+    const hdrs = await headers();
+    const signupUrl = buildAbsoluteUrl(
+      buildPlatformInviteSignupPath(currentInvite.token),
+      {
+        host: hdrs.get('x-forwarded-host') || hdrs.get('host'),
+        protocol: hdrs.get('x-forwarded-proto'),
+      },
+    );
+    const inviter = await getIdentityDisplayProfile(session.identityId);
+
+    try {
+      const notificationResult = await createPlatformInviteNotificationWorkflow({
+        inviterIdentityId: session.identityId,
+        inviteEmail: invite.email,
+        signupUrl,
+        roleName: roleDefinition.name ?? invite.roleKey,
+        inviterName: getInviterName(inviter ?? {}),
+        expiresAt: currentInvite.expiresAt,
+        updated: true,
+      });
+
+      for (const event of notificationResult.outboxEvents) {
+        await dispatchNotificationDeliveryOutboxEvent(event.id);
+      }
+    } catch (error) {
+      console.error('Platform invite role update email queueing failed:', error);
+    }
+
+    return {
+      inviteId: invite.id,
+      successMessage: 'Platform invite role updated successfully.',
+      roleName: roleDefinition.name ?? invite.roleKey,
+      roleKey: invite.roleKey,
+      roleSystemKey: invite.roleSystemKey ?? null,
+    };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildGovernanceAuditInput({
+          action: 'platform.invite.changeRole',
+          entityType: 'PlatformInvite',
+          entityId: result.inviteId,
+          description: `Platform invite moved to role ${result.roleName}.`,
+          metadata: {
+            roleKey: result.roleKey,
+            roleSystemKey: result.roleSystemKey,
+          },
+        }),
+    },
+  },
+);
+
+const changePlatformMembershipRoleActionImpl = createTxAction(
+  async (formData: FormData) => {
+    await requirePlatformAdminSession();
+    const raw = Object.fromEntries(formData.entries());
+    const parsed: ChangePlatformMembershipRoleActionInput =
+      changePlatformMembershipRoleActionSchema.parse(raw);
+    const input: ChangePlatformMembershipRoleDomain =
+      changePlatformMembershipRoleSchema.parse(parsed);
+
+    await getPlatformMembershipById(input.membershipId);
+    const membership = await updatePlatformMembershipRole(input.membershipId, {
+      roleKey: input.roleKey,
+    });
+    const roleDefinition = await getRoleDefinitionById(
+      membership.roleDefinitionId,
+    );
+
+    return {
+      membershipId: membership.id,
+      successMessage: 'Platform membership role updated successfully.',
+      roleName: roleDefinition.name ?? membership.roleKey,
+      roleKey: membership.roleKey,
+      roleSystemKey: membership.roleSystemKey ?? null,
+    };
+  },
+  {
+    audit: {
+      onSuccess: ({ result }) =>
+        buildGovernanceAuditInput({
+          action: 'platform.membership.changeRole',
+          entityType: 'PlatformMembership',
+          entityId: result.membershipId,
+          description: `Platform membership moved to role ${result.roleName}.`,
+          metadata: {
+            roleKey: result.roleKey,
+            roleSystemKey: result.roleSystemKey,
+          },
+        }),
+    },
+  },
+);
 
 export async function togglePlatformMembershipActiveAction(formData: FormData) {
   return togglePlatformMembershipActiveActionImpl(formData);

@@ -2,7 +2,6 @@
 
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { MoreHorizontalIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +26,8 @@ export function CatalogRowMenu({
   viewHref,
   editHref,
   isActive,
+  onToggleSuccess,
+  onDeleteSuccess,
   toggleAction,
   deleteAction,
 }: {
@@ -36,10 +37,16 @@ export function CatalogRowMenu({
   viewHref: string;
   editHref: string;
   isActive: boolean;
+  onToggleSuccess?: (
+    entityId: string,
+    next: {
+      isActive: boolean;
+    },
+  ) => void;
+  onDeleteSuccess?: (entityId: string) => void;
   toggleAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
   deleteAction: (formData: FormData) => Promise<ApiResponse<ActionResult>>;
 }) {
-  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const { showActionError, showActionSuccess } = useActionToast();
 
@@ -56,8 +63,10 @@ export function CatalogRowMenu({
         return;
       }
 
+      onToggleSuccess?.(entityId, {
+        isActive: !isActive,
+      });
       showActionSuccess(response.data.successMessage, `${entityLabel} updated.`);
-      router.refresh();
     });
   };
 
@@ -81,8 +90,8 @@ export function CatalogRowMenu({
         return;
       }
 
+      onDeleteSuccess?.(entityId);
       showActionSuccess(response.data.successMessage, `${entityLabel} deleted.`);
-      router.refresh();
     });
   };
 

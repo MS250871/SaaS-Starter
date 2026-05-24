@@ -1,11 +1,9 @@
 'use server';
 
 import { getUserSession } from '@/lib/auth/auth-cookies';
-import { getRequestContext } from '@/lib/context/request-context';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { createTxAction } from '@/lib/http/create-action';
-import { logAdminAction } from '@/modules/audit/services/audit.services';
 import {
   getMediaJobById,
   markMediaProcessing,
@@ -27,7 +25,7 @@ async function requirePlatformAdminSession() {
 
 const requeuePlatformMediaJobActionImpl = createTxAction(
   async (formData: FormData) => {
-    const session = await requirePlatformAdminSession();
+    await requirePlatformAdminSession();
     const mediaJobId = String(formData.get('mediaJobId') ?? '').trim();
 
     if (!mediaJobId) {
@@ -38,24 +36,28 @@ const requeuePlatformMediaJobActionImpl = createTxAction(
     await requeueMediaJob(job.id);
     await markMediaProcessing(job.mediaId);
 
-    const requestContext = getRequestContext();
-    await logAdminAction({
-      adminIdentityId: session.identityId,
-      adminEmail: null,
-      adminRole: session.platformRoleSystemKeys?.[0] ?? null,
-      action: 'media.job.requeue',
-      entityType: 'MediaJob',
-      entityId: job.id,
-      description: `Media job ${job.jobType} requeued for media ${job.mediaId}.`,
-      ipAddress: requestContext.ip,
-      userAgent: requestContext.userAgent,
-      requestId: requestContext.requestId,
-    });
-
     return {
       mediaJobId: job.id,
       successMessage: 'Media job requeued successfully.',
     };
+  },
+  {
+    audit: {
+      onSuccess: ({ args, result }) => {
+        const formData = args[0];
+        const mediaJobId = String(formData.get('mediaJobId') ?? '').trim();
+
+        return {
+          scope: 'PLATFORM' as const,
+          category: 'MEDIA' as const,
+          source: 'ADMIN_PANEL' as const,
+          action: 'media.job.requeue',
+          entityType: 'MediaJob',
+          entityId: result.mediaJobId || mediaJobId,
+          description: 'Media job requeued.',
+        };
+      },
+    },
   },
 );
 

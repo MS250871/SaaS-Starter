@@ -52,6 +52,22 @@ const addWorkspaceSupportTicketInternalNoteActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'SUPPORT',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.support.ticket.internalNote.create',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: `Internal note added to ${result.title}.`,
+        metadata: {
+          messageId: result.messageId,
+        },
+      }),
+    },
+  },
 );
 
 export async function addWorkspaceSupportTicketInternalNoteAction(

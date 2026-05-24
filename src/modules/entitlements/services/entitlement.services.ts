@@ -16,11 +16,13 @@ import {
 } from '@/modules/entitlements/db';
 
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
-import { withUnitOfWork } from '@/lib/context/unit-of-work';
+import { cacheKeys } from '@/lib/cache/cache-keys';
 import type { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { canOverrideEntitlement } from '@/modules/entitlements/override-policy';
+import { readResolvedWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
+import { readCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
 
 export type PlanFeatureWithFeature = Prisma.PlanFeatureGetPayload<{
   include: { feature: true };
@@ -275,43 +277,47 @@ export async function getPlanCatalogSnapshotById(
 }
 
 export async function listPublicPricingPlans() {
-  return planQueries.delegate.findMany({
-    where: {
-      isActive: true,
-      isPublic: true,
-    },
-    orderBy: {
-      sortOrder: 'asc',
-    },
-    include: {
-      features: {
-        where: { isEnabled: true },
-        include: {
-          feature: true,
-        },
-      },
-      limits: {
-        include: {
-          limitDefinition: true,
-        },
-      },
-      products: {
+  return readCatalogCache(
+    (catalogVersion) => cacheKeys.publicPricingPlans(catalogVersion),
+    () =>
+      planQueries.delegate.findMany({
         where: {
           isActive: true,
+          isPublic: true,
+        },
+        orderBy: {
+          sortOrder: 'asc',
         },
         include: {
-          prices: {
+          features: {
+            where: { isEnabled: true },
+            include: {
+              feature: true,
+            },
+          },
+          limits: {
+            include: {
+              limitDefinition: true,
+            },
+          },
+          products: {
             where: {
               isActive: true,
             },
-            orderBy: {
-              createdAt: 'asc',
+            include: {
+              prices: {
+                where: {
+                  isActive: true,
+                },
+                orderBy: {
+                  createdAt: 'asc',
+                },
+              },
             },
           },
         },
-      },
-    },
-  });
+      }),
+  );
 }
 
 export async function createPlan(data: CreateInput<'Plan'>) {
@@ -395,10 +401,14 @@ export async function listFeatureAdminSnapshots(): Promise<FeatureAdminSnapshot[
 }
 
 export async function listFeatureCatalog() {
-  return featureQueries.many({
-    where: { isActive: true },
-    orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
-  });
+  return readCatalogCache(
+    (catalogVersion) => cacheKeys.featureCatalog(catalogVersion),
+    () =>
+      featureQueries.many({
+        where: { isActive: true },
+        orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+  );
 }
 
 export async function createFeature(data: CreateInput<'Feature'>) {
@@ -478,10 +488,14 @@ export async function listLimitAdminSnapshots(): Promise<LimitAdminSnapshot[]> {
 }
 
 export async function listLimitCatalog() {
-  return limitDefinitionQueries.many({
-    where: { isActive: true },
-    orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
-  });
+  return readCatalogCache(
+    (catalogVersion) => cacheKeys.limitCatalog(catalogVersion),
+    () =>
+      limitDefinitionQueries.many({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      }),
+  );
 }
 
 export async function createLimit(data: CreateInput<'LimitDefinition'>) {
@@ -563,10 +577,14 @@ export async function listPlanFeatures(
 ): Promise<PlanFeatureWithFeature[]> {
   if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
 
-  const features = await planFeatureQueries.many({
-    where: { planId },
-    include: { feature: true },
-  });
+  const features = await readCatalogCache(
+    (catalogVersion) => cacheKeys.planFeatures(catalogVersion, planId),
+    () =>
+      planFeatureQueries.many({
+        where: { planId },
+        include: { feature: true },
+      }),
+  );
 
   return features as unknown as PlanFeatureWithFeature[];
 }
@@ -611,10 +629,14 @@ export async function listPlanLimits(
 ): Promise<PlanLimitWithDefinition[]> {
   if (!planId) throwError(ERR.INVALID_INPUT, 'Plan ID is required');
 
-  const limits = await planLimitQueries.many({
-    where: { planId },
-    include: { limitDefinition: true },
-  });
+  const limits = await readCatalogCache(
+    (catalogVersion) => cacheKeys.planLimits(catalogVersion, planId),
+    () =>
+      planLimitQueries.many({
+        where: { planId },
+        include: { limitDefinition: true },
+      }),
+  );
 
   return limits as unknown as PlanLimitWithDefinition[];
 }
@@ -727,10 +749,15 @@ export async function listWorkspaceFeatureOverrides(
 ): Promise<WorkspaceFeatureOverrideWithFeature[]> {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
 
-  const overrides = await workspaceFeatureOverrideQueries.many({
-    where: { workspaceId },
-    include: { feature: true },
-  });
+  const overrides = await readCatalogCache(
+    (catalogVersion) =>
+      cacheKeys.workspaceFeatureOverrides(catalogVersion, workspaceId),
+    () =>
+      workspaceFeatureOverrideQueries.many({
+        where: { workspaceId },
+        include: { feature: true },
+      }),
+  );
 
   return overrides as unknown as WorkspaceFeatureOverrideWithFeature[];
 }
@@ -854,10 +881,15 @@ export async function listWorkspaceLimitOverrides(
 ): Promise<WorkspaceLimitOverrideWithDefinition[]> {
   if (!workspaceId) throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
 
-  const overrides = await workspaceLimitOverrideQueries.many({
-    where: { workspaceId },
-    include: { limitDefinition: true },
-  });
+  const overrides = await readCatalogCache(
+    (catalogVersion) =>
+      cacheKeys.workspaceLimitOverrides(catalogVersion, workspaceId),
+    () =>
+      workspaceLimitOverrideQueries.many({
+        where: { workspaceId },
+        include: { limitDefinition: true },
+      }),
+  );
 
   return overrides as unknown as WorkspaceLimitOverrideWithDefinition[];
 }
@@ -1011,7 +1043,7 @@ export async function resolveEntitlements(params: {
   workspaceId: string;
   planId?: string | null;
 }) {
-  return withUnitOfWork(async () => {
+  return readResolvedWorkspaceEntitlementsCache(params, async () => {
     if (!params.workspaceId) {
       throwError(ERR.INVALID_INPUT, 'workspaceId is required');
     }

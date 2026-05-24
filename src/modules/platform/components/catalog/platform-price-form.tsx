@@ -64,7 +64,6 @@ export function PlatformPriceForm({
       }
 
       router.push(`/platform/catalog/prices/${response.data.priceId}`);
-      router.refresh();
     });
   };
 

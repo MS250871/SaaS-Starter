@@ -64,6 +64,23 @@ const updateWorkspaceSupportTicketStatusActionImpl = createAction(
       ...result,
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'SUPPORT',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.support.ticket.status.update',
+        entityType: 'SupportTicket',
+        entityId: result.ticketId,
+        description: `Ticket status updated to ${result.status}.`,
+        newValue: {
+          contextType: result.contextType,
+          status: result.status,
+        },
+      }),
+    },
+  },
 );
 
 export async function updateWorkspaceSupportTicketStatusAction(

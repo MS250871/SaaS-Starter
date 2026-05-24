@@ -40,6 +40,23 @@ const createWorkspaceCustomerActionImpl = createTxAction(
       name: `${customer.firstName} ${customer.lastName}`.trim(),
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'CUSTOMER',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.customer.create',
+        entityType: 'Customer',
+        entityId: result.customerId,
+        description: `Customer ${result.name || 'record'} created in workspace.`,
+        metadata: {
+          created: result.created,
+          identityId: result.identityId,
+        },
+      }),
+    },
+  },
 );
 
 export async function createWorkspaceCustomerAction(formData: FormData) {

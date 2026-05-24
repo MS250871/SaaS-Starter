@@ -1,12 +1,7 @@
-import { Hero } from '@/components/home/hero';
-import { HowItWorks } from '@/components/home/how-it-works';
+import { MarketingHome } from '@/components/home/marketing-home';
+
 function HomePage() {
-  return (
-    <>
-      <Hero />
-      <HowItWorks />
-    </>
-  );
+  return <MarketingHome />;
 }
 
 export default HomePage;

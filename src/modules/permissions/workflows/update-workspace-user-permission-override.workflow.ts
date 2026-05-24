@@ -1,6 +1,7 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import { invalidatePermissionsCache } from '@/modules/permissions/services/permission-cache.services';
 import {
   getPermissionById,
   upsertWorkspaceUserPermissionOverride,
@@ -14,7 +15,7 @@ export async function updateWorkspaceUserPermissionOverrideWorkflow(input: {
   effect: 'ALLOW' | 'DENY';
   grantedById?: string;
 }) {
-  return withUnitOfWork(async () => {
+  const result = await withUnitOfWork(async () => {
     const [membership, permission] = await Promise.all([
       findActiveWorkspaceMembershipByIdentity(
         input.workspaceId,
@@ -50,4 +51,8 @@ export async function updateWorkspaceUserPermissionOverrideWorkflow(input: {
         'Workspace member',
     };
   });
+
+  await invalidatePermissionsCache();
+
+  return result;
 }

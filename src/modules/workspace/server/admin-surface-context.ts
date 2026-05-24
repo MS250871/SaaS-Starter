@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { headers } from 'next/headers';
 
 import { readActorContext } from '@/lib/request/read-actor-context';
@@ -28,7 +29,7 @@ function getWorkspaceBasePath(params: {
   return '/app';
 }
 
-export async function getWorkspaceAdminSurfaceContext() {
+const getWorkspaceAdminSurfaceContextCached = cache(async () => {
   const { actor, requestContext } = await readActorContext();
   const hdrs = await headers();
   const workspaceId = actor.workspaceId;
@@ -81,6 +82,10 @@ export async function getWorkspaceAdminSurfaceContext() {
       host: hdrs.get('host'),
     }),
   };
+});
+
+export async function getWorkspaceAdminSurfaceContext() {
+  return getWorkspaceAdminSurfaceContextCached();
 }
 
 export type WorkspaceAdminSurfaceContext = Awaited<

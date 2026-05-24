@@ -64,7 +64,6 @@ export function PlatformLimitForm({
       }
 
       router.push(`/platform/catalog/limits/${response.data.limitId}`);
-      router.refresh();
     });
   };
 

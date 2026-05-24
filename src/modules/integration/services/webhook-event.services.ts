@@ -5,8 +5,12 @@ import {
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
 import type { Prisma } from '@/generated/prisma/client';
 import type { WebhookStatus } from '@/generated/prisma/client';
-import { throwError } from '@/lib/errors/app-error';
+import { extractAppError, throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
+import {
+  dispatchRazorpayWebhookJob,
+  shouldBypassQStashDispatch,
+} from '@/modules/jobs/services/qstash-job-dispatch.services';
 
 const MAX_WEBHOOK_ATTEMPTS = 10;
 const DEFAULT_WEBHOOK_RETRY_BASE_MS = 60_000; // 1 min
@@ -301,7 +305,7 @@ export async function scheduleWebhookEventRetry(
 ) {
   if (!id) throwError(ERR.INVALID_INPUT, 'Webhook event ID is required');
 
-  const event = attempts ? await getWebhookEventById(id) : null;
+  const event = attempts == null ? await getWebhookEventById(id) : null;
   const currentAttempts = attempts ?? event?.attempts ?? 0;
 
   if (currentAttempts >= MAX_WEBHOOK_ATTEMPTS) {
@@ -312,13 +316,43 @@ export async function scheduleWebhookEventRetry(
   const nextRetryAt = new Date(Date.now() + delayMs);
 
   try {
-    return await webhookEventCrud.update(id, {
+    const updatedEvent = await webhookEventCrud.update(id, {
       status: 'FAILED' as WebhookStatus,
       error,
       nextRetryAt,
       processedAt: null,
     } as UpdateInput<'WebhookEvent'>);
+
+    if (shouldBypassQStashDispatch()) {
+      return updatedEvent;
+    }
+
+    try {
+      if (updatedEvent.provider !== 'razorpay') {
+        throwError(
+          ERR.NOT_IMPLEMENTED,
+          `No QStash worker dispatcher exists for webhook provider ${updatedEvent.provider}.`,
+        );
+      }
+
+      await dispatchRazorpayWebhookJob({
+        webhookEventId: updatedEvent.id,
+        scheduledAt: nextRetryAt,
+      });
+
+      return updatedEvent;
+    } catch (dispatchError) {
+      await webhookEventCrud.update(id, {
+        nextRetryAt: null,
+      } as UpdateInput<'WebhookEvent'>);
+
+      throw dispatchError;
+    }
   } catch (e) {
+    if (extractAppError(e)) {
+      throw e;
+    }
+
     throwError(ERR.DB_ERROR, 'Failed to schedule webhook retry', undefined, e);
   }
 }

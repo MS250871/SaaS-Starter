@@ -64,7 +64,6 @@ export function PlatformFeatureForm({
       }
 
       router.push(`/platform/catalog/features/${response.data.featureId}`);
-      router.refresh();
     });
   };
 

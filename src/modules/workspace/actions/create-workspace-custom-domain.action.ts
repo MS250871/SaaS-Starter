@@ -79,6 +79,28 @@ const createWorkspaceCustomDomainActionImpl = createAction(
       })),
     };
   },
+  {
+    audit: {
+      onSuccess: ({ result }) => ({
+        scope: 'WORKSPACE',
+        category: 'ROUTING',
+        source: 'WORKSPACE_APP',
+        action: 'workspace.domain.create',
+        entityType: 'WorkspaceDomain',
+        entityId: result.domain.id,
+        description: `Custom domain ${result.domain.domain} added to the workspace.`,
+        metadata: {
+          dnsRecordCount: result.dnsRecords.length,
+        },
+        newValue: {
+          domain: result.domain.domain,
+          isPrimary: result.domain.isPrimary,
+          routingMode: result.domain.routingMode,
+          status: result.domain.status,
+        },
+      }),
+    },
+  },
 );
 
 export async function createWorkspaceCustomDomainAction(formData: FormData) {

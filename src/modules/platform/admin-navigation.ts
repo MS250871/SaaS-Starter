@@ -398,7 +398,21 @@ export function getPlatformRouteMeta(pathname: string) {
 export function filterPlatformNavGroupsByPermissions(
   navGroups: AdminNavGroup[],
   permissions: string[],
+  roleSystemKeys: string[] = [],
 ) {
+  const isPlatformAdmin = roleSystemKeys.includes('PLATFORM_ADMIN')
+  const canSeeByPermissions = (requiredPermissions?: string[]) => {
+    if (!requiredPermissions) {
+      return true
+    }
+
+    if (hasAnyPermission(permissions, requiredPermissions)) {
+      return true
+    }
+
+    return requiredPermissions.includes('*') && isPlatformAdmin
+  }
+
   return navGroups
     .map((group) => ({
       ...group,
@@ -406,15 +420,11 @@ export function filterPlatformNavGroupsByPermissions(
         .map((item) => ({
           ...item,
           children: item.children?.filter(
-            (child) =>
-              !child.requiredPermissions ||
-              hasAnyPermission(permissions, child.requiredPermissions),
+            (child) => canSeeByPermissions(child.requiredPermissions),
           ),
         }))
         .filter((item) => {
-          const itemAllowed =
-            !item.requiredPermissions ||
-            hasAnyPermission(permissions, item.requiredPermissions)
+          const itemAllowed = canSeeByPermissions(item.requiredPermissions)
           const hasVisibleChildren = (item.children?.length ?? 0) > 0
 
           return itemAllowed || hasVisibleChildren

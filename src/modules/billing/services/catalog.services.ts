@@ -5,9 +5,11 @@ import {
   priceQueries,
 } from '@/modules/billing/db';
 import type { CreateInput, UpdateInput } from '@/lib/crud/prisma-types';
+import { cacheKeys } from '@/lib/cache/cache-keys';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { listPublicPricingPlans } from '@/modules/entitlements/services/entitlement.services';
+import { readCatalogCache } from '@/modules/entitlements/services/catalog-cache.services';
 import {
   BillingInterval,
   Currency,
@@ -508,34 +510,38 @@ export async function getPublicPlanCheckoutOptions(planKey: string) {
 export async function listActiveOneTimePurchaseOffers(): Promise<
   OneTimePurchaseOffer[]
 > {
-  const products = await productQueries.delegate.findMany({
-    where: {
-      isActive: true,
-      type: ProductType.ONE_TIME,
-    },
-    select: {
-      code: true,
-      name: true,
-      description: true,
-      prices: {
+  const products = await readCatalogCache(
+    (catalogVersion) => cacheKeys.publicOneTimeOffers(catalogVersion),
+    () =>
+      productQueries.delegate.findMany({
         where: {
           isActive: true,
-          interval: null,
+          type: ProductType.ONE_TIME,
+        },
+        select: {
+          code: true,
+          name: true,
+          description: true,
+          prices: {
+            where: {
+              isActive: true,
+              interval: null,
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+            },
+          },
         },
         orderBy: {
           createdAt: 'asc',
         },
-        select: {
-          id: true,
-          amount: true,
-          currency: true,
-        },
-      },
-    },
-    orderBy: {
-      createdAt: 'asc',
-    },
-  });
+      }),
+  );
 
   return products
     .map((product): OneTimePurchaseOffer | null => {

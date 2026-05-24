@@ -2,6 +2,8 @@ import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { resolveWorkspaceSurfaceRedirect } from '@/modules/auth/workflows/post-login.workflow';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
 import {
   cancelWorkspaceSubscriptions,
@@ -62,7 +64,7 @@ export async function changeWorkspacePlanWorkflow(
   const now = new Date();
   const nextPeriodEnd = addOneMonth(now);
 
-  const routing = await withUnitOfWork(async () => {
+  await withUnitOfWork(async () => {
     await cancelWorkspaceSubscriptions({
       workspaceId: context.workspaceId!,
       now,
@@ -84,9 +86,10 @@ export async function changeWorkspacePlanWorkflow(
       planCode: 'trial',
       subscriptionStatus: 'ACTIVE',
     });
-
-    return syncWorkspaceRoutingState(context.workspaceId!);
   });
+  await invalidateWorkspaceEntitlementsCache(context.workspaceId);
+  const routing = await syncWorkspaceRoutingState(context.workspaceId);
+  await invalidateWorkspaceBillingCaches(context.workspaceId);
 
   const basePath = await resolveWorkspaceSurfaceRedirect({
     workspaceId: context.workspaceId,

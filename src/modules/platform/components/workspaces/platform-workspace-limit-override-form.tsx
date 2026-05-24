@@ -143,7 +143,6 @@ export function PlatformWorkspaceLimitOverrideForm({
       router.push(
         `/platform/workspaces/overrides/limits/create?workspaceId=${response.data.workspaceId}`,
       );
-      router.refresh();
     });
   };
 

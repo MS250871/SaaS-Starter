@@ -15,6 +15,8 @@ import type {
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { resolveWorkspaceSurfaceRedirect } from '@/modules/auth/workflows/post-login.workflow';
+import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import {
   type PriceCheckoutSnapshot,
   getPriceCheckoutSnapshotById,
@@ -460,7 +462,7 @@ export async function verifyBillingPaymentWorkflow(
       );
       let restartUpgradeRefundIssue: string | null = null;
 
-      const routing = await withUnitOfWork(async () => {
+      await withUnitOfWork(async () => {
         await cancelOtherWorkspaceSubscriptions({
           workspaceId: context.workspaceId!,
           exceptSubscriptionId: localSubscription.id,
@@ -473,9 +475,10 @@ export async function verifyBillingPaymentWorkflow(
             subscriptionStatus,
           });
         }
-
-        return syncWorkspaceRoutingState(context.workspaceId!);
       });
+      await invalidateWorkspaceEntitlementsCache(context.workspaceId);
+      const routing = await syncWorkspaceRoutingState(context.workspaceId);
+      await invalidateWorkspaceBillingCaches(context.workspaceId);
 
       if (restartUpgradeRefundMeta) {
         try {
