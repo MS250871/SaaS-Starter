@@ -63,8 +63,10 @@ import {
 } from '@/modules/workspace/routing';
 import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
 import {
+  resolveWorkspaceLoginRedirect as resolveWorkspaceLoginRedirectInternal,
   resolveWorkspaceCanonicalSurfaceHost as resolveWorkspaceCanonicalSurfaceHostInternal,
   resolveWorkspaceSurfaceRedirect as resolveWorkspaceSurfaceRedirectInternal,
+  resolveWorkspaceSignupRedirect as resolveWorkspaceSignupRedirectInternal,
 } from '@/modules/workspace/services/workspace-canonical.services';
 import { SessionEndReason } from '@/generated/prisma/client';
 
@@ -262,6 +264,20 @@ export async function resolveWorkspaceCanonicalSurfaceHost(
   workspaceId: string,
 ) {
   return resolveWorkspaceCanonicalSurfaceHostInternal(workspaceId);
+}
+
+export async function resolveWorkspaceLoginRedirect(params: {
+  workspaceId: string;
+  returnPath?: string | null;
+}) {
+  return resolveWorkspaceLoginRedirectInternal(params);
+}
+
+export async function resolveWorkspaceSignupRedirect(params: {
+  workspaceId: string;
+  returnPath?: string | null;
+}) {
+  return resolveWorkspaceSignupRedirectInternal(params);
 }
 
 function sanitizeReturnPath(value: string | undefined) {

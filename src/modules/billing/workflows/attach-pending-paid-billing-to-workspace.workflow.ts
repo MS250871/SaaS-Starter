@@ -1,7 +1,10 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import {
+  invalidateWorkspaceActiveSubscriptionSummaryCache,
+  invalidateWorkspaceBillingCaches,
+} from '@/modules/billing/services/billing-cache.services';
 import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import { getPriceCheckoutSnapshotById } from '@/modules/billing/services/catalog.services';
 import {
@@ -91,6 +94,7 @@ export async function attachPendingPaidBillingToWorkspaceWorkflow(params: {
   });
 
   if (!params.skipCacheInvalidation) {
+    await invalidateWorkspaceActiveSubscriptionSummaryCache(params.workspaceId);
     await invalidateWorkspaceEntitlementsCache(params.workspaceId);
     await syncWorkspaceRoutingState(params.workspaceId);
     await invalidateWorkspaceBillingCaches(params.workspaceId);

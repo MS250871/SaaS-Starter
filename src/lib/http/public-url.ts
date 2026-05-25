@@ -8,6 +8,15 @@ function isLoopbackHost(hostname: string) {
   );
 }
 
+function isLocalDevelopmentHost(hostname: string) {
+  return (
+    isLoopbackHost(hostname) ||
+    hostname === 'lvh.me' ||
+    hostname.endsWith('.lvh.me') ||
+    hostname.endsWith('.localhost')
+  );
+}
+
 export function resolvePublicHostValue(params: {
   host?: string | null;
   forwardedHost?: string | null;
@@ -33,6 +42,42 @@ export function resolvePublicHostname(params: {
   return normalizeHostname(resolvePublicHostValue(params));
 }
 
+export function resolvePublicProtocol(params: {
+  host?: string | null;
+  forwardedHost?: string | null;
+  forwardedProto?: string | null;
+  fallbackUrl?: string | null;
+}) {
+  const publicHostname = resolvePublicHostname({
+    host: params.host,
+    forwardedHost: params.forwardedHost,
+  });
+
+  if (publicHostname && isLocalDevelopmentHost(publicHostname)) {
+    if (params.fallbackUrl) {
+      try {
+        const fallbackProtocol = new URL(params.fallbackUrl).protocol;
+
+        if (fallbackProtocol === 'http:' || fallbackProtocol === 'https:') {
+          return fallbackProtocol.slice(0, -1);
+        }
+      } catch {
+        // Ignore malformed fallback URL and use plain HTTP below.
+      }
+    }
+
+    return 'http';
+  }
+
+  const forwardedProto = params.forwardedProto?.split(',')[0]?.trim().toLowerCase();
+
+  if (forwardedProto === 'http' || forwardedProto === 'https') {
+    return forwardedProto;
+  }
+
+  return process.env.NODE_ENV === 'production' ? 'https' : 'http';
+}
+
 export function withPreservedPort(hostname: string, currentHostValue: string) {
   const port = currentHostValue.split(':')[1];
 
@@ -54,9 +99,12 @@ export function buildPublicUrl(params: {
     host: params.host,
     forwardedHost: params.forwardedHost,
   });
-  const protocol =
-    params.forwardedProto ??
-    (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+  const protocol = resolvePublicProtocol({
+    host: params.host,
+    forwardedHost: params.forwardedHost,
+    forwardedProto: params.forwardedProto,
+    fallbackUrl: params.fallbackUrl,
+  });
 
   if (publicHost) {
     return new URL(params.path, `${protocol}://${publicHost}`);

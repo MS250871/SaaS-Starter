@@ -13,7 +13,10 @@ import { ERR } from '@/lib/errors/codes';
 import type { BillingInterval, Prisma } from '@/generated/prisma/client';
 import { resolveWorkspaceSurfaceRedirect } from '@/modules/auth/workflows/post-login.workflow';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
-import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import {
+  invalidateWorkspaceActiveSubscriptionSummaryCache,
+  invalidateWorkspaceBillingCaches,
+} from '@/modules/billing/services/billing-cache.services';
 import {
   type PriceCheckoutSnapshot,
   getPriceCheckoutSnapshotById,
@@ -491,6 +494,9 @@ async function createSubscriptionCheckout(
           },
         });
       });
+      await invalidateWorkspaceActiveSubscriptionSummaryCache(
+        context.workspaceId!,
+      );
       await invalidateWorkspaceEntitlementsCache(context.workspaceId!);
       await syncWorkspaceRoutingState(context.workspaceId!);
       await invalidateWorkspaceBillingCaches(context.workspaceId!);

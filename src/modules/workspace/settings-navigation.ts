@@ -37,6 +37,11 @@ export function buildWorkspaceSettingsLinks(
 
   if (hasPermissionGroup(permissions, "workspaceSettings")) {
     links.push({
+      title: "Profile",
+      href: buildWorkspaceAdminPath(basePath, "settings/profile"),
+    })
+
+    links.push({
       title: "Themes",
       href: buildWorkspaceAdminPath(basePath, "settings/theme"),
     })

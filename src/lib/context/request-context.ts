@@ -12,6 +12,7 @@ type WorkspaceContext = {
   isActive: boolean;
   primaryDomain?: string;
   strategy?: string;
+  intent?: 'free' | 'paid';
 };
 
 export type RequestContext = {

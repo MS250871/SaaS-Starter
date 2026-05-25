@@ -25,6 +25,7 @@ type WorkspaceContext = {
   workspaceId: string;
   slug?: string;
   strategy?: string;
+  intent?: 'free' | 'paid';
 };
 
 function isCustomerSurface(pathname: string) {
@@ -83,7 +84,7 @@ export function handleRouteGuards(
 
     const loginPath = buildWorkspaceLoginPath({
       workspaceId: workspace.workspaceId,
-      intent: workspaceStrategy === 'free_path' ? 'free' : 'paid',
+      intent: workspace.intent ?? (workspaceStrategy === 'free_path' ? 'free' : 'paid'),
       returnPath,
       strategy: workspaceStrategy,
       slug: workspace.slug,

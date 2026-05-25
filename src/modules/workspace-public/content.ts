@@ -1,6 +1,7 @@
-import type {
-  WorkspacePublicHomeContract,
-  WorkspacePublicTemplateKey,
+import {
+  workspacePublicTemplateKeys,
+  type WorkspacePublicHomeContract,
+  type WorkspacePublicTemplateKey,
 } from '@/modules/workspace-public/contracts';
 
 type WebsiteSettings = {
@@ -28,8 +29,13 @@ function normalizeDisplayName(
 export function resolveWorkspacePublicTemplateKey(
   settings: WorkspaceSettingsShape | null | undefined,
 ): WorkspacePublicTemplateKey {
-  if (settings?.website?.templateKey === 'coaching-classic') {
-    return settings.website.templateKey;
+  if (
+    settings?.website?.templateKey &&
+    workspacePublicTemplateKeys.includes(
+      settings.website.templateKey as WorkspacePublicTemplateKey,
+    )
+  ) {
+    return settings.website.templateKey as WorkspacePublicTemplateKey;
   }
 
   return 'coaching-classic';

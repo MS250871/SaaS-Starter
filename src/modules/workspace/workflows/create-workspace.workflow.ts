@@ -4,7 +4,10 @@ import { ERR } from '@/lib/errors/codes';
 import { getIdentityById } from '@/modules/auth/services/identity.services';
 import { attachPendingPaidBillingToWorkspaceWorkflow } from '@/modules/billing/workflows/attach-pending-paid-billing-to-workspace.workflow';
 import { findActivePriceByProductCode } from '@/modules/billing/services/catalog.services';
-import { invalidateWorkspaceBillingCaches } from '@/modules/billing/services/billing-cache.services';
+import {
+  invalidateWorkspaceActiveSubscriptionSummaryCache,
+  invalidateWorkspaceBillingCaches,
+} from '@/modules/billing/services/billing-cache.services';
 import { createSubscription } from '@/modules/billing/services/subscription.services';
 import { invalidateWorkspaceEntitlementsCache } from '@/modules/entitlements/services/entitlement-cache.services';
 import { getWorkspaceOwnerRoleDefinition } from '@/modules/roles/services/role.services';
@@ -144,6 +147,7 @@ export async function createWorkspaceWorkflow(input: {
       subscriptionId,
     };
   });
+  await invalidateWorkspaceActiveSubscriptionSummaryCache(result.workspaceId);
   await invalidateWorkspaceEntitlementsCache(result.workspaceId);
   const routing = await syncWorkspaceRoutingState(result.workspaceId);
   await invalidateWorkspaceBillingCaches(result.workspaceId);

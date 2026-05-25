@@ -1,21 +1,16 @@
 import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import { getRequestContext } from '@/lib/context/request-context';
 import {
   createWorkspaceInvite,
   findPendingWorkspaceInviteByEmail,
 } from '@/modules/workspace/services/invite.services';
 import type { CreateWorkspaceInviteDomain } from '@/modules/workspace/schema';
-import { buildWorkspaceSignupPath } from '@/modules/workspace/routing';
+import { resolveWorkspaceSignupRedirect } from '@/modules/workspace/services/workspace-canonical.services';
 
 const INVITE_EXPIRY_DAYS = 7;
 
-function buildSignupPath(token: string) {
-  const requestContext = getRequestContext();
-  const signupPath = buildWorkspaceSignupPath({
-    workspaceId: requestContext.workspace?.workspaceId ?? '',
-    intent: 'free',
-    strategy: requestContext.workspace?.strategy,
-    slug: requestContext.workspace?.slug,
+async function buildSignupPath(workspaceId: string, token: string) {
+  const signupPath = await resolveWorkspaceSignupRedirect({
+    workspaceId,
   });
   const url = new URL(signupPath, 'https://skillmaxx.local');
 
@@ -37,7 +32,7 @@ export async function createWorkspaceInviteWorkflow(input: {
     if (existing) {
       return {
         invite: existing,
-        signupPath: buildSignupPath(existing.token),
+        signupPath: await buildSignupPath(input.workspaceId, existing.token),
         reused: true,
       };
     }
@@ -56,7 +51,7 @@ export async function createWorkspaceInviteWorkflow(input: {
 
     return {
       invite,
-      signupPath: buildSignupPath(invite.token),
+      signupPath: await buildSignupPath(input.workspaceId, invite.token),
       reused: false,
     };
   });

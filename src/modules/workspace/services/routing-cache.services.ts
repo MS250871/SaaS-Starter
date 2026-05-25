@@ -7,6 +7,7 @@ type WorkspaceRoutingCachePayload = {
   isActive: boolean;
   primaryDomain?: string;
   strategy?: string;
+  intent?: 'free' | 'paid';
 };
 
 export function buildWorkspaceRoutingCachePayload(params: {
@@ -15,6 +16,7 @@ export function buildWorkspaceRoutingCachePayload(params: {
   isActive?: boolean;
   primaryDomain?: string | null;
   strategy?: string | null;
+  intent?: 'free' | 'paid' | null;
 }): WorkspaceRoutingCachePayload {
   return {
     workspaceId: params.workspaceId,
@@ -22,6 +24,7 @@ export function buildWorkspaceRoutingCachePayload(params: {
     isActive: params.isActive ?? true,
     primaryDomain: params.primaryDomain ?? undefined,
     strategy: params.strategy ?? undefined,
+    intent: params.intent ?? undefined,
   };
 }
 

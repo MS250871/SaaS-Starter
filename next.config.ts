@@ -34,6 +34,13 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '20mb',
     },
   },
+  images: {
+    localPatterns: [
+      {
+        pathname: '/api/workspace/profile-media/**',
+      },
+    ],
+  },
   async headers() {
     return [
       {

@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { resolvePublicHostValue } from '@/lib/http/public-url';
+import { resolvePublicHostValue, resolvePublicProtocol } from '@/lib/http/public-url';
 
 function parseOrigin(value: string | null) {
   if (!value) {
@@ -25,9 +25,12 @@ export async function resolvePublicRedirectTarget(path: string) {
   });
 
   if (publicHost) {
-    const protocol =
-      hdrs.get('x-forwarded-proto') ??
-      (process.env.NODE_ENV === 'production' ? 'https' : 'http');
+    const protocol = resolvePublicProtocol({
+      host: hdrs.get('host'),
+      forwardedHost: hdrs.get('x-forwarded-host'),
+      forwardedProto: hdrs.get('x-forwarded-proto'),
+      fallbackUrl: hdrs.get('referer') ?? hdrs.get('origin'),
+    });
     return new URL(path, `${protocol}://${publicHost}`).toString();
   }
 
@@ -43,7 +46,9 @@ export async function resolvePublicRedirectTarget(path: string) {
 
   const rootDomain = process.env.ROOT_DOMAIN;
   if (rootDomain) {
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+    const protocol = resolvePublicProtocol({
+      host: rootDomain,
+    });
     return new URL(path, `${protocol}://${rootDomain}`).toString();
   }
 

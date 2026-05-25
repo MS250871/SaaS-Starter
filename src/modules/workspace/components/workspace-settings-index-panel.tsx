@@ -13,6 +13,8 @@ import type { WorkspaceSettingsLink } from "@/modules/workspace/settings-navigat
 const settingsDescriptions: Record<string, string> = {
   Domains: "Manage routing, DNS, and branded domain setup.",
   Billing: "Review subscription, invoices, and one-time purchases.",
+  Profile:
+    "Manage workspace identity, contact details, social links, and website defaults.",
   Themes: "Adjust workspace colors, typography, and preview styling.",
   Access: "Control role policies and member-level access.",
   "Features & Limits": "Review resolved entitlements and upgrade paths.",

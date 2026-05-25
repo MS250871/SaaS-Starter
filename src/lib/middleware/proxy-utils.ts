@@ -131,6 +131,8 @@ export type WorkspaceRoutingContext = {
   isActive?: boolean;
   primaryDomain?: string;
   strategy?: string;
+  intent?: 'free' | 'paid';
+  resolutionSource?: 'domain' | 'managed_subdomain_slug' | 'free_path_slug';
 };
 
 function inferWorkspaceIntent(strategy: string | undefined) {
@@ -172,7 +174,7 @@ export async function resolveWorkspaceCanonicalRedirect(params: {
     strategy === 'free_path'
       ? rootHost
       : params.workspace.primaryDomain ?? rootHost;
-  const intent = inferWorkspaceIntent(params.workspace.strategy);
+  const intent = params.workspace.intent ?? inferWorkspaceIntent(params.workspace.strategy);
   const search = params.req.nextUrl.search;
 
   if (isWorkspaceAuthRoute(params.normalizedPathname)) {

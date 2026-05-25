@@ -1039,64 +1039,90 @@ export async function listPlatformWorkspaceLimitOverrideAdminSnapshots(opts?: {
 /*                          ENTITLEMENT RESOLVER                              */
 /* -------------------------------------------------------------------------- */
 
+async function resolveEntitlementsFreshLoader(params: {
+  workspaceId: string;
+  planId?: string | null;
+}) {
+  if (!params.workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'workspaceId is required');
+  }
+
+  const features = new Set<string>();
+  const limits = new Map<string, number>();
+
+  if (params.planId) {
+    const [planFeatures, planLimits] = await Promise.all([
+      planFeatureQueries.delegate.findMany({
+        where: { planId: params.planId },
+        include: { feature: true },
+      }),
+      planLimitQueries.delegate.findMany({
+        where: { planId: params.planId },
+        include: { limitDefinition: true },
+      }),
+    ]);
+
+    for (const pf of planFeatures) {
+      if (pf.isEnabled && pf.feature?.key) {
+        features.add(pf.feature.key);
+      }
+    }
+
+    for (const pl of planLimits) {
+      if (pl.limitDefinition?.key) {
+        limits.set(pl.limitDefinition.key, pl.valueInt);
+      }
+    }
+  }
+
+  const [featureOverrides, limitOverrides] = await Promise.all([
+    workspaceFeatureOverrideQueries.delegate.findMany({
+      where: { workspaceId: params.workspaceId },
+      include: { feature: true },
+    }),
+    workspaceLimitOverrideQueries.delegate.findMany({
+      where: { workspaceId: params.workspaceId },
+      include: { limitDefinition: true },
+    }),
+  ]);
+
+  for (const fo of featureOverrides) {
+    const key = fo.feature?.key;
+    if (!key) continue;
+    if (!canOverrideEntitlement(fo.feature?.overridePolicy)) continue;
+
+    if (fo.isEnabled) features.add(key);
+    else features.delete(key);
+  }
+
+  for (const lo of limitOverrides) {
+    const key = lo.limitDefinition?.key;
+    if (!key) continue;
+    if (!canOverrideEntitlement(lo.limitDefinition?.overridePolicy)) continue;
+
+    limits.set(key, lo.valueInt);
+  }
+
+  return {
+    features: Array.from(features),
+    limits: Object.fromEntries(limits),
+  };
+}
+
 export async function resolveEntitlements(params: {
   workspaceId: string;
   planId?: string | null;
 }) {
-  return readResolvedWorkspaceEntitlementsCache(params, async () => {
-    if (!params.workspaceId) {
-      throwError(ERR.INVALID_INPUT, 'workspaceId is required');
-    }
+  return readResolvedWorkspaceEntitlementsCache(params, () =>
+    resolveEntitlementsFreshLoader(params),
+  );
+}
 
-    const features = new Set<string>();
-    const limits = new Map<string, number>();
-
-    if (params.planId) {
-      const planFeatures = await listPlanFeatures(params.planId);
-
-      for (const pf of planFeatures) {
-        if (pf.isEnabled && pf.feature?.key) {
-          features.add(pf.feature.key);
-        }
-      }
-
-      const planLimits = await listPlanLimits(params.planId);
-
-      for (const pl of planLimits) {
-        if (pl.limitDefinition?.key) {
-          limits.set(pl.limitDefinition.key, pl.valueInt);
-        }
-      }
-    }
-
-    const featureOverrides = await listWorkspaceFeatureOverrides(
-      params.workspaceId,
-    );
-
-    for (const fo of featureOverrides) {
-      const key = fo.feature?.key;
-      if (!key) continue;
-      if (!canOverrideEntitlement(fo.feature?.overridePolicy)) continue;
-
-      if (fo.isEnabled) features.add(key);
-      else features.delete(key);
-    }
-
-    const limitOverrides = await listWorkspaceLimitOverrides(params.workspaceId);
-
-    for (const lo of limitOverrides) {
-      const key = lo.limitDefinition?.key;
-      if (!key) continue;
-      if (!canOverrideEntitlement(lo.limitDefinition?.overridePolicy)) continue;
-
-      limits.set(key, lo.valueInt);
-    }
-
-    return {
-      features: Array.from(features),
-      limits: Object.fromEntries(limits),
-    };
-  });
+export async function resolveEntitlementsFresh(params: {
+  workspaceId: string;
+  planId?: string | null;
+}) {
+  return resolveEntitlementsFreshLoader(params);
 }
 
 /* -------------------------------------------------------------------------- */

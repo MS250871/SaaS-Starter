@@ -15,11 +15,13 @@ import {
 } from '@/modules/workspace/routing';
 import { buildWorkspaceThemeStyle } from '@/modules/workspace/theme';
 import { resolveWorkspaceByDomain } from '@/modules/workspace/services/domains.services';
-import { resolveWorkspaceCanonicalRequestRedirect } from '@/modules/workspace/services/workspace-canonical.services';
+import {
+  getWorkspaceCanonicalRoutingSnapshot,
+  resolveWorkspaceCanonicalRequestRedirect,
+} from '@/modules/workspace/services/workspace-canonical.services';
 import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
 import {
   findWorkspaceBySlug,
-  getWorkspaceById,
   getWorkspaceAdminSurfaceWorkspace,
 } from '@/modules/workspace/services/workspace.services';
 
@@ -115,15 +117,14 @@ async function resolveWorkspaceAuthFallback(params: {
   );
 
   if (resolvedDomain?.workspaceId) {
-    const workspace = await withActionTxContext(() =>
-      getWorkspaceById(resolvedDomain.workspaceId),
+    const routing = await withActionTxContext(() =>
+      getWorkspaceCanonicalRoutingSnapshot(resolvedDomain.workspaceId),
     );
 
     return {
-      workspaceId: workspace.id,
-      slug: workspace.slug,
-      strategy:
-        resolvedDomain.type === 'CUSTOM' ? 'custom_domain' : 'subdomain',
+      workspaceId: routing.workspaceId,
+      slug: routing.slug,
+      strategy: routing.strategy,
     } satisfies NonNullable<WorkspaceRequestContext['workspace']>;
   }
 
@@ -142,13 +143,14 @@ async function resolveWorkspaceAuthFallback(params: {
     );
 
     if (workspace?.id && workspace.isActive) {
+      const routing = await withActionTxContext(() =>
+        getWorkspaceCanonicalRoutingSnapshot(workspace.id),
+      );
+
       return {
-        workspaceId: workspace.id,
-        slug: workspace.slug,
-        strategy:
-          host === normalizeHostname(workspace.defaultDomain ?? '')
-            ? 'subdomain'
-            : undefined,
+        workspaceId: routing.workspaceId,
+        slug: routing.slug,
+        strategy: routing.strategy,
       } satisfies NonNullable<WorkspaceRequestContext['workspace']>;
     }
   }
@@ -165,12 +167,14 @@ async function resolveWorkspaceAuthFallback(params: {
     return null;
   }
 
+  const routing = await withActionTxContext(() =>
+    getWorkspaceCanonicalRoutingSnapshot(workspace.id),
+  );
+
   return {
-    workspaceId: workspace.id,
-    slug: workspace.slug,
-    strategy: host === normalizeHostname(workspace.defaultDomain ?? '')
-      ? 'subdomain'
-      : undefined,
+    workspaceId: routing.workspaceId,
+    slug: routing.slug,
+    strategy: routing.strategy,
   } satisfies NonNullable<WorkspaceRequestContext['workspace']>;
 }
 
@@ -188,28 +192,34 @@ export async function getWorkspaceAuthPageData(): Promise<WorkspaceAuthPageData 
   }
 
   const hdrs = await headers();
+  const workspaceId = workspaceContext.workspaceId;
   const currentPublicHost = resolvePublicHostValue({
     host: hdrs.get('host'),
     forwardedHost: hdrs.get('x-forwarded-host'),
   });
+  const currentPath = requestMeta.path;
   const canonicalRedirectUrl =
-    requestMeta.path
-      ? await resolveWorkspaceCanonicalRequestRedirect({
-          workspaceId: workspaceContext.workspaceId,
-          currentHost: currentPublicHost,
-          currentPath: requestMeta.path,
-          visiblePath: requestMeta.originalPath,
-          search: requestMeta.search,
-        })
+    currentPath
+      ? await withActionTxContext(() =>
+          resolveWorkspaceCanonicalRequestRedirect({
+            workspaceId,
+            currentHost: currentPublicHost,
+            currentPath,
+            visiblePath: requestMeta.originalPath,
+            search: requestMeta.search,
+          }),
+        )
       : null;
   const [workspace, workspaceSettings] = await withActionTxContext(() =>
     Promise.all([
-      getWorkspaceAdminSurfaceWorkspace(workspaceContext.workspaceId),
-      getWorkspaceSettings(workspaceContext.workspaceId),
+      getWorkspaceAdminSurfaceWorkspace(workspaceId),
+      getWorkspaceSettings(workspaceId),
     ]),
   );
 
-  const strategy = normalizeWorkspaceDomainStrategy(workspaceContext.strategy);
+  const strategy = normalizeWorkspaceDomainStrategy(
+    workspaceContext.strategy,
+  ) as WorkspaceDomainStrategy;
   const settings =
     (workspaceSettings?.settings as WorkspaceAuthSettingsShape | null) ?? null;
   const workspaceName =

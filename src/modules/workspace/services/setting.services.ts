@@ -8,6 +8,10 @@ import { Prisma } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
 import { readWorkspaceSettingsCache } from '@/modules/workspace/services/workspace-cache.services';
+import {
+  readWorkspaceSettingsJson,
+  type WorkspaceSettingsJson,
+} from '@/modules/workspace/settings';
 
 /**
  * Get settings
@@ -20,6 +24,14 @@ export async function getWorkspaceSettings(workspaceId: string) {
       where: { workspaceId },
     }),
   );
+}
+
+export async function getWorkspaceSettingsFresh(workspaceId: string) {
+  if (!workspaceId) throwError(ERR.INVALID_INPUT, 'workspaceId required');
+
+  return workspaceSettingsQueries.findFirst({
+    where: { workspaceId },
+  });
 }
 
 export async function getWorkspaceThemeSnapshot(workspaceId: string) {
@@ -77,7 +89,7 @@ export async function upsertWorkspaceSettings(params: {
     throwError(ERR.INVALID_INPUT, 'workspaceId required');
   }
 
-  const existing = await getWorkspaceSettings(params.workspaceId);
+  const existing = await getWorkspaceSettingsFresh(params.workspaceId);
 
   if (!existing) {
     return createWorkspaceSettings({
@@ -111,21 +123,6 @@ export async function updateWorkspaceConfig(
   return upsertWorkspaceSettings({ workspaceId, settings });
 }
 
-type WorkspaceSettingsJson = {
-  domain?: {
-    strategy?: string | null;
-    [key: string]: unknown;
-  };
-  billing?: {
-    planCode?: string | null;
-    subscriptionStatus?: string | null;
-    trialStartsAt?: string | null;
-    trialEndsAt?: string | null;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
-
 export async function syncWorkspaceBillingSettings(params: {
   workspaceId: string;
   planCode: string;
@@ -139,11 +136,8 @@ export async function syncWorkspaceBillingSettings(params: {
     );
   }
 
-  const existing = await getWorkspaceSettings(params.workspaceId);
-  const currentSettings =
-    existing?.settings && typeof existing.settings === 'object'
-      ? (existing.settings as unknown as WorkspaceSettingsJson)
-      : {};
+  const existing = await getWorkspaceSettingsFresh(params.workspaceId);
+  const currentSettings = readWorkspaceSettingsJson(existing?.settings);
 
   const nextSettings: WorkspaceSettingsJson = {
     ...currentSettings,

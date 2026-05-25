@@ -51,6 +51,11 @@ export async function resolveWorkspace(
         typeof raw.strategy === 'string' && raw.strategy.trim()
           ? raw.strategy
           : undefined,
+      intent:
+        raw.intent === 'free' || raw.intent === 'paid'
+          ? raw.intent
+          : undefined,
+      resolutionSource: 'domain',
     };
   };
 
@@ -66,6 +71,7 @@ export async function resolveWorkspace(
       ...value,
       slug: value.slug ?? slug,
       strategy: value.strategy ?? 'subdomain',
+      resolutionSource: 'managed_subdomain_slug',
     };
   };
 
@@ -109,7 +115,12 @@ export async function resolveWorkspace(
         cacheKeys.routingSlug(freeWorkspacePath.slug),
       ),
     );
-    if (slugData) return slugData;
+    if (slugData) {
+      return {
+        ...slugData,
+        resolutionSource: 'free_path_slug',
+      };
+    }
   }
 
   return null;

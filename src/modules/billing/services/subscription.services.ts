@@ -424,6 +424,56 @@ export async function getWorkspaceActiveSubscriptionPlanSummary(
   );
 }
 
+export async function getWorkspaceActiveSubscriptionPlanSummaryFresh(
+  workspaceId: string,
+): Promise<BillingWorkspaceActiveSubscriptionPlanSummary | null> {
+  if (!workspaceId) {
+    throwError(ERR.INVALID_INPUT, 'Workspace ID is required');
+  }
+
+  return subscriptionQueries.delegate.findFirst({
+    where: {
+      workspaceId,
+      status: {
+        in: ['ACTIVE', 'TRIALING', 'PAST_DUE'],
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+    select: {
+      id: true,
+      status: true,
+      currentPeriodStart: true,
+      currentPeriodEnd: true,
+      providerSubscriptionId: true,
+      price: {
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          interval: true,
+          product: {
+            select: {
+              code: true,
+              name: true,
+              plan: {
+                select: {
+                  id: true,
+                  key: true,
+                  name: true,
+                  description: true,
+                  sortOrder: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }) as Promise<BillingWorkspaceActiveSubscriptionPlanSummary | null>;
+}
+
 export async function listPlatformWorkspaceActiveSubscriptionAdminSnapshots(
   workspaceIds?: string[],
 ): Promise<PlatformWorkspaceActiveSubscriptionAdminSnapshot[]> {

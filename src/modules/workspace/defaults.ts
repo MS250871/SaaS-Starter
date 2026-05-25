@@ -1,3 +1,5 @@
+import type { WorkspaceSettingsJson } from '@/modules/workspace/settings';
+
 const DEFAULT_ROOT_DOMAIN =
   (process.env.ROOT_DOMAIN || '').split(':')[0] || 'platform.localhost';
 
@@ -35,9 +37,36 @@ export function buildDefaultWorkspaceSettings(params: {
     settings: {
       branding: {
         displayName: params.name,
+        legalName: null,
+        tagline: null,
+        shortDescription: null,
+        logoAspect: 'square',
         logoUrl: null,
+        logoMediaId: null,
         faviconUrl: null,
+        faviconMediaId: null,
         supportEmail: null,
+      },
+      contact: {
+        primaryContactName: null,
+        supportPhone: null,
+        supportWhatsapp: null,
+        websiteUrl: null,
+        address: {
+          line1: null,
+          line2: null,
+          city: null,
+          state: null,
+          postalCode: null,
+          country: null,
+        },
+      },
+      social: {
+        youtube: null,
+        linkedin: null,
+        instagram: null,
+        facebook: null,
+        x: null,
       },
       locale: {
         timezone: params.timezone ?? 'Asia/Calcutta',
@@ -50,6 +79,13 @@ export function buildDefaultWorkspaceSettings(params: {
       },
       website: {
         templateKey: 'coaching-classic',
+        siteTitle: params.name,
+        defaultSeo: {
+          metaTitle: null,
+          metaDescription: null,
+          ogImageUrl: null,
+          ogImageMediaId: null,
+        },
       },
       domain: {
         strategy: params.intent === 'paid' ? 'pending_payment' : 'free_path',
@@ -66,7 +102,7 @@ export function buildDefaultWorkspaceSettings(params: {
         trialStartsAt: params.trialStartsAt?.toISOString() ?? null,
         trialEndsAt: params.trialEndsAt?.toISOString() ?? null,
       },
-    },
+    } satisfies WorkspaceSettingsJson,
   };
 }
 

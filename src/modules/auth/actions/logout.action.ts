@@ -11,7 +11,7 @@ import {
   getUserSession,
 } from '@/lib/auth/auth-cookies';
 import { logoutWorkflow } from '@/modules/auth/workflows/logout.workflow';
-import { buildWorkspaceLoginPath } from '@/modules/workspace/routing';
+import { resolveWorkspaceLoginRedirect } from '@/modules/auth/workflows/post-login.workflow';
 import {
   buildNavErrorAudit,
   getNavAuditState,
@@ -41,12 +41,8 @@ const logoutActionImpl = createNavAction(async () => {
   if (requestContext.workspace?.workspaceId) {
     redirect(
       await resolvePublicRedirectTarget(
-        buildWorkspaceLoginPath({
+        await resolveWorkspaceLoginRedirect({
           workspaceId: requestContext.workspace.workspaceId,
-          intent:
-            requestContext.workspace.strategy === 'free_path' ? 'free' : 'paid',
-          strategy: requestContext.workspace.strategy,
-          slug: requestContext.workspace.slug,
         }),
       ),
     );

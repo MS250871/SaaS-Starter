@@ -22,16 +22,14 @@ import { verifyWorkflow } from '@/modules/auth/workflows/verify.workflow';
 import {
   postLoginWorkflow,
   resolveWorkspaceCanonicalSurfaceHost,
+  resolveWorkspaceLoginRedirect,
+  resolveWorkspaceSignupRedirect,
 } from '@/modules/auth/workflows/post-login.workflow';
 import {
   buildHostTransferPath,
   issueHostTransferToken,
 } from '@/modules/auth/services/host-transfer.services';
 import { dispatchOtpOutboxEvent } from '@/modules/auth/services/otp-outbox.services';
-import {
-  buildWorkspaceLoginPath,
-  buildWorkspaceSignupPath,
-} from '@/modules/workspace/routing';
 import {
   buildNavErrorAudit,
   getNavAuditState,
@@ -49,14 +47,8 @@ async function redirectForExpiredVerification(): Promise<never> {
     if (requestContext.workspace?.workspaceId) {
       redirect(
         await resolvePublicRedirectTarget(
-          `${buildWorkspaceLoginPath({
+          `${await resolveWorkspaceLoginRedirect({
             workspaceId: requestContext.workspace.workspaceId,
-            intent:
-              requestContext.workspace.strategy === 'free_path'
-                ? 'free'
-                : 'paid',
-            strategy: requestContext.workspace.strategy,
-            slug: requestContext.workspace.slug,
           })}&expired=verification`,
         ),
       );
@@ -91,11 +83,8 @@ async function redirectForExpiredVerification(): Promise<never> {
     if (auth.entry === 'workspace' && auth.workspaceId) {
       redirect(
         await resolvePublicRedirectTarget(
-          `${buildWorkspaceSignupPath({
+          `${await resolveWorkspaceSignupRedirect({
             workspaceId: auth.workspaceId,
-            intent: auth.intent,
-            strategy: requestContext.workspace?.strategy,
-            slug: requestContext.workspace?.slug,
           })}&${params.toString()}`,
         ),
       );
@@ -109,11 +98,8 @@ async function redirectForExpiredVerification(): Promise<never> {
   if (auth.entry === 'workspace' && auth.workspaceId) {
     redirect(
       await resolvePublicRedirectTarget(
-        `${buildWorkspaceLoginPath({
+        `${await resolveWorkspaceLoginRedirect({
           workspaceId: auth.workspaceId,
-          intent: auth.intent,
-          strategy: requestContext.workspace?.strategy,
-          slug: requestContext.workspace?.slug,
         })}&${params.toString()}`,
       ),
     );

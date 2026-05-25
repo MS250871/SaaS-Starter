@@ -12,8 +12,11 @@ import {
 } from '@/generated/prisma/client';
 import { throwError } from '@/lib/errors/app-error';
 import { ERR } from '@/lib/errors/codes';
-import { resolveEntitlements } from '@/modules/entitlements/services/entitlement.services';
-import { getWorkspaceActiveSubscriptionPlanSummary } from '@/modules/billing/services/subscription.services';
+import {
+  resolveEntitlements,
+  resolveEntitlementsFresh,
+} from '@/modules/entitlements/services/entitlement.services';
+import { getWorkspaceActiveSubscriptionPlanSummaryFresh } from '@/modules/billing/services/subscription.services';
 
 export type WorkspaceDomainDetailed = Prisma.WorkspaceDomainGetPayload<{
   select: {
@@ -240,13 +243,18 @@ export async function verifyWorkspaceDomain(id: string) {
   }
 }
 
-export async function getWorkspaceDomainEntitlements(workspaceId: string) {
+export async function getWorkspaceDomainEntitlements(
+  workspaceId: string,
+  opts?: {
+    fresh?: boolean;
+  },
+) {
   if (!workspaceId) {
     throwError(ERR.INVALID_INPUT, 'workspaceId is required');
   }
 
   const [activeSubscription, customDomainSetupCount] = await Promise.all([
-    getWorkspaceActiveSubscriptionPlanSummary(workspaceId),
+    getWorkspaceActiveSubscriptionPlanSummaryFresh(workspaceId),
     workspaceDomainQueries.count({
       where: {
         workspaceId,
@@ -257,10 +265,15 @@ export async function getWorkspaceDomainEntitlements(workspaceId: string) {
   ]);
 
   const activePlan = activeSubscription?.price?.product?.plan ?? null;
-  const entitlements = await resolveEntitlements({
-    workspaceId,
-    planId: activePlan?.id,
-  });
+  const entitlements = opts?.fresh
+    ? await resolveEntitlementsFresh({
+        workspaceId,
+        planId: activePlan?.id,
+      })
+    : await resolveEntitlements({
+        workspaceId,
+        planId: activePlan?.id,
+      });
 
   return {
     activePlan,

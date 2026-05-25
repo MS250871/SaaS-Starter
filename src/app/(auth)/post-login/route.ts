@@ -51,9 +51,10 @@ export async function GET(req: NextRequest) {
             buildWorkspaceLoginPath({
               workspaceId: requestContext.workspace.workspaceId,
               intent:
-                requestContext.workspace.strategy === 'free_path'
+                requestContext.workspace.intent ??
+                (requestContext.workspace.strategy === 'free_path'
                   ? 'free'
-                  : 'paid',
+                  : 'paid'),
               strategy: requestContext.workspace.strategy,
               slug: requestContext.workspace.slug,
             }),

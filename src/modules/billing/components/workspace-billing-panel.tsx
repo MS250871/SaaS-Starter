@@ -199,7 +199,9 @@ export function WorkspaceBillingPanel({
         return;
       }
 
-      setPlanMessage(response.data.successMessage);
+      if (!response.data.redirectTo.startsWith('/host-transfer')) {
+        setPlanMessage(response.data.successMessage);
+      }
       navigateClientRedirect(router, response.data.redirectTo);
     });
   };

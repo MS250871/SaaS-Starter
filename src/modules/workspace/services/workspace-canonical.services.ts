@@ -1,75 +1,21 @@
-import { withUnitOfWork } from '@/lib/context/unit-of-work';
-import { getRootDomainHost, normalizeHostname } from '@/lib/middleware/proxy-utils';
-import { withPreservedPort } from '@/lib/http/public-url';
+import { resolvePublicProtocol, withPreservedPort } from '@/lib/http/public-url';
+import { normalizeHostname } from '@/lib/middleware/proxy-utils';
 import {
-  buildManagedWorkspaceSubdomain,
   buildWorkspaceCanonicalPath,
-  normalizeWorkspaceDomainStrategy,
+  buildWorkspaceLoginPath,
+  buildWorkspaceSignupPath,
 } from '@/modules/workspace/routing';
-import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
-import { getWorkspaceById } from '@/modules/workspace/services/workspace.services';
+import {
+  getWorkspaceRoutingSnapshot,
+  type WorkspaceRoutingSnapshot,
+} from '@/modules/workspace/services/workspace-routing.services';
 
-type WorkspaceSettingsShape = {
-  domain?: {
-    strategy?: string | null;
-    rootDomain?: string | null;
-    primaryHost?: string | null;
-  };
-};
-
-export type WorkspaceCanonicalRoutingSnapshot = {
-  workspaceId: string;
-  slug: string;
-  strategy: ReturnType<typeof normalizeWorkspaceDomainStrategy>;
-  canonicalHost: string;
-  rootHost: string;
-};
+export type WorkspaceCanonicalRoutingSnapshot = WorkspaceRoutingSnapshot;
 
 export async function getWorkspaceCanonicalRoutingSnapshot(
   workspaceId: string,
 ): Promise<WorkspaceCanonicalRoutingSnapshot> {
-  return withUnitOfWork(async () => {
-    const [workspace, settings] = await Promise.all([
-      getWorkspaceById(workspaceId),
-      getWorkspaceSettings(workspaceId),
-    ]);
-    const settingsJson =
-      settings?.settings && typeof settings.settings === 'object'
-        ? (settings.settings as WorkspaceSettingsShape)
-        : null;
-    const strategy = normalizeWorkspaceDomainStrategy(
-      settingsJson?.domain?.strategy,
-    );
-    const configuredRootHost =
-      typeof settingsJson?.domain?.rootDomain === 'string' &&
-      settingsJson.domain.rootDomain.trim()
-        ? normalizeHostname(settingsJson.domain.rootDomain)
-        : getRootDomainHost();
-    const defaultDomain =
-      typeof workspace.defaultDomain === 'string' && workspace.defaultDomain.trim()
-        ? normalizeHostname(workspace.defaultDomain)
-        : '';
-    const primaryHost =
-      typeof settingsJson?.domain?.primaryHost === 'string' &&
-      settingsJson.domain.primaryHost.trim()
-        ? normalizeHostname(settingsJson.domain.primaryHost)
-        : '';
-
-    const canonicalHost =
-      defaultDomain ||
-      primaryHost ||
-      (strategy === 'subdomain'
-        ? buildManagedWorkspaceSubdomain(workspace.slug, configuredRootHost)
-        : configuredRootHost);
-
-    return {
-      workspaceId: workspace.id,
-      slug: workspace.slug,
-      strategy,
-      canonicalHost,
-      rootHost: configuredRootHost,
-    };
-  });
+  return getWorkspaceRoutingSnapshot(workspaceId);
 }
 
 export async function resolveWorkspaceSurfaceRedirect(params: {
@@ -87,7 +33,37 @@ export async function resolveWorkspaceSurfaceRedirect(params: {
 
 export async function resolveWorkspaceCanonicalSurfaceHost(workspaceId: string) {
   const routing = await getWorkspaceCanonicalRoutingSnapshot(workspaceId);
-  return routing.canonicalHost;
+  return routing.primaryHost;
+}
+
+export async function resolveWorkspaceLoginRedirect(params: {
+  workspaceId: string;
+  returnPath?: string | null;
+}) {
+  const routing = await getWorkspaceCanonicalRoutingSnapshot(params.workspaceId);
+
+  return buildWorkspaceLoginPath({
+    workspaceId: params.workspaceId,
+    intent: routing.intent,
+    returnPath: params.returnPath,
+    strategy: routing.strategy,
+    slug: routing.slug,
+  });
+}
+
+export async function resolveWorkspaceSignupRedirect(params: {
+  workspaceId: string;
+  returnPath?: string | null;
+}) {
+  const routing = await getWorkspaceCanonicalRoutingSnapshot(params.workspaceId);
+
+  return buildWorkspaceSignupPath({
+    workspaceId: params.workspaceId,
+    intent: routing.intent,
+    returnPath: params.returnPath,
+    strategy: routing.strategy,
+    slug: routing.slug,
+  });
 }
 
 export async function resolveWorkspaceCanonicalRequestRedirect(params: {
@@ -96,6 +72,7 @@ export async function resolveWorkspaceCanonicalRequestRedirect(params: {
   currentPath: string;
   visiblePath?: string | null;
   search?: string | null;
+  currentProtocol?: string | null;
 }) {
   const routing = await getWorkspaceCanonicalRoutingSnapshot(params.workspaceId);
   const canonicalPath = buildWorkspaceCanonicalPath({
@@ -104,7 +81,7 @@ export async function resolveWorkspaceCanonicalRequestRedirect(params: {
     path: params.currentPath,
   });
   const normalizedCurrentHost = normalizeHostname(params.currentHost);
-  const canonicalHost = normalizeHostname(routing.canonicalHost);
+  const canonicalHost = normalizeHostname(routing.primaryHost);
   const search = params.search ?? '';
   const comparisonPath = params.visiblePath || params.currentPath;
   const currentPathWithSearch = `${comparisonPath}${search}`;
@@ -117,7 +94,10 @@ export async function resolveWorkspaceCanonicalRequestRedirect(params: {
     return null;
   }
 
-  const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
+  const protocol = resolvePublicProtocol({
+    host: params.currentHost,
+    forwardedProto: params.currentProtocol,
+  });
   const canonicalHostWithPort = withPreservedPort(
     canonicalHost,
     params.currentHost,

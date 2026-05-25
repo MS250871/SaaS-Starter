@@ -2,7 +2,20 @@ import type { CSSProperties } from 'react';
 import type { WorkspaceDomainStrategy } from '@/modules/workspace/routing';
 import type { WorkspaceThemeSettings } from '@/modules/workspace/theme';
 
-export type WorkspacePublicTemplateKey = 'coaching-classic';
+export const workspacePublicTemplateKeys = ['coaching-classic'] as const;
+
+export type WorkspacePublicTemplateKey =
+  (typeof workspacePublicTemplateKeys)[number];
+
+export const workspacePublicTemplateOptions: Array<{
+  key: WorkspacePublicTemplateKey;
+  label: string;
+}> = [
+  {
+    key: 'coaching-classic',
+    label: 'Coaching Classic',
+  },
+];
 
 export type WorkspacePublicNavItem = {
   label: string;

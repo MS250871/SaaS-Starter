@@ -15,11 +15,13 @@ import {
   normalizeWorkspaceDomainStrategy,
 } from '@/modules/workspace/routing';
 import { resolveWorkspaceByDomain } from '@/modules/workspace/services/domains.services';
-import { resolveWorkspaceCanonicalRequestRedirect } from '@/modules/workspace/services/workspace-canonical.services';
+import {
+  getWorkspaceCanonicalRoutingSnapshot,
+  resolveWorkspaceCanonicalRequestRedirect,
+} from '@/modules/workspace/services/workspace-canonical.services';
 import { getWorkspaceSettings } from '@/modules/workspace/services/setting.services';
 import {
   findWorkspaceBySlug,
-  getWorkspaceById,
   getWorkspaceAdminSurfaceWorkspace,
 } from '@/modules/workspace/services/workspace.services';
 import { headers } from 'next/headers';
@@ -80,16 +82,15 @@ async function resolveWorkspacePublicFallback(params: {
   );
 
   if (resolvedDomain?.workspaceId) {
-    const workspace = await withActionTxContext(() =>
-      getWorkspaceById(resolvedDomain.workspaceId),
+    const routing = await withActionTxContext(() =>
+      getWorkspaceCanonicalRoutingSnapshot(resolvedDomain.workspaceId),
     );
 
     return {
-      workspaceId: resolvedDomain.workspaceId,
-      slug: workspace.slug,
-      strategy:
-        resolvedDomain.type === 'CUSTOM' ? 'custom_domain' : 'subdomain',
-      primaryDomain: workspace.defaultDomain ?? undefined,
+      workspaceId: routing.workspaceId,
+      slug: routing.slug,
+      strategy: routing.strategy,
+      primaryDomain: routing.primaryHost,
     };
   }
 
@@ -114,11 +115,15 @@ async function resolveWorkspacePublicFallback(params: {
     return null;
   }
 
+  const routing = await withActionTxContext(() =>
+    getWorkspaceCanonicalRoutingSnapshot(workspace.id),
+  );
+
   return {
-    workspaceId: workspace.id,
-    slug: workspace.slug,
-    strategy: undefined,
-    primaryDomain: workspace.defaultDomain ?? undefined,
+    workspaceId: routing.workspaceId,
+    slug: routing.slug,
+    strategy: routing.strategy,
+    primaryDomain: routing.primaryHost,
   };
 }
 
@@ -136,29 +141,32 @@ export async function getWorkspacePublicPageData() {
   }
 
   const hdrs = await headers();
+  const workspaceId = workspaceContext.workspaceId;
+  const currentPath = requestMeta.path;
   const canonicalRedirectUrl =
-    requestMeta.path
-      ? await resolveWorkspaceCanonicalRequestRedirect({
-          workspaceId: workspaceContext.workspaceId,
-          currentHost: resolvePublicHostValue({
-            host: hdrs.get('host'),
-            forwardedHost: hdrs.get('x-forwarded-host'),
+    currentPath
+      ? await withActionTxContext(() =>
+          resolveWorkspaceCanonicalRequestRedirect({
+            workspaceId,
+            currentHost: resolvePublicHostValue({
+              host: hdrs.get('host'),
+              forwardedHost: hdrs.get('x-forwarded-host'),
+            }),
+            currentPath,
+            visiblePath: requestMeta.originalPath,
+            search: requestMeta.search,
           }),
-          currentPath: requestMeta.path,
-          visiblePath: requestMeta.originalPath,
-          search: requestMeta.search,
-        })
+        )
       : null;
 
   const workspace = await withActionTxContext(() =>
     Promise.all([
-      getWorkspaceAdminSurfaceWorkspace(workspaceContext.workspaceId),
-      getWorkspaceSettings(workspaceContext.workspaceId),
+      getWorkspaceAdminSurfaceWorkspace(workspaceId),
+      getWorkspaceSettings(workspaceId),
     ]),
   );
   const [workspaceRecord, workspaceSettings] = workspace;
   const strategy = normalizeWorkspaceDomainStrategy(workspaceContext.strategy);
-  const intent = strategy === 'free_path' ? 'free' : 'paid';
   const homePath = buildWorkspaceCanonicalPath({
     strategy,
     slug: workspaceContext.slug,
@@ -166,13 +174,13 @@ export async function getWorkspacePublicPageData() {
   });
   const loginPath = buildWorkspaceLoginPath({
     workspaceId: workspaceRecord.id,
-    intent,
+    intent: strategy === 'free_path' ? 'free' : 'paid',
     strategy,
     slug: workspaceContext.slug,
   });
   const signupPath = buildWorkspaceSignupPath({
     workspaceId: workspaceRecord.id,
-    intent,
+    intent: strategy === 'free_path' ? 'free' : 'paid',
     strategy,
     slug: workspaceContext.slug,
   });

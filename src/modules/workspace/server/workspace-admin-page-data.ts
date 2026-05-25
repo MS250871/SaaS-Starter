@@ -33,6 +33,11 @@ import {
   listWorkspaceDomainsDetailed,
   type WorkspaceDomainDetailed,
 } from '@/modules/workspace/services/domains.services';
+import {
+  pickWorkspaceProfileSettings,
+  readWorkspaceSettingsJson,
+} from '@/modules/workspace/settings';
+import { buildWorkspaceProfileAssetPreviewUrls } from '@/modules/workspace/services/workspace-profile-assets.services';
 import { listAssignableRoleDefinitions } from '@/modules/roles/services/role.services';
 import { normalizeWorkspaceTheme } from '@/modules/workspace/theme';
 import { getWorkspaceAdminSurfaceContext } from '@/modules/workspace/server/admin-surface-context';
@@ -636,6 +641,30 @@ export async function getWorkspaceThemePageData() {
     return {
       ...context,
       initialTheme: normalizeWorkspaceTheme(context.settings?.themes),
+    };
+  });
+}
+
+export async function getWorkspaceProfilePageData() {
+  return withActionReadContext(async () => {
+    const context = await getWorkspaceAdminSurfaceContext();
+    const initialProfile = pickWorkspaceProfileSettings(
+      readWorkspaceSettingsJson(context.settings?.settings),
+    );
+
+    return {
+      ...context,
+      initialProfile,
+      assetPreviewUrls: context.workspaceId
+        ? await buildWorkspaceProfileAssetPreviewUrls({
+            workspaceId: context.workspaceId,
+            logoMediaId: initialProfile.branding?.logoMediaId ?? null,
+            faviconMediaId: initialProfile.branding?.faviconMediaId ?? null,
+          })
+        : {
+            logoPreviewUrl: null,
+            faviconPreviewUrl: null,
+          },
     };
   });
 }

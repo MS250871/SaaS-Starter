@@ -10,6 +10,7 @@ import { ERR } from '@/lib/errors/codes';
 import { getWorkspaceRootDomain } from '@/modules/workspace/defaults';
 import {
   buildManagedWorkspaceSubdomain,
+  normalizeWorkspaceDomainStrategy,
   type WorkspaceDomainStrategy,
 } from '@/modules/workspace/routing';
 import {
@@ -27,26 +28,17 @@ import {
 } from '@/modules/workspace/services/routing-cache.services';
 import {
   getWorkspaceSettings,
+  getWorkspaceSettingsFresh,
   updateWorkspaceConfig,
 } from '@/modules/workspace/services/setting.services';
+import {
+  readWorkspaceSettingsJson,
+  type WorkspaceSettingsJson,
+} from '@/modules/workspace/settings';
 import {
   getWorkspaceById,
   updateWorkspace,
 } from '@/modules/workspace/services/workspace.services';
-
-type WorkspaceSettingsJson = {
-  domain?: {
-    strategy?: string | null;
-    slug?: string | null;
-    rootDomain?: string | null;
-    primaryHost?: string | null;
-    customDomain?: string | null;
-    customDomainVerified?: boolean | null;
-    redirectAliases?: unknown;
-    [key: string]: unknown;
-  };
-  [key: string]: unknown;
-};
 
 export type WorkspaceRoutingSnapshot = {
   workspaceId: string;
@@ -91,6 +83,129 @@ function toWorkspaceIntent(activePlanKey?: string | null): 'free' | 'paid' {
   return activePlanKey && activePlanKey !== 'trial' ? 'paid' : 'free';
 }
 
+function inferRoutingIntentFromSettings(params: {
+  settings: WorkspaceSettingsJson;
+  strategy?: string | null;
+}) {
+  const explicitIntent = params.settings.domain?.intent;
+
+  if (explicitIntent === 'free' || explicitIntent === 'paid') {
+    return explicitIntent;
+  }
+
+  const billingPlanCode = params.settings.billing?.planCode;
+
+  if (billingPlanCode === 'trial') {
+    return 'free';
+  }
+
+  if (billingPlanCode && billingPlanCode !== 'pending_payment') {
+    return 'paid';
+  }
+
+  return normalizeWorkspaceDomainStrategy(params.strategy) === 'free_path'
+    ? 'free'
+    : 'paid';
+}
+
+function buildWorkspaceRoutingSnapshotFromSettings(params: {
+  workspace: {
+    id: string;
+    slug: string;
+    defaultDomain?: string | null;
+  };
+  settingsRecord?: {
+    settings?: unknown;
+  } | null;
+}): WorkspaceRoutingSnapshot {
+  const settings = readWorkspaceSettingsJson(params.settingsRecord?.settings);
+  const domainSettings = settings.domain ?? {};
+  const rootDomain =
+    typeof domainSettings.rootDomain === 'string' && domainSettings.rootDomain
+      ? domainSettings.rootDomain
+      : getWorkspaceRootDomain();
+  const strategy = normalizeWorkspaceDomainStrategy(domainSettings.strategy);
+  const managedSubdomainHost = buildManagedWorkspaceSubdomain(
+    params.workspace.slug,
+    rootDomain,
+  );
+  const customDomain =
+    typeof domainSettings.customDomain === 'string' &&
+    domainSettings.customDomain.trim()
+      ? domainSettings.customDomain
+      : null;
+  const primaryHost =
+    typeof domainSettings.primaryHost === 'string' &&
+    domainSettings.primaryHost.trim()
+      ? domainSettings.primaryHost
+      : params.workspace.defaultDomain?.trim()
+        ? params.workspace.defaultDomain
+        : strategy === 'custom_domain' && customDomain
+          ? customDomain
+          : strategy === 'subdomain'
+            ? managedSubdomainHost
+            : rootDomain;
+
+  return {
+    workspaceId: params.workspace.id,
+    slug: params.workspace.slug,
+    strategy,
+    rootDomain,
+    primaryHost,
+    managedSubdomainHost,
+    customDomain,
+    intent: inferRoutingIntentFromSettings({
+      settings,
+      strategy,
+    }),
+  };
+}
+
+function hasPersistedWorkspaceRoutingSnapshot(
+  settingsRecord: { settings?: unknown } | null | undefined,
+) {
+  const settings = readWorkspaceSettingsJson(settingsRecord?.settings);
+  const domainSettings = settings.domain ?? {};
+
+  return Boolean(
+    typeof domainSettings.strategy === 'string' &&
+      domainSettings.strategy &&
+      typeof domainSettings.rootDomain === 'string' &&
+      domainSettings.rootDomain &&
+      typeof domainSettings.primaryHost === 'string' &&
+      domainSettings.primaryHost,
+  );
+}
+
+export async function getWorkspaceRoutingSnapshot(
+  workspaceId: string,
+): Promise<WorkspaceRoutingSnapshot> {
+  const result = await withUnitOfWork(async () => {
+    const [workspace, settingsRecord] = await Promise.all([
+      getWorkspaceById(workspaceId),
+      getWorkspaceSettings(workspaceId),
+    ]);
+
+    return {
+      snapshot: buildWorkspaceRoutingSnapshotFromSettings({
+        workspace: {
+          id: workspace.id,
+          slug: workspace.slug,
+          defaultDomain: workspace.defaultDomain,
+        },
+        settingsRecord,
+      }),
+      hasPersistedSnapshot: hasPersistedWorkspaceRoutingSnapshot(settingsRecord),
+    };
+  });
+
+  if (result.hasPersistedSnapshot) {
+    return result.snapshot;
+  }
+
+  return syncWorkspaceRoutingState(workspaceId);
+}
+
 export async function syncWorkspaceRoutingState(
   workspaceId: string,
 ): Promise<WorkspaceRoutingSnapshot> {
@@ -102,15 +217,12 @@ export async function syncWorkspaceRoutingState(
     const [workspace, settingsRecord, domainEntitlements, currentDomains] =
       await Promise.all([
         getWorkspaceById(workspaceId),
-        getWorkspaceSettings(workspaceId),
-        getWorkspaceDomainEntitlements(workspaceId),
+        getWorkspaceSettingsFresh(workspaceId),
+        getWorkspaceDomainEntitlements(workspaceId, { fresh: true }),
         listWorkspaceDomains(workspaceId),
       ]);
 
-    const currentSettings =
-      settingsRecord?.settings && typeof settingsRecord.settings === 'object'
-        ? (settingsRecord.settings as unknown as WorkspaceSettingsJson)
-        : {};
+    const currentSettings = readWorkspaceSettingsJson(settingsRecord?.settings);
     const currentDomainSettings = currentSettings.domain ?? {};
     const rootDomain =
       typeof currentDomainSettings.rootDomain === 'string' &&
@@ -271,6 +383,7 @@ export async function syncWorkspaceRoutingState(
       domain: {
         ...currentDomainSettings,
         strategy: finalStrategy,
+        intent: toWorkspaceIntent(domainEntitlements.activePlan?.key),
         slug: workspace.slug,
         rootDomain,
         primaryHost,
@@ -298,6 +411,7 @@ export async function syncWorkspaceRoutingState(
       isActive: workspace.isActive,
       primaryDomain: primaryHost,
       strategy: finalStrategy,
+      intent: toWorkspaceIntent(domainEntitlements.activePlan?.key),
     });
 
     const finalDomainValues = new Set(

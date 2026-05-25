@@ -13,7 +13,7 @@ import {
 } from '@/modules/workspace/services/domains.services';
 import type { ManagedWorkspaceDomainState } from '@/modules/workspace/services/domain-provider.types';
 import {
-  getWorkspaceSettings,
+  getWorkspaceSettingsFresh,
   updateWorkspaceConfig,
 } from '@/modules/workspace/services/setting.services';
 import { updateWorkspace } from '@/modules/workspace/services/workspace.services';
@@ -247,7 +247,7 @@ async function applyManagedDomainStateToWorkspace(params: {
   };
 }) {
   const checkedAt = new Date();
-  const existingSettings = await getWorkspaceSettings(params.workspaceId);
+  const existingSettings = await getWorkspaceSettingsFresh(params.workspaceId);
   const currentSettings =
     (existingSettings?.settings as {
       domain?: Record<string, unknown>;
@@ -373,7 +373,7 @@ export async function createWorkspaceCustomDomainSetup(params: {
     checkedAt,
   });
 
-  const existingSettings = await getWorkspaceSettings(params.workspaceId);
+  const existingSettings = await getWorkspaceSettingsFresh(params.workspaceId);
   const currentSettings =
     (existingSettings?.settings as {
       domain?: Record<string, unknown>;

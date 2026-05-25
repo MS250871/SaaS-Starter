@@ -10,6 +10,7 @@ type WorkspaceContext = {
   isActive?: boolean;
   primaryDomain?: string;
   strategy?: string;
+  intent?: 'free' | 'paid';
 };
 
 export type RequestHeaderInjectionResult = {
@@ -61,6 +62,7 @@ export async function injectRequestHeaders(
           isActive: workspace.isActive ?? true,
           primaryDomain: workspace.primaryDomain,
           strategy: workspace.strategy,
+          intent: workspace.intent,
         }
       : undefined,
 

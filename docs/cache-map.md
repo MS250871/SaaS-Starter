@@ -80,12 +80,26 @@ Keys:
 - `routingSlug`
 - `routingDomain`
 
+Authoritative source:
+- persisted workspace routing snapshot in `WorkspaceSettings.settings.domain`
+- Redis is the mirror for middleware speed, not a second routing decision engine
+
+Routing snapshot fields:
+- `strategy`
+- `intent`
+- `slug`
+- `rootDomain`
+- `primaryHost`
+- `customDomain`
+
 Read boundary:
 - middleware workspace resolution
 
 Read helpers:
 - [src/lib/middleware/resolve-workspace.ts](C:\Users\munir\Documents\skillmaxx-org\src\lib\middleware\resolve-workspace.ts)
 - [src/modules/workspace/services/routing-cache.services.ts](C:\Users\munir\Documents\skillmaxx-org\src\modules\workspace\services\routing-cache.services.ts)
+- [src/modules/workspace/services/workspace-routing.services.ts](C:\Users\munir\Documents\skillmaxx-org\src\modules\workspace\services\workspace-routing.services.ts)
+- [src/modules/workspace/services/workspace-canonical.services.ts](C:\Users\munir\Documents\skillmaxx-org\src\modules\workspace\services\workspace-canonical.services.ts)
 
 Write owner:
 - orchestration boundary calls [syncWorkspaceRoutingState(...) in src/modules/workspace/services/workspace-routing.services.ts](C:\Users\munir\Documents\skillmaxx-org\src\modules\workspace\services\workspace-routing.services.ts)
@@ -101,6 +115,8 @@ Current invalidation/sync owners:
 Rule:
 - never write or clear routing keys directly from domain mutation services
 - always trigger routing sync after commit
+- routing sync must compute from fresh DB state, not from Redis-backed read caches
+- render-time canonical readers must consume the persisted routing snapshot, not re-derive routing from live billing/domain tables on every request
 
 ### 2. Workspace Surface
 

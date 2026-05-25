@@ -9,6 +9,7 @@ import {
   workspaceFontOptions,
   workspaceRadiusOptions,
 } from '@/modules/workspace/theme';
+import { workspacePublicTemplateKeys } from '@/modules/workspace-public/contracts';
 
 function normalizeWorkspaceName(value: string) {
   return value.trim().replace(/\s+/g, ' ');
@@ -178,6 +179,145 @@ export const updateWorkspaceThemeSchema =
 
 export type UpdateWorkspaceThemeDomain = z.output<
   typeof updateWorkspaceThemeSchema
+>;
+
+const optionalWorkspaceTextField = (
+  max: number,
+  tooLongMessage: string,
+) => z.string().trim().max(max, tooLongMessage).optional().or(z.literal(''));
+
+const optionalWorkspaceEmailField = z
+  .string()
+  .trim()
+  .email('Enter a valid support email address')
+  .max(320, 'Support email is too long')
+  .optional()
+  .or(z.literal(''));
+
+const optionalWorkspaceUrlField = z
+  .string()
+  .trim()
+  .url('Enter a valid URL')
+  .max(500, 'URL is too long')
+  .optional()
+  .or(z.literal(''));
+
+function toNullableString(value: string | undefined) {
+  const normalized = value?.trim() ?? '';
+
+  return normalized ? normalized : null;
+}
+
+export const workspaceProfileFormSchema = z.object({
+  displayName: optionalWorkspaceTextField(120, 'Display name is too long'),
+  legalName: optionalWorkspaceTextField(160, 'Legal name is too long'),
+  tagline: optionalWorkspaceTextField(160, 'Tagline is too long'),
+  shortDescription: optionalWorkspaceTextField(
+    400,
+    'Short description is too long',
+  ),
+  logoAspect: z.enum(['square', '2:1', '3:1', '4:1']),
+  supportEmail: optionalWorkspaceEmailField,
+  primaryContactName: optionalWorkspaceTextField(
+    120,
+    'Primary contact name is too long',
+  ),
+  supportPhone: optionalWorkspaceTextField(32, 'Support phone is too long'),
+  supportWhatsapp: optionalWorkspaceTextField(
+    32,
+    'Support WhatsApp is too long',
+  ),
+  websiteUrl: optionalWorkspaceUrlField,
+  addressLine1: optionalWorkspaceTextField(160, 'Address line 1 is too long'),
+  addressLine2: optionalWorkspaceTextField(160, 'Address line 2 is too long'),
+  addressCity: optionalWorkspaceTextField(120, 'City is too long'),
+  addressState: optionalWorkspaceTextField(120, 'State is too long'),
+  addressPostalCode: optionalWorkspaceTextField(
+    32,
+    'Postal code is too long',
+  ),
+  addressCountry: optionalWorkspaceTextField(120, 'Country is too long'),
+  socialYoutube: optionalWorkspaceUrlField,
+  socialLinkedin: optionalWorkspaceUrlField,
+  socialInstagram: optionalWorkspaceUrlField,
+  socialFacebook: optionalWorkspaceUrlField,
+  socialX: optionalWorkspaceUrlField,
+  websiteTemplateKey: z.enum(workspacePublicTemplateKeys).optional().or(z.literal('')),
+  websiteSiteTitle: optionalWorkspaceTextField(120, 'Site title is too long'),
+  websiteMetaTitle: optionalWorkspaceTextField(
+    160,
+    'Meta title is too long',
+  ),
+  websiteMetaDescription: optionalWorkspaceTextField(
+    320,
+    'Meta description is too long',
+  ),
+  websiteOgImageUrl: optionalWorkspaceUrlField,
+  websiteOgImageMediaId: optionalWorkspaceTextField(
+    120,
+    'Open Graph image media id is too long',
+  ),
+});
+
+export type WorkspaceProfileFormInput = z.input<
+  typeof workspaceProfileFormSchema
+>;
+
+export const updateWorkspaceProfileActionSchema = workspaceProfileFormSchema;
+
+export type UpdateWorkspaceProfileActionInput = z.input<
+  typeof updateWorkspaceProfileActionSchema
+>;
+
+export const updateWorkspaceProfileSchema =
+  updateWorkspaceProfileActionSchema.transform((data) => ({
+    branding: {
+      displayName: toNullableString(data.displayName),
+      legalName: toNullableString(data.legalName),
+      tagline: toNullableString(data.tagline),
+      shortDescription: toNullableString(data.shortDescription),
+      logoAspect: data.logoAspect,
+      supportEmail: (() => {
+        const email = toNullableString(data.supportEmail);
+
+        return email ? email.toLowerCase() : null;
+      })(),
+    },
+    contact: {
+      primaryContactName: toNullableString(data.primaryContactName),
+      supportPhone: toNullableString(data.supportPhone),
+      supportWhatsapp: toNullableString(data.supportWhatsapp),
+      websiteUrl: toNullableString(data.websiteUrl),
+      address: {
+        line1: toNullableString(data.addressLine1),
+        line2: toNullableString(data.addressLine2),
+        city: toNullableString(data.addressCity),
+        state: toNullableString(data.addressState),
+        postalCode: toNullableString(data.addressPostalCode),
+        country: toNullableString(data.addressCountry),
+      },
+    },
+    social: {
+      youtube: toNullableString(data.socialYoutube),
+      linkedin: toNullableString(data.socialLinkedin),
+      instagram: toNullableString(data.socialInstagram),
+      facebook: toNullableString(data.socialFacebook),
+      x: toNullableString(data.socialX),
+    },
+    website: {
+      templateKey: toNullableString(data.websiteTemplateKey),
+      siteTitle: toNullableString(data.websiteSiteTitle),
+      defaultSeo: {
+        metaTitle: toNullableString(data.websiteMetaTitle),
+        metaDescription: toNullableString(data.websiteMetaDescription),
+        ogImageUrl: toNullableString(data.websiteOgImageUrl),
+        ogImageMediaId: toNullableString(data.websiteOgImageMediaId),
+      },
+    },
+  }));
+
+export type UpdateWorkspaceProfileDomain = z.output<
+  typeof updateWorkspaceProfileSchema
 >;
 
 export const createWorkspaceInviteFormSchema = z.object({
